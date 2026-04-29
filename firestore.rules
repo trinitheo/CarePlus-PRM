@@ -8,7 +8,11 @@ service cloud.firestore {
 
     // Helper functions
     function isSignedIn() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
     function isValidId(id) {
@@ -38,7 +42,6 @@ service cloud.firestore {
 
     function isValidClinicalRecord(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'status']) &&
-             data.patientId == request.auth.uid || true && // Simplified for now
              data.authorId == request.auth.uid &&
              data.status in ['draft', 'signed'] &&
              (!('subjective' in data) || (data.subjective is string && data.subjective.size() <= 10000)) &&
@@ -80,26 +83,32 @@ service cloud.firestore {
              data.status in ['pending', 'accepted', 'completed'];
     }
 
+    function isValidVitals(data) {
+      return data.keys().hasAll(['authorId']) &&
+             data.authorId == request.auth.uid;
+             // Simplified validation for now to allow various vitals structures
+    }
+
     // Collection Rules
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId);
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
-      allow update: if isSignedIn() && request.auth.uid == userId && 
+      allow create: if isVerified() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isVerified() && request.auth.uid == userId && 
                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'specialty']) &&
                      isValidUser(incoming());
     }
 
     match /patients/{patientId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isValidPatient(incoming());
-      allow update: if isSignedIn() && isValidPatient(incoming()) &&
+      allow create: if isVerified() && isValidPatient(incoming());
+      allow update: if isVerified() && isValidPatient(incoming()) &&
                      incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'lastName', 'dateOfBirth', 'gender']);
       
       // Sub-collections
       match /clinical_records/{recordId} {
         allow get, list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(recordId) && isValidClinicalRecord(incoming());
-        allow update: if isSignedIn() && isValidId(recordId) && 
+        allow create: if isVerified() && isValidId(recordId) && isValidClinicalRecord(incoming());
+        allow update: if isVerified() && isValidId(recordId) && 
                        existing().status == 'draft' &&
                        isValidClinicalRecord(incoming()) &&
                        incoming().authorId == existing().authorId;
@@ -107,30 +116,35 @@ service cloud.firestore {
 
       match /prescriptions/{prescriptionId} {
         allow get, list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(prescriptionId) && isValidPrescription(incoming());
-        allow update: if isSignedIn() && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
+        allow create: if isVerified() && isValidId(prescriptionId) && isValidPrescription(incoming());
+        allow update: if isVerified() && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
       }
 
       match /investigations/{investigationId} {
         allow get, list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(investigationId) && isValidInvestigation(incoming());
-        allow update: if isSignedIn() && isValidId(investigationId) && isValidInvestigation(incoming()) &&
+        allow create: if isVerified() && isValidId(investigationId) && isValidInvestigation(incoming());
+        allow update: if isVerified() && isValidId(investigationId) && isValidInvestigation(incoming()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions']);
       }
 
       match /procedures/{procedureId} {
         allow get, list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(procedureId) && isValidProcedure(incoming());
-        allow update: if isSignedIn() && isValidId(procedureId) && isValidProcedure(incoming()) &&
+        allow create: if isVerified() && isValidId(procedureId) && isValidProcedure(incoming());
+        allow update: if isVerified() && isValidId(procedureId) && isValidProcedure(incoming()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate']);
       }
 
       match /referrals/{referralId} {
         allow get, list: if isSignedIn();
-        allow create: if isSignedIn() && isValidId(referralId) && isValidReferral(incoming());
-        allow update: if isSignedIn() && isValidId(referralId) && isValidReferral(incoming()) &&
+        allow create: if isVerified() && isValidId(referralId) && isValidReferral(incoming());
+        allow update: if isVerified() && isValidId(referralId) && isValidReferral(incoming()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
+      }
+
+      match /vitals/{vitalsId} {
+        allow get, list: if isSignedIn();
+        allow create: if isVerified() && isValidVitals(incoming());
       }
     }
   }

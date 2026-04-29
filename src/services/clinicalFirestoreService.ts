@@ -174,3 +174,18 @@ export async function saveClinicalIntake(patientId: string, intakeId: string, da
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+// Vitals
+export async function updatePatientVitals(patientId: string, data: any) {
+  const path = `patients/${patientId}/vitals`;
+  try {
+    const docRef = await addDoc(collection(db, path), {
+      ...data,
+      authorId: auth.currentUser?.uid,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}

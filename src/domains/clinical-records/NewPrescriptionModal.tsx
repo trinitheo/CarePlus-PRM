@@ -8,6 +8,7 @@ import { ScrollArea } from '../../../components/ui/scroll-area';
 import { Pill, X, Loader2, Sparkles, ChevronDown } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
 import { savePrescription } from '../../services/clinicalFirestoreService';
+import { generateFriendlyInstructions } from '../../services/aiService';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface NewPrescriptionModalProps {
@@ -18,6 +19,7 @@ interface NewPrescriptionModalProps {
 export function NewPrescriptionModal({ patientId, children }: NewPrescriptionModalProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Form State
@@ -191,10 +193,19 @@ export function NewPrescriptionModal({ patientId, children }: NewPrescriptionMod
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="h-8 border-[#EDEBE9] bg-[#F1F0FF] text-[#5C2D91] hover:bg-[#EBE9FF] gap-1.5 px-3 rounded-full text-[11px] font-bold shadow-sm"
+                  disabled={isGeneratingAI || !medicationName || !dosage || !frequency}
+                  onClick={async () => {
+                    setIsGeneratingAI(true);
+                    const instructions = await generateFriendlyInstructions(medicationName, dosage, frequency);
+                    if (instructions) {
+                      setSig(instructions);
+                    }
+                    setIsGeneratingAI(false);
+                  }}
+                  className="h-8 border-[#EDEBE9] bg-[#F1F0FF] text-[#5C2D91] hover:bg-[#EBE9FF] gap-1.5 px-3 rounded-full text-[11px] font-bold shadow-sm disabled:opacity-50"
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Generate
+                  {isGeneratingAI ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {isGeneratingAI ? 'Generating...' : 'AI Generate'}
                 </Button>
               </div>
               <Textarea 

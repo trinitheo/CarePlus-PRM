@@ -17,6 +17,7 @@ import { InvestigationOrderModal } from './InvestigationOrderModal';
 import { NewProcedureModal } from './NewProcedureModal';
 import { NewReferralModal } from './NewReferralModal';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
+import { VitalsCard } from './VitalsCard';
 import { motion } from 'motion/react';
 
 export function ClinicalRecords({ 
@@ -32,7 +33,12 @@ export function ClinicalRecords({
   const clinicalData = usePatientClinicalData(patientId);
   
   const patient = patients[patientId];
-  const patientVitals = vitals[patientId] || [];
+  // Merge vitals: prioritize firestore if available
+  const firestoreVitals = (clinicalData.vitals as any[]).map(v => ({
+    ...v,
+    timestamp: v.createdAt?.seconds * 1000 || Date.now()
+  }));
+  const patientVitals = firestoreVitals.length > 0 ? firestoreVitals : (vitals[patientId] || []);
   const intake = clinicalIntakes[patientId];
   const latestVitals = patientVitals[patientVitals.length - 1];
 
@@ -123,9 +129,9 @@ export function ClinicalRecords({
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 min-h-0">
         {/* LEFT: Patient Detail Card */}
-        <div className="xl:col-span-4 space-y-6 flex flex-col min-h-0">
-          <motion.div variants={itemVariants}>
-            <Card className="border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
+        <div className="xl:col-span-3 space-y-6 flex flex-col min-h-0">
+          <motion.div variants={itemVariants} className="flex-1">
+            <Card className="h-full border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
               <div className="p-6">
                 <div className="flex items-center gap-5">
                   <div className="h-20 w-20 rounded-2xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
@@ -205,97 +211,12 @@ export function ClinicalRecords({
               </div>
             </Card>
           </motion.div>
-
-          <motion.div variants={itemVariants} className="flex-1 min-h-0 flex flex-col">
-            <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="py-4 px-6 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
-                <CardTitle className="text-xs font-bold text-[#616161] uppercase tracking-wider flex items-center gap-2">
-                  <DatabaseZap className="h-4 w-4 text-[#0078D4]" />
-                  Clinical Ledger
-                </CardTitle>
-                <div className="text-[10px] font-mono text-[#A19F9D]">ID: {patientId}</div>
-              </CardHeader>
-              <ScrollArea className="flex-1 p-6">
-                <div className="space-y-6 relative">
-                  <div className="absolute left-2.5 top-2 bottom-2 w-[1px] bg-[#EDEBE9]" />
-                  {eventLog.slice().reverse().map((ev, i) => (
-                    <div key={i} className="relative pl-8 group">
-                      <div className="absolute left-0 top-1.5 h-5 w-5 rounded-full border-2 border-white bg-[#0078D4] shadow-sm group-hover:scale-110 transition-transform z-10" />
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-[#242424] uppercase tracking-tight">{ev.type.replace('_', ' ')}</span>
-                          <span className="text-[10px] font-medium text-[#A19F9D]">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="text-[11px] text-[#616161] leading-relaxed line-clamp-2 italic opacity-80 bg-[#FAFAFA] p-2 rounded-md border border-[#F0F0F0] mt-1 group-hover:opacity-100 transition-opacity">
-                          {typeof ev.payload === 'object' ? JSON.stringify(ev.payload).slice(0, 80) + '...' : ev.payload}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {eventLog.length === 0 && (
-                    <div className="p-12 text-center text-[#A19F9D] italic text-xs">No entries recorded.</div>
-                  )}
-                </div>
-              </ScrollArea>
-              <div className="p-4 bg-[#FAFAFA] border-t border-[#EDEBE9] text-center shrink-0">
-                <Button variant="link" className="text-[11px] font-bold text-[#0078D4] h-auto p-0 uppercase tracking-widest">
-                  View Full Audit Log
-                </Button>
-              </div>
-            </Card>
-          </motion.div>
         </div>
 
         {/* MIDDLE: Vitals & Medications */}
-        <div className="xl:col-span-5 space-y-6 flex flex-col min-h-0">
-          <motion.div variants={itemVariants}>
-            <Card className="border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="py-4 px-6 border-b border-[#F3F2F1] flex flex-row items-center justify-between shrink-0">
-                <CardTitle className="text-sm font-bold text-[#242424] flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-[#0078D4]" />
-                  Latest Vitals
-                </CardTitle>
-                <div className="flex items-center gap-2 px-3 py-1 bg-[#FDE7E9] border border-[#FBC6CC] rounded-full">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D13438] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#D13438]"></span>
-                  </span>
-                  <span className="text-[10px] font-bold text-[#D13438] uppercase tracking-tighter">Live Monitor</span>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {[
-                    { label: 'Heart Rate', value: latestVitals?.hr, icon: Heart, unit: 'bpm', color: '#D13438' },
-                    { label: 'Blood Pressure', value: latestVitals?.bp, icon: Activity, unit: 'mmHg', color: '#0078D4' },
-                    { label: 'Resp Rate', value: 16, icon: Wind, unit: 'breaths/min', color: '#107C10' },
-                    { label: 'SpO2', value: 98, icon: Droplets, unit: '%', color: '#005A9E' },
-                    { label: 'Temperature', value: latestVitals?.temp?.toFixed(1), icon: Thermometer, unit: '°C', color: '#845701' },
-                    { label: 'Weight', value: 88.5, icon: Scale, unit: 'kg', color: '#616161' },
-                    { label: 'Height', value: 178, icon: Ruler, unit: 'cm', color: '#616161' },
-                    { label: 'BMI', value: 27.9, icon: Activity, unit: '', color: '#D13438' },
-                    { label: 'Glucose', value: 98, icon: Activity, unit: 'mg/dL', color: '#845701' },
-                  ].map((v, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-[#EDEBE9] bg-white group hover:border-[#0078D4] hover:shadow-md transition-all">
-                      <div className="text-[10px] font-bold text-[#A19F9D] mb-1 uppercase tracking-tight flex items-center gap-1.5">
-                        <v.icon className="h-3 w-3" style={{ color: v.color }} /> {v.label}
-                      </div>
-                      <div className="flex items-baseline gap-1.5">
-                        <div className="text-2xl font-black tabular-nums tracking-tighter text-[#242424] group-hover:text-[#0078D4] transition-colors">
-                          {v.value || '--'}
-                        </div>
-                        <div className="text-[10px] font-bold text-[#A19F9D]">{v.unit}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-6 pt-6 border-t border-[#F3F2F1] flex justify-center">
-                  <Button variant="outline" className="w-full sm:w-auto h-11 px-8 rounded-xl border-[#EDEBE9] text-[#616161] font-bold text-[13px] hover:bg-[#F3F2F1] transition-all">
-                    Show More Telemetry
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        <div className="xl:col-span-6 space-y-6 flex flex-col min-h-0">
+          <motion.div variants={itemVariants} className="shrink-0">
+            <VitalsCard vitals={patientVitals} patientId={patientId} />
           </motion.div>
 
           <motion.div variants={itemVariants} className="flex-1 min-h-0 flex flex-col">
@@ -367,23 +288,56 @@ export function ClinicalRecords({
           </motion.div>
         </div>
 
-        {/* RIGHT: Knowledge Graph */}
-        <div className="xl:col-span-3 min-h-0 flex flex-col">
+        {/* RIGHT: Ledger & Knowledge Graph */}
+        <div className="xl:col-span-3 min-h-0 flex flex-col gap-6">
+          <motion.div variants={itemVariants} className="flex-1 flex flex-col min-h-0">
+            <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white pt-[13px] pb-[13px]">
+              <CardHeader className="py-4 px-6 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
+                <CardTitle className="text-xs font-bold text-[#616161] uppercase tracking-wider flex items-center gap-2">
+                  <DatabaseZap className="h-4 w-4 text-[#0078D4]" />
+                  Clinical Ledger
+                </CardTitle>
+                <div className="text-[10px] font-mono text-[#A19F9D]">ID: {patientId}</div>
+              </CardHeader>
+              <ScrollArea className="flex-1 p-6">
+                <div className="space-y-6 relative">
+                  <div className="absolute left-2.5 top-2 bottom-2 w-[1px] bg-[#EDEBE9]" />
+                  {eventLog.slice().reverse().map((ev, i) => (
+                    <div key={i} className="relative pl-8 group">
+                      <div className="absolute left-0 top-1.5 h-5 w-5 rounded-full border-2 border-white bg-[#0078D4] shadow-sm group-hover:scale-110 transition-transform z-10" />
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-[#242424] uppercase tracking-tight">{ev.type.replace('_', ' ')}</span>
+                        </div>
+                        <div className="text-[10px] text-[#616161] leading-relaxed truncate opacity-70">
+                          {typeof ev.payload === 'object' ? JSON.stringify(ev.payload).slice(0, 50) : ev.payload}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {eventLog.length === 0 && (
+                    <div className="p-8 text-center text-[#A19F9D] italic text-[10px]">No entries recorded.</div>
+                  )}
+                </div>
+              </ScrollArea>
+            </Card>
+          </motion.div>
+
           <motion.div 
             variants={itemVariants}
-            className="flex-1 flex flex-col"
+            className="flex-1 flex flex-col min-h-0"
           >
             <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="py-4 px-6 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
-                <CardTitle className="text-sm font-bold text-[#242424] flex items-center gap-2">
-                  <Network className="h-4 w-4 text-[#0078D4]" />
+              <CardHeader className="py-3 px-5 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
+                <CardTitle className="text-[11px] font-bold text-[#242424] flex items-center gap-2 uppercase tracking-widest">
+                  <Network className="h-3.5 w-3.5 text-[#0078D4]" />
                   Knowledge Graph
                 </CardTitle>
-                <div className="h-8 w-8 flex items-center justify-center">
+                <div className="h-6 w-6 flex items-center justify-center">
                   <SyncIcon />
                 </div>
               </CardHeader>
-              <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAFA]/30">
+              <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAFA]/30 relative">
                 <KnowledgeGraph patientId={patientId} />
               </div>
             </Card>

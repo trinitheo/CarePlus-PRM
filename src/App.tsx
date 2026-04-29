@@ -79,7 +79,7 @@ export default function App() {
               {(sizeClass === 'expanded' || viewState.subView === 'explorer') && (
                 <motion.div 
                   layout
-                  className={`flex flex-col min-w-0 transition-all duration-500 ${isSplitLayout ? 'w-1/5 border-r border-border pr-6' : 'w-full'}`}
+                  className={`flex flex-col min-w-0 transition-all duration-500 ${isSplitLayout ? 'w-1/6 border-r border-border pr-6' : 'w-full'}`}
                 >
                   <PatientExplorer 
                     onSelectPatient={selectPatient} 
