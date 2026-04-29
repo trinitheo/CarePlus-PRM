@@ -1,0 +1,160 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Clinical staff member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["doctor", "nurse", "admin"] },
+        "specialty": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "dateOfBirth": { "type": "string", "format": "date" },
+        "gender": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["firstName", "lastName"]
+    },
+    "ClinicalRecord": {
+      "title": "Clinical Record",
+      "description": "SOAP Note for a patient encounter",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "subjective": { "type": "string" },
+        "objective": { "type": "string" },
+        "assessment": { "type": "string" },
+        "plan": { "type": "string" },
+        "icd10Codes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string", "enum": ["draft", "signed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "authorId", "status"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "Medication order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "medicationName": { "type": "string" },
+        "dosage": { "type": "string" },
+        "route": { "type": "string" },
+        "frequency": { "type": "string" },
+        "duration": { "type": "string" },
+        "durationUnit": { "type": "string" },
+        "refills": { "type": "number" },
+        "sig": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "authorId", "medicationName", "dosage", "frequency"]
+    },
+    "Investigation": {
+      "title": "Investigation",
+      "description": "Lab or imaging order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "category": { "type": "string" },
+        "testName": { "type": "string" },
+        "priority": { "type": "string" },
+        "indication": { "type": "string" },
+        "instructions": { "type": "string" },
+        "status": { "type": "string", "enum": ["ordered", "pending", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "authorId", "category", "testName"]
+    },
+    "Procedure": {
+      "title": "Procedure",
+      "description": "Procedure order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "procedureName": { "type": "string" },
+        "priority": { "type": "string" },
+        "targetDate": { "type": "string", "format": "date" },
+        "preparation": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "authorId", "procedureName"]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "Specialist referral order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "fromProvider": { "type": "string" },
+        "toProvider": { "type": "string" },
+        "specialty": { "type": "string" },
+        "reason": { "type": "string" },
+        "urgency": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "authorId", "specialty", "reason"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Patient records"
+    },
+    "/patients/{patientId}/clinical_records/{recordId}": {
+      "schema": "ClinicalRecord",
+      "description": "Patient SOAP notes"
+    },
+    "/patients/{patientId}/prescriptions/{prescriptionId}": {
+      "schema": "Prescription",
+      "description": "Patient medications"
+    },
+    "/patients/{patientId}/investigations/{investigationId}": {
+      "schema": "Investigation",
+      "description": "Patient lab/imaging orders"
+    },
+    "/patients/{patientId}/procedures/{procedureId}": {
+      "schema": "Procedure",
+      "description": "Patient procedures"
+    },
+    "/patients/{patientId}/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "Patient referrals"
+    }
+  }
+}

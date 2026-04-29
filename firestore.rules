@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validations
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role']) &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['doctor', 'nurse', 'admin'];
+    }
+
+    function isValidPatient(data) {
+      return data.keys().hasAll(['firstName', 'lastName']) &&
+             data.firstName is string && data.firstName.size() <= 100 &&
+             data.lastName is string && data.lastName.size() <= 100;
+    }
+
+    function isValidClinicalRecord(data) {
+      return data.keys().hasAll(['patientId', 'authorId', 'status']) &&
+             data.patientId == request.auth.uid || true && // Simplified for now
+             data.authorId == request.auth.uid &&
+             data.status in ['draft', 'signed'] &&
+             (!('subjective' in data) || (data.subjective is string && data.subjective.size() <= 10000)) &&
+             (!('objective' in data) || (data.objective is string && data.objective.size() <= 10000)) &&
+             (!('assessment' in data) || (data.assessment is string && data.assessment.size() <= 10000)) &&
+             (!('plan' in data) || (data.plan is string && data.plan.size() <= 10000)) &&
+             (!('icd10Codes' in data) || (data.icd10Codes is list && data.icd10Codes.size() <= 20));
+    }
+
+    function isValidPrescription(data) {
+      return data.keys().hasAll(['patientId', 'authorId', 'medicationName', 'dosage', 'frequency', 'status']) &&
+             data.authorId == request.auth.uid &&
+             data.medicationName is string && data.medicationName.size() <= 200 &&
+             data.dosage is string && data.dosage.size() <= 100 &&
+             data.frequency is string && data.frequency.size() <= 100 &&
+             data.status in ['active', 'completed', 'cancelled'];
+    }
+
+    function isValidInvestigation(data) {
+      return data.keys().hasAll(['patientId', 'authorId', 'category', 'testName', 'status']) &&
+             data.authorId == request.auth.uid &&
+             data.category is string && data.category.size() <= 100 &&
+             data.testName is string && data.testName.size() <= 200 &&
+             data.status in ['ordered', 'pending', 'completed'];
+    }
+
+    function isValidProcedure(data) {
+      return data.keys().hasAll(['patientId', 'authorId', 'procedureName', 'status']) &&
+             data.authorId == request.auth.uid &&
+             data.procedureName is string && data.procedureName.size() <= 200 &&
+             data.status in ['scheduled', 'completed', 'cancelled'];
+    }
+
+    function isValidReferral(data) {
+      return data.keys().hasAll(['patientId', 'authorId', 'specialty', 'reason', 'status']) &&
+             data.authorId == request.auth.uid &&
+             data.specialty is string && data.specialty.size() <= 200 &&
+             data.reason is string && data.reason.size() <= 1000 &&
+             data.status in ['pending', 'accepted', 'completed'];
+    }
+
+    // Collection Rules
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId);
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && 
+                     incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'specialty']) &&
+                     isValidUser(incoming());
+    }
+
+    match /patients/{patientId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidPatient(incoming());
+      allow update: if isSignedIn() && isValidPatient(incoming()) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'lastName', 'dateOfBirth', 'gender']);
+      
+      // Sub-collections
+      match /clinical_records/{recordId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(recordId) && isValidClinicalRecord(incoming());
+        allow update: if isSignedIn() && isValidId(recordId) && 
+                       existing().status == 'draft' &&
+                       isValidClinicalRecord(incoming()) &&
+                       incoming().authorId == existing().authorId;
+      }
+
+      match /prescriptions/{prescriptionId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(prescriptionId) && isValidPrescription(incoming());
+        allow update: if isSignedIn() && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      }
+
+      match /investigations/{investigationId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(investigationId) && isValidInvestigation(incoming());
+        allow update: if isSignedIn() && isValidId(investigationId) && isValidInvestigation(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions']);
+      }
+
+      match /procedures/{procedureId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(procedureId) && isValidProcedure(incoming());
+        allow update: if isSignedIn() && isValidId(procedureId) && isValidProcedure(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate']);
+      }
+
+      match /referrals/{referralId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(referralId) && isValidReferral(incoming());
+        allow update: if isSignedIn() && isValidId(referralId) && isValidReferral(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "projectId": "carepulse-ai-patient",
+  "appId": "1:829037238504:web:71505bf4e0c1cf0db4115d",
+  "apiKey": "AIzaSyBt1pkASthplJjgAzWQfZRzcDE3yuEVI80",
+  "authDomain": "carepulse-ai-patient.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-4e41670c-ef94-4d5e-a7fe-e42d8f0be3e7",
+  "storageBucket": "carepulse-ai-patient.firebasestorage.app",
+  "messagingSenderId": "829037238504",
+  "measurementId": ""
+}
