@@ -3,7 +3,8 @@ import { EventStoreProvider } from './store/eventStore';
 import { Shell } from './components/Layout';
 import { ClinicalRecords } from './domains/clinical-records/ClinicalRecords';
 import { doc, getDocFromServer } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import { db, auth } from './lib/firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { Activity, ChevronRight, User } from 'lucide-react';
@@ -13,8 +14,30 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const sizeClass = useWindowSizeClass();
   const [currentModule, setCurrentModule] = useState('patients');
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
+    // Ensure user is signed in for Firestore operations if possible
+    const login = async () => {
+      try {
+        if (!auth.currentUser) {
+          // Check if anonymous auth is likely available (not usually possible via JS, so we just try/catch)
+          await signInAnonymously(auth);
+          console.log('Signed in anonymously');
+        }
+      } catch (error: any) {
+        // If anonymous auth is disabled in console, we'll see admin-restricted-operation
+        if (error?.code === 'auth/admin-restricted-operation') {
+          console.warn('Anonymous Auth is disabled in Firebase Console. Please enable it under Auth > Sign-in Method to track specific authored records.');
+        } else {
+          console.error('Auth error:', error);
+        }
+      } finally {
+        setIsAuthReady(true);
+      }
+    };
+    login();
+
     async function testFirestoreConnection() {
       try {
         await getDocFromServer(doc(db, '_diagnostics', 'connection'));

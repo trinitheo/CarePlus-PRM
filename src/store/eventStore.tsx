@@ -48,6 +48,18 @@ export interface Vitals {
   hr: number;
   bp: string;
   temp: number;
+  rr?: number;
+  spo2?: number;
+  glucose?: number;
+  weight?: number;
+  height?: number;
+  bmi?: number;
+  hba1c?: number;
+  gcs?: string;
+  gcs_e?: number;
+  gcs_v?: number;
+  gcs_m?: number;
+  avpu?: string;
   timestamp: number;
 }
 

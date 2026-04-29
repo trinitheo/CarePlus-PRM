@@ -24,6 +24,7 @@ import {
   SelectValue 
 } from '../../../components/ui/select';
 import { updatePatientVitals } from '../../services/clinicalFirestoreService';
+import { useCommandDispatcher } from '../../store/eventStore';
 
 interface UpdateVitalsModalProps {
   isOpen: boolean;
@@ -33,39 +34,83 @@ interface UpdateVitalsModalProps {
 }
 
 export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }: UpdateVitalsModalProps) {
+  const dispatch = useCommandDispatcher();
   const [vitals, setVitals] = useState({
-    hr: currentVitals?.hr?.toString() || '',
-    bp: currentVitals?.bp || '',
-    temp: currentVitals?.temp?.toString() || '',
-    rr: '16',
-    spo2: '98',
-    glucose: '98',
-    weight: '88.5',
-    height: '178',
-    bmi: '27.9',
-    hba1c: '6.8',
-    gcs: '15/15',
+    hr: '',
+    bp: '',
+    temp: '',
+    rr: '',
+    spo2: '',
+    glucose: '',
+    weight: '',
+    height: '',
+    bmi: '',
+    hba1c: '',
+    gcs_e: 4,
+    gcs_v: 5,
+    gcs_m: 6,
     avpu: 'Alert'
   });
+
+  // Sync state when modal opens or currentVitals changes
+  React.useEffect(() => {
+    if (isOpen) {
+      setVitals({
+        hr: currentVitals?.hr?.toString() || '',
+        bp: currentVitals?.bp || '',
+        temp: currentVitals?.temp?.toString() || '',
+        rr: currentVitals?.rr?.toString() || '16',
+        spo2: currentVitals?.spo2?.toString() || '98',
+        glucose: currentVitals?.glucose?.toString() || '98',
+        weight: currentVitals?.weight?.toString() || '88.5',
+        height: currentVitals?.height?.toString() || '178',
+        bmi: currentVitals?.bmi?.toString() || '27.9',
+        hba1c: currentVitals?.hba1c?.toString() || '6.8',
+        gcs_e: currentVitals?.gcs_e || 4,
+        gcs_v: currentVitals?.gcs_v || 5,
+        gcs_m: currentVitals?.gcs_m || 6,
+        avpu: currentVitals?.avpu || 'Alert'
+      });
+    }
+  }, [isOpen, currentVitals]);
 
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updatePatientVitals(patientId, {
+      const gcsTotal = Number(vitals.gcs_e) + Number(vitals.gcs_v) + Number(vitals.gcs_m);
+      
+      const payload = {
         ...vitals,
-        hr: vitals.hr ? Number(vitals.hr) : null,
-        temp: vitals.temp ? Number(vitals.temp) : null,
-        rr: vitals.rr ? Number(vitals.rr) : null,
-        spo2: vitals.spo2 ? Number(vitals.spo2) : null,
-        glucose: vitals.glucose ? Number(vitals.glucose) : null,
-        weight: vitals.weight ? Number(vitals.weight) : null,
-        height: vitals.height ? Number(vitals.height) : null,
-        bmi: vitals.bmi ? Number(vitals.bmi) : null,
-        hba1c: vitals.hba1c ? Number(vitals.hba1c) : null,
+        hr: vitals.hr ? Number(vitals.hr) : (currentVitals?.hr || 0),
+        temp: vitals.temp ? Number(vitals.temp) : (currentVitals?.temp || 0),
+        rr: vitals.rr ? Number(vitals.rr) : (currentVitals?.rr || 0),
+        spo2: vitals.spo2 ? Number(vitals.spo2) : (currentVitals?.spo2 || 0),
+        glucose: vitals.glucose ? Number(vitals.glucose) : (currentVitals?.glucose || 0),
+        weight: vitals.weight ? Number(vitals.weight) : (currentVitals?.weight || 0),
+        height: vitals.height ? Number(vitals.height) : (currentVitals?.height || 0),
+        bmi: vitals.bmi ? Number(vitals.bmi) : (currentVitals?.bmi || 0),
+        hba1c: vitals.hba1c ? Number(vitals.hba1c) : (currentVitals?.hba1c || 0),
+        gcs: `${gcsTotal}/15`,
+        timestamp: Date.now(),
         updatedAt: new Date()
+      };
+
+      await updatePatientVitals(patientId, payload);
+      
+      // Dispatch to local event store for Ledger reflection
+      dispatch({
+        type: 'VITALS_RECORDED',
+        payload: {
+          patientId,
+          hr: payload.hr,
+          bp: payload.bp,
+          temp: payload.temp,
+          timestamp: payload.timestamp
+        }
       });
+
       onClose();
     } catch (error) {
       console.error('Error updating vitals:', error);
@@ -76,37 +121,36 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
 
   const inputFields = [
     { label: 'Heart Rate', key: 'hr', unit: 'bpm', type: 'number' },
-    { label: 'Blood Pressure', key: 'bp', unit: '', placeholder: '120/80' },
-    { label: 'Temperature', key: 'temp', unit: '°C' },
-    { label: 'Resp. Rate', key: 'rr', unit: 'breaths/min' },
-    { label: 'SpO2', key: 'spo2', unit: '%' },
-    { label: 'Glucose', key: 'glucose', unit: 'mg/dL' },
-    { label: 'Weight', key: 'weight', unit: 'kg' },
-    { label: 'Height', key: 'height', unit: 'cm' },
-    { label: 'BMI', key: 'bmi', unit: '' },
-    { label: 'HbA1c', key: 'hba1c', unit: '%' },
-    { label: 'GCS', key: 'gcs', unit: '' },
+    { label: 'Blood Pressure', key: 'bp', unit: 'mmHg', placeholder: '120/80' },
+    { label: 'Temperature', key: 'temp', unit: '°C', type: 'number' },
+    { label: 'Resp. Rate', key: 'rr', unit: 'br/min', type: 'number' },
+    { label: 'SpO2', key: 'spo2', unit: '%', type: 'number' },
+    { label: 'Glucose', key: 'glucose', unit: 'mg/dL', type: 'number' },
+    { label: 'Weight', key: 'weight', unit: 'kg', type: 'number' },
+    { label: 'Height', key: 'height', unit: 'cm', type: 'number' },
+    { label: 'BMI', key: 'bmi', unit: '', type: 'number' },
+    { label: 'HbA1c', key: 'hba1c', unit: '%', type: 'number' },
   ];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl bg-white rounded-3xl border-none shadow-2xl p-0 overflow-hidden font-segoe">
-        <DialogHeader className="p-4 py-3 border-b border-[#F3F2F1] flex flex-row items-center justify-between">
-          <DialogTitle className="text-lg font-bold text-[#242424]">Update Patient Vitals</DialogTitle>
+      <DialogContent className="max-w-[416px] w-full bg-white rounded-3xl border-none shadow-2xl p-0 overflow-hidden font-segoe">
+        <DialogHeader className="p-4 py-2.5 border-b border-[#F3F2F1] flex flex-row items-center justify-between">
+          <DialogTitle className="text-base font-bold text-[#242424]">Update Patient Vitals</DialogTitle>
         </DialogHeader>
 
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 bg-[#FAFBFC]">
+        <div className="p-3 grid grid-cols-2 gap-2 bg-[#FAFBFC]">
           {inputFields.map((field) => (
-            <div key={field.key} className="bg-white p-2.5 px-3 rounded-xl border border-[#EDEBE9] shadow-sm hover:border-[#0078D4] transition-all group">
-              <Label className="text-[9px] font-bold text-[#616161] mb-0.5 block tracking-tight uppercase opacity-70">
+            <div key={field.key} className="bg-white p-2 px-3 rounded-xl border border-[#EDEBE9] shadow-sm hover:border-[#0078D4] transition-all group">
+              <Label className="text-[9px] font-bold text-[#616161] mb-0 block tracking-tight uppercase opacity-70">
                 {field.label}
               </Label>
-              <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-baseline gap-2">
                 <input 
                   type={field.type || 'text'}
                   value={(vitals as any)[field.key]}
                   onChange={(e) => setVitals({ ...vitals, [field.key]: e.target.value })}
-                  className="w-full text-base font-semibold text-[#242424] border-none focus:ring-0 p-0 placeholder:text-[#EDEBE9] bg-transparent"
+                  className="flex-1 w-0 text-base font-semibold text-[#242424] border-none focus:ring-0 p-0 placeholder:text-[#EDEBE9] bg-transparent"
                   placeholder={field.placeholder || ''}
                 />
                 <span className="text-[8px] font-bold text-[#A19F9D] uppercase tracking-tighter shrink-0">
@@ -116,8 +160,50 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
             </div>
           ))}
 
-          <div className="bg-white p-2.5 px-3 rounded-xl border border-[#EDEBE9] shadow-sm hover:border-[#0078D4] transition-all group">
-             <Label className="text-[9px] font-bold text-[#616161] mb-0.5 block tracking-tight uppercase opacity-70">
+          <div className="bg-white p-2 px-3 rounded-xl border border-[#EDEBE9] shadow-sm hover:border-[#0078D4] transition-all group col-span-2">
+            <Label className="text-[9px] font-bold text-[#616161] mb-1 block tracking-tight uppercase opacity-70">
+              GCS Components (Eye, Verbal, Motor)
+            </Label>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col flex-1">
+                <span className="text-[8px] font-bold text-[#A19F9D] mb-0.5">E</span>
+                <input 
+                  type="number" 
+                  min="1" max="4"
+                  value={vitals.gcs_e} 
+                  onChange={(e) => setVitals({ ...vitals, gcs_e: Number(e.target.value) })}
+                  className="w-full text-sm font-semibold border-b border-[#F3F2F1] focus:border-[#0078D4] focus:ring-0 p-0 bg-transparent"
+                />
+              </div>
+              <div className="flex flex-col flex-1">
+                <span className="text-[8px] font-bold text-[#A19F9D] mb-0.5">V</span>
+                <input 
+                  type="number" 
+                  min="1" max="5"
+                  value={vitals.gcs_v} 
+                  onChange={(e) => setVitals({ ...vitals, gcs_v: Number(e.target.value) })}
+                  className="w-full text-sm font-semibold border-b border-[#F3F2F1] focus:border-[#0078D4] focus:ring-0 p-0 bg-transparent"
+                />
+              </div>
+              <div className="flex flex-col flex-1">
+                <span className="text-[8px] font-bold text-[#A19F9D] mb-0.5">M</span>
+                <input 
+                  type="number" 
+                  min="1" max="6"
+                  value={vitals.gcs_m} 
+                  onChange={(e) => setVitals({ ...vitals, gcs_m: Number(e.target.value) })}
+                  className="w-full text-sm font-semibold border-b border-[#F3F2F1] focus:border-[#0078D4] focus:ring-0 p-0 bg-transparent"
+                />
+              </div>
+              <div className="flex flex-col items-center pl-2 border-l border-[#F3F2F1]">
+                <span className="text-[8px] font-bold text-[#A19F9D] mb-0.5 uppercase">Total</span>
+                <span className="text-sm font-bold text-[#0078D4]">{Number(vitals.gcs_e) + Number(vitals.gcs_v) + Number(vitals.gcs_m)}/15</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-2 px-3 rounded-xl border border-[#EDEBE9] shadow-sm hover:border-[#0078D4] transition-all group">
+             <Label className="text-[9px] font-bold text-[#616161] mb-0 block tracking-tight uppercase opacity-70">
                 AVPU
               </Label>
               <Select value={vitals.avpu} onValueChange={(val) => setVitals({ ...vitals, avpu: val })}>
@@ -134,18 +220,18 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
           </div>
         </div>
 
-        <DialogFooter className="p-3 px-4 bg-white border-t border-[#F3F2F1] flex gap-3">
+        <DialogFooter className="p-2.5 px-4 bg-white border-t border-[#F3F2F1] flex gap-3">
           <Button 
             variant="ghost" 
             onClick={onClose} 
-            className="flex-1 h-10 rounded-xl bg-[#F3F2F1] text-[#616161] font-bold hover:bg-[#EDEBE9]"
+            className="flex-1 h-9 rounded-xl bg-[#F3F2F1] text-[#616161] font-bold hover:bg-[#EDEBE9]"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleSave} 
             disabled={isSaving}
-            className="flex-1 h-10 rounded-xl bg-[#0078D4] text-white font-bold hover:bg-[#005A9E] shadow-md shadow-[#0078D4]/20"
+            className="flex-1 h-9 rounded-xl bg-[#0078D4] text-white font-bold hover:bg-[#005A9E] shadow-md shadow-[#0078D4]/20"
           >
             {isSaving ? 'Saving...' : 'Save Vitals'}
           </Button>

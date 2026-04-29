@@ -33,11 +33,16 @@ export function ClinicalRecords({
   const clinicalData = usePatientClinicalData(patientId);
   
   const patient = patients[patientId];
-  // Merge vitals: prioritize firestore if available
-  const firestoreVitals = (clinicalData.vitals as any[]).map(v => ({
-    ...v,
-    timestamp: v.createdAt?.seconds * 1000 || Date.now()
-  }));
+  // Merge vitals: prioritize firestore if available and ensure chronological order (ascending)
+  const firestoreVitals = (clinicalData.vitals as any[])
+    .map(v => ({
+      ...v,
+      // Handle the transition state where createdAt might be null on the initial local write
+      timestamp: v.createdAt?.seconds ? v.createdAt.seconds * 1000 : Date.now()
+    }))
+    // Ensure oldest -> newest so [length-1] is indeed the latest
+    .sort((a, b) => a.timestamp - b.timestamp);
+
   const patientVitals = firestoreVitals.length > 0 ? firestoreVitals : (vitals[patientId] || []);
   const intake = clinicalIntakes[patientId];
   const latestVitals = patientVitals[patientVitals.length - 1];
@@ -127,12 +132,12 @@ export function ClinicalRecords({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 flex-1 min-h-0">
         {/* LEFT: Patient Detail Card */}
         <div className="xl:col-span-3 space-y-6 flex flex-col min-h-0">
           <motion.div variants={itemVariants} className="flex-1">
             <Card className="h-full border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-              <div className="p-6">
+              <div className="p-5 xl:p-6">
                 <div className="flex items-center gap-5">
                   <div className="h-20 w-20 rounded-2xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
                     {patient?.id === 'p-1' || patient?.id === 'p-2' ? (

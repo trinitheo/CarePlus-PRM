@@ -67,7 +67,7 @@ export async function saveSOAPNote(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -84,7 +84,7 @@ export async function savePrescription(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'system-user',
       createdAt: serverTimestamp(),
       status: 'active'
     });
@@ -101,7 +101,7 @@ export async function saveInvestigation(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'system-user',
       createdAt: serverTimestamp(),
       status: 'ordered'
     });
@@ -118,7 +118,7 @@ export async function saveProcedure(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'system-user',
       createdAt: serverTimestamp(),
       status: 'scheduled'
     });
@@ -135,7 +135,7 @@ export async function saveReferral(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'system-user',
       createdAt: serverTimestamp(),
       status: 'pending'
     });
@@ -151,7 +151,7 @@ export async function savePatient(patientId: string, data: any) {
   try {
     await setDoc(doc(db, path, patientId), {
       ...data,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -166,7 +166,7 @@ export async function saveClinicalIntake(patientId: string, intakeId: string, da
   try {
     await setDoc(doc(db, path, intakeId), {
       ...data,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -181,7 +181,7 @@ export async function updatePatientVitals(patientId: string, data: any) {
   try {
     const docRef = await addDoc(collection(db, path), {
       ...data,
-      authorId: auth.currentUser?.uid,
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
     });
     return docRef.id;

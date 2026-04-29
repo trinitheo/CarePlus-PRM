@@ -1,6 +1,6 @@
 import { useQueryModel } from '../../store/eventStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
-import { Network, User, Activity, Watch, Pill, Utensils, Database, FileText, Microscope, Stethoscope, UserPlus } from 'lucide-react';
+import { Network, User, Activity, Watch, Pill, Utensils, Database, FileText, Microscope, Stethoscope, UserPlus, Heart, Droplets } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 
@@ -14,11 +14,21 @@ interface GraphNode {
 }
 
 export function KnowledgeGraph({ patientId }: { patientId: string }) {
-  const { patients, healthRecords, vitals, clinicalIntakes } = useQueryModel();
+  const { patients, healthRecords, clinicalIntakes, vitals: mockVitals } = useQueryModel();
   const clinicalData = usePatientClinicalData(patientId);
   const patient = patients[patientId];
   const records = healthRecords[patientId] || [];
-  const latestVitals = vitals[patientId]?.slice(-1)[0];
+
+  // Merge vitals logic same as ClinicalRecords
+  const firestoreVitals = (clinicalData.vitals as any[])
+    .map(v => ({
+      ...v,
+      timestamp: v.createdAt?.seconds ? v.createdAt.seconds * 1000 : Date.now()
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const mergedVitals = firestoreVitals.length > 0 ? firestoreVitals : (mockVitals[patientId] || []);
+  const latestVitals = mergedVitals[mergedVitals.length - 1];
   const intake = clinicalIntakes[patientId];
 
   // Simple "Graph" layout constants
@@ -27,7 +37,12 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
 
   const nodes: GraphNode[] = [
     { id: 'patient', label: patient?.name || 'Unknown', icon: User, x: center.x, y: center.y, type: 'core' },
-    ...(latestVitals ? [{ id: 'vitals', label: 'Vitals', icon: Activity, type: 'source' } as GraphNode] : []),
+    ...(latestVitals ? [
+      { id: 'vitals', label: 'Vitals', icon: Activity, type: 'source' },
+      ...(latestVitals.hr > 100 ? [{ id: 'hr', label: `HR: ${latestVitals.hr}`, icon: Heart, type: 'source' }] : []),
+      ...(latestVitals.bp?.startsWith('16') || latestVitals.bp?.startsWith('17') || latestVitals.bp?.startsWith('18') ? [{ id: 'bp', label: `BP: ${latestVitals.bp}`, icon: Activity, type: 'source' }] : []),
+      ...(latestVitals.spo2 < 95 ? [{ id: 'spo2', label: `SpO2: ${latestVitals.spo2}%`, icon: Droplets, type: 'source' }] : []),
+    ] : []) as GraphNode[],
     ...(intake ? [{ id: 'intake', label: 'Intake', icon: Database, type: 'source' } as GraphNode] : []),
     ...Array.from(new Set(records.map(r => r.source))).map((source) => ({
       id: source,
@@ -135,7 +150,7 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
           </div>
           <div>
             <div className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Knowledge Density</div>
-            <div className="text-xs font-bold text-[#242424]">{records.length + (vitals[patientId]?.length || 0) + clinicalData.clinical_records.length} total edges</div>
+            <div className="text-xs font-bold text-[#242424]">{records.length + mergedVitals.length + clinicalData.clinical_records.length} total edges</div>
           </div>
         </div>
         <div className="flex -space-x-2">

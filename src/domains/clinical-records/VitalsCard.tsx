@@ -62,9 +62,8 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
       }
     }
 
-    // Respiratory Rate (Simulated constant for demo purpose in previous turns, but let's assume it can be evaluated)
     // SpO2
-    const spo2 = 94; // Threshold example
+    const spo2 = latestVitals?.spo2 ?? 98;
     if (spo2 < 95) {
       found.push({ id: 'spo2-low', type: 'warning', title: 'Borderline Hypoxia', detail: 'Oxygen saturation falling below 95% threshold.', icon: Droplets });
     }
@@ -72,26 +71,12 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
     return found;
   }, [latestVitals]);
 
-  const vitalsConfig = [
-    { label: 'Heart Rate', value: latestVitals?.hr, icon: Heart, unit: 'bpm', color: TOKENS.critical },
-    { label: 'Blood Pressure', value: latestVitals?.bp, icon: Activity, unit: 'mmHg', color: TOKENS.brand },
-    { label: 'Resp Rate', value: 16, icon: Wind, unit: 'breaths/min', color: TOKENS.success },
-    { label: 'SpO2', value: 98, icon: Droplets, unit: '%', color: TOKENS.brand },
-    { label: 'Temperature', value: latestVitals?.temp?.toFixed(1), icon: Thermometer, unit: '°C', color: TOKENS.warning },
-    { label: 'Glucose', value: 98, icon: Activity, unit: 'mg/dL', color: TOKENS.warning },
-    { label: 'Weight', value: 88.5, icon: Scale, unit: 'kg', color: TOKENS.neutral2 },
-    { label: 'Height', value: 178, icon: Ruler, unit: 'cm', color: TOKENS.neutral2 },
-    { label: 'BMI', value: 27.9, icon: Activity, unit: '', color: TOKENS.critical },
-  ];
-
-  const isExpanded = sizeClass === 'expanded';
-
   return (
     <Card className="border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white h-full flex flex-col">
       <CardHeader className="py-5 px-6 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 rounded-full bg-[#0078D4]" />
-          <CardTitle className="text-[11px] font-bold text-[#242424] uppercase tracking-[0.15em]">Latest Patient Biometrics</CardTitle>
+          <CardTitle className="text-[20pt] font-bold text-[#242424] tracking-tight">Vital signs</CardTitle>
         </div>
         <div className="flex items-center gap-3">
           <Button 
@@ -121,7 +106,25 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
         <div className="flex flex-col flex-1 p-6 gap-6 overflow-auto">
           {/* Main Grid: Vitals Visualizer */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-4 shrink-0">
-            {vitalsConfig.map((v, i) => (
+            {[
+              { label: 'Heart Rate', value: latestVitals?.hr, icon: Heart, unit: 'bpm', color: TOKENS.critical },
+              { label: 'Blood Pressure', value: latestVitals?.bp, icon: Activity, unit: 'mmHg', color: TOKENS.brand },
+              { label: 'Resp Rate', value: latestVitals?.rr, icon: Wind, unit: 'breaths/min', color: TOKENS.success },
+              { label: 'SpO2', value: latestVitals?.spo2, icon: Droplets, unit: '%', color: TOKENS.brand },
+              { label: 'Temperature', value: latestVitals?.temp?.toFixed(1), icon: Thermometer, unit: '°C', color: TOKENS.warning },
+              { label: 'Glucose', value: latestVitals?.glucose, icon: Activity, unit: 'mg/dL', color: TOKENS.warning },
+              { label: 'Weight', value: latestVitals?.weight, icon: Scale, unit: 'kg', color: TOKENS.neutral2 },
+              { label: 'Height', value: latestVitals?.height, icon: Ruler, unit: 'cm', color: TOKENS.neutral2 },
+              { label: 'BMI', value: latestVitals?.bmi, icon: Activity, unit: '', color: TOKENS.critical },
+              { 
+                label: 'GCS', 
+                value: latestVitals?.gcs || '--', 
+                subValue: latestVitals?.gcs_e ? `E${latestVitals.gcs_e}V${latestVitals.gcs_v}M${latestVitals.gcs_m}` : null,
+                icon: ShieldAlert, 
+                unit: '', 
+                color: TOKENS.neutral1 
+              },
+            ].map((v, i) => (
               <motion.div 
                 key={i}
                 initial={{ opacity: 0, y: 12 }}
@@ -134,11 +137,18 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
                   <v.icon className="h-3.5 w-3.5" style={{ color: v.color }} /> 
                   {v.label}
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <div className="text-[26px] font-segoe font-normal tabular-nums tracking-tighter text-[#242424] group-hover:text-[#0078D4] transition-colors leading-none">
-                    {v.value || '--'}
+                <div className="flex flex-col">
+                  <div className="flex items-baseline gap-1.5">
+                    <div className="text-[26px] font-segoe font-normal tabular-nums tracking-tighter text-[#242424] group-hover:text-[#0078D4] transition-colors leading-none">
+                      {v.value || '--'}
+                    </div>
+                    <div className="text-[10px] font-bold text-[#A19F9D] uppercase tracking-tight">{v.unit}</div>
                   </div>
-                  <div className="text-[10px] font-bold text-[#A19F9D] uppercase tracking-tight">{v.unit}</div>
+                  {(v as any).subValue && (
+                    <div className="text-[9px] font-bold text-[#0078D4] mt-1 tracking-[0.05em] uppercase opacity-90">
+                      {(v as any).subValue}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}

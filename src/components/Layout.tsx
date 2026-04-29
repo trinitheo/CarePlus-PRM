@@ -11,7 +11,7 @@ const NAV_ITEMS = [
 
 export function Sidebar({ currentModule, onNavigate }: { currentModule: string, onNavigate: (module: string) => void }) {
   return (
-    <aside className="hidden md:flex flex-col h-screen border-r border-[#EDEBE9] bg-[#FAFAFA] transition-all duration-300 w-16 lg:w-[15%] shrink-0 shadow-sm z-20">
+    <aside className="hidden md:flex flex-col h-screen border-r border-[#EDEBE9] bg-[#FAFAFA] transition-all duration-300 w-16 lg:w-[200px] shrink-0 shadow-sm z-20">
       <div className="p-6 flex items-center gap-3">
         <div className="h-9 w-9 rounded-xl bg-[#0078D4] flex items-center justify-center shrink-0 shadow-sm shadow-[#0078D4]/20">
           <Activity className="h-5 w-5 text-white" />
@@ -97,7 +97,7 @@ export function Shell({ children, currentModule, onNavigate }: { children: React
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="p-4 md:p-8 flex-1 h-full"
+              className="p-3 md:p-6 flex-1 h-full"
             >
               {children}
             </motion.div>
