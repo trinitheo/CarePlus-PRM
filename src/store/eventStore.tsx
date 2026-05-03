@@ -3,12 +3,24 @@ import { createContext, useContext, useReducer, useEffect, ReactNode } from 'rea
 // --- Domain Events ---
 export type DomainEvent =
   | { type: 'PATIENT_REGISTERED'; payload: Patient }
-  | { type: 'VITALS_RECORDED'; payload: { patientId: string; hr: number; bp: string; temp: number; timestamp: number } }
+  | { type: 'VITALS_RECORDED'; payload: Vitals }
   | { type: 'APPOINTMENT_SCHEDULED'; payload: { id: string; patientId: string; providerId: string; time: string; reason: string } }
   | { type: 'HEALTH_DATA_INGESTED'; payload: { id: string; patientId: string; source: 'watch' | 'medication_log' | 'diet' | 'health_connect'; type: string; value: any; timestamp: number } }
-  | { type: 'CLINICAL_INTAKE_RECORDED'; payload: ClinicalIntake };
+  | { type: 'CLINICAL_INTAKE_RECORDED'; payload: ClinicalIntake }
+  | { type: 'INTERACTION_RECORDED'; payload: Interaction };
 
 // --- State Model ---
+export interface Interaction {
+  id: string;
+  patientId: string;
+  authorId: string;
+  authorRole: 'doctor' | 'nurse' | 'pt' | 'social_worker' | 'financial_counselor' | 'community_lead';
+  type: 'clinical' | 'nursing' | 'pt' | 'social_care' | 'financial' | 'support_group';
+  content: string;
+  category?: string;
+  timestamp: number;
+}
+
 export interface ClinicalIntake {
   id: string;
   patientId: string;
@@ -86,6 +98,7 @@ export interface AppState {
   healthRecords: Record<string, HealthRecord[]>;
   clinicalIntakes: Record<string, ClinicalIntake | undefined>;
   appointments: Record<string, Appointment>;
+  interactions: Record<string, Interaction[]>;
   eventLog: DomainEvent[];
 }
 
@@ -147,6 +160,37 @@ const initialState: AppState = {
   appointments: {
     'appt-1': { id: 'appt-1', patientId: 'p-1', providerId: 'prov-1', time: '2026-04-26T09:00:00Z', reason: 'Follow-up' },
   },
+  interactions: {
+    'p-1': [
+      {
+        id: 'i-1',
+        patientId: 'p-1',
+        authorId: 'sw-1',
+        authorRole: 'social_worker',
+        type: 'social_care',
+        content: 'Patient expressed difficulty with transportation to appointments. Connected with community shuttle program.',
+        timestamp: Date.now() - 172800000
+      },
+      {
+        id: 'i-2',
+        patientId: 'p-1',
+        authorId: 'pt-1',
+        authorRole: 'pt',
+        type: 'pt',
+        content: 'Post-op mobility assessment complete. Patient shows improved range of motion in right knee.',
+        timestamp: Date.now() - 86400000
+      },
+      {
+        id: 'i-3',
+        patientId: 'p-1',
+        authorId: 'fc-1',
+        authorRole: 'financial_counselor',
+        type: 'financial',
+        content: 'Reviewed insurance benefits for upcoming physical therapy sessions. Deductible met.',
+        timestamp: Date.now() - 259200000
+      }
+    ]
+  },
   eventLog: [],
 };
 
@@ -193,6 +237,15 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
         appointments: { ...state.appointments, [event.payload.id]: event.payload },
         eventLog: [...state.eventLog, event],
       };
+    case 'INTERACTION_RECORDED':
+      return {
+        ...state,
+        interactions: {
+          ...state.interactions,
+          [event.payload.patientId]: [...(state.interactions[event.payload.patientId] || []), event.payload]
+        },
+        eventLog: [...state.eventLog, event],
+      };
     default:
       return state;
   }
@@ -219,6 +272,8 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
             hr: 70 + Math.floor(Math.random() * 15),
             bp: `120/${75 + Math.floor(Math.random() * 10)}`,
             temp: 98.6 + (Math.random() * 0.4 - 0.2),
+            rr: 12 + Math.floor(Math.random() * 8),
+            spo2: 95 + Math.floor(Math.random() * 5),
             timestamp: Date.now(),
           },
         });

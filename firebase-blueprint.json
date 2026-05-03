@@ -125,6 +125,45 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "authorId", "specialty", "reason"]
+    },
+    "Vitals": {
+      "title": "Vital Signs",
+      "description": "Patient physiological measurements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "hr": { "type": "number" },
+        "bp": { "type": "string" },
+        "temp": { "type": "number" },
+        "rr": { "type": "number" },
+        "spo2": { "type": "number" },
+        "glucose": { "type": "number" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "bmi": { "type": "number" },
+        "hba1c": { "type": "number" },
+        "gcs": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId"]
+    },
+    "Interaction": {
+      "title": "Patient Interaction",
+      "description": "Any interaction between a healthcare/support worker and the patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorRole": { "type": "string", "enum": ["doctor", "nurse", "pt", "social_worker", "financial_counselor"] },
+        "type": { "type": "string", "enum": ["clinical", "nursing", "pt", "social_care", "financial", "support_group"] },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "authorId", "authorRole", "type", "content"]
     }
   },
   "firestore": {
@@ -155,6 +194,14 @@
     "/patients/{patientId}/referrals/{referralId}": {
       "schema": "Referral",
       "description": "Patient referrals"
+    },
+    "/patients/{patientId}/vitals/{vitalId}": {
+      "schema": "Vitals",
+      "description": "Patient vital signs records"
+    },
+    "/patients/{patientId}/interactions/{interactionId}": {
+      "schema": "Interaction",
+      "description": "Historical interactions with care team"
     }
   }
 }

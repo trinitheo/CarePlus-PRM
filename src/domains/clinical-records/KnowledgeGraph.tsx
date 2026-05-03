@@ -1,39 +1,67 @@
+import { useMemo } from 'react';
 import { useQueryModel } from '../../store/eventStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
-import { Network, User, Activity, Watch, Pill, Utensils, Database, FileText, Microscope, Stethoscope, UserPlus, Heart, Droplets } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { 
+  Network, User, Activity, Watch, Pill, Utensils, Database, FileText, 
+  Microscope, Stethoscope, UserPlus, Heart, Droplets, Users, 
+  DollarSign, Accessibility, MessagesSquare, HeartHandshake 
+} from 'lucide-react';
+import { motion } from 'motion/react';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 
 interface GraphNode {
   id: string;
   label: string;
   icon: any;
-  type: 'core' | 'source';
+  type: 'core' | 'source' | 'interaction';
   x?: number;
   y?: number;
+  color?: string;
 }
 
-export function KnowledgeGraph({ patientId }: { patientId: string }) {
-  const { patients, healthRecords, clinicalIntakes, vitals: mockVitals } = useQueryModel();
+export function KnowledgeGraph({ 
+  patientId,
+  onNodeClick 
+}: { 
+  patientId: string;
+  onNodeClick?: (nodeId: string) => void;
+}) {
+  const { patients, healthRecords, clinicalIntakes, interactions, vitals: mockVitals } = useQueryModel();
   const clinicalData = usePatientClinicalData(patientId);
   const patient = patients[patientId];
   const records = healthRecords[patientId] || [];
+  const mockInteractions = interactions[patientId] || [];
 
-  // Merge vitals logic same as ClinicalRecords
-  const firestoreVitals = (clinicalData.vitals as any[])
-    .map(v => ({
+  // Merge Firestore interactions with mock interactions
+  const firestoreInteractions = (clinicalData.interactions as any[])
+    .map(i => ({
+      ...i,
+      timestamp: i.createdAt?.seconds ? i.createdAt.seconds * 1000 : (i.timestamp || Date.now())
+    }));
+  
+  const patentInteractionsCombined = [...firestoreInteractions, ...mockInteractions];
+
+  const localVitals = mockVitals[patientId] || [];
+
+  // Merge vitals: prioritize firestore if available, merge with local for immediate feedback
+  const mergedVitals = useMemo(() => {
+    const firestoreVitalsMapped = (clinicalData.vitals as any[]).map(v => ({
       ...v,
-      timestamp: v.createdAt?.seconds ? v.createdAt.seconds * 1000 : Date.now()
-    }))
-    .sort((a, b) => a.timestamp - b.timestamp);
+      timestamp: v.createdAt?.seconds ? v.createdAt.seconds * 1000 : (v.timestamp || Date.now())
+    }));
 
-  const mergedVitals = firestoreVitals.length > 0 ? firestoreVitals : (mockVitals[patientId] || []);
+    const vitalsMap = new Map();
+    localVitals.forEach(v => vitalsMap.set(v.timestamp, v));
+    firestoreVitalsMapped.forEach(v => vitalsMap.set(v.timestamp, v));
+
+    return Array.from(vitalsMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+  }, [clinicalData.vitals, localVitals]);
   const latestVitals = mergedVitals[mergedVitals.length - 1];
   const intake = clinicalIntakes[patientId];
 
   // Simple "Graph" layout constants
   const center = { x: 200, y: 150 };
-  const radius = 90;
+  const radius = 95;
 
   const nodes: GraphNode[] = [
     { id: 'patient', label: patient?.name || 'Unknown', icon: User, x: center.x, y: center.y, type: 'core' },
@@ -55,12 +83,27 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
     ...(clinicalData.investigations.length > 0 ? [{ id: 'lab', label: 'Labs', icon: Microscope, type: 'source' } as GraphNode] : []),
     ...(clinicalData.procedures.length > 0 ? [{ id: 'proc', label: 'Proc', icon: Stethoscope, type: 'source' } as GraphNode] : []),
     ...(clinicalData.referrals.length > 0 ? [{ id: 'ref', label: 'Ref', icon: UserPlus, type: 'source' } as GraphNode] : []),
+    
+    // Multi-disciplinary Interaction Nodes
+    ...Array.from(new Set(patentInteractionsCombined.map(i => i.type))).map(type => {
+      let icon = Users;
+      let label = (type as string).toUpperCase();
+      let color = '#0078D4';
+
+      if (type === 'social_care') { icon = HeartHandshake; label = 'Social Care'; color = '#E3008C'; }
+      if (type === 'financial') { icon = DollarSign; label = 'Financial'; color = '#107C10'; }
+      if (type === 'pt') { icon = Accessibility; label = 'PT / Rehab'; color = '#5C2D91'; }
+      if (type === 'support_group') { icon = MessagesSquare; label = 'Support'; color = '#008272'; }
+      if (type === 'nursing') { icon = Stethoscope; label = 'Nursing'; color = '#D13438'; }
+
+      return { id: `interaction-${type}`, label, icon, type: 'interaction', color } as GraphNode;
+    })
   ];
 
   return (
-    <div className="flex-1 p-0 relative bg-white">
+    <div className="flex-1 p-0 relative bg-white overflow-hidden flex flex-col">
       {/* SVG Visualization */}
-      <svg viewBox="0 0 400 300" className="w-full h-full">
+      <svg viewBox="0 0 400 300" className="w-full h-full mt-[-14px]">
         <defs>
           <radialGradient id="nodeGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
             <stop offset="0%" stopColor="#0078D4" stopOpacity="0.1" />
@@ -70,7 +113,8 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
         
         {/* Connections */}
         {nodes.filter(n => n.id !== 'patient').map((node, i) => {
-          const angle = (i / (nodes.length - 1)) * Math.PI * 2;
+          const totalNodes = nodes.length - 1;
+          const angle = (i / totalNodes) * Math.PI * 2;
           const x = center.x + Math.cos(angle) * radius;
           const y = center.y + Math.sin(angle) * radius;
           
@@ -79,12 +123,13 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
               key={`line-${node.id}`}
               initial={{ pathLength: 0, opacity: 0 }}
               animate={{ pathLength: 1, opacity: 1 }}
-              transition={{ duration: 1, delay: i * 0.1 }}
+              transition={{ duration: 1, delay: i * 0.05 }}
               x1={center.x} y1={center.y} 
               x2={x} y2={y} 
-              stroke="#EDEBE9" 
-              strokeWidth="1.5" 
-              strokeDasharray="4 4"
+              stroke={node.type === 'interaction' ? (node as any).color : "#EDEBE9"} 
+              strokeWidth={node.type === 'interaction' ? "1" : "1"} 
+              strokeOpacity={node.type === 'interaction' ? 0.3 : 0.8}
+              strokeDasharray={node.type === 'interaction' ? "0" : "4 4"}
             />
           );
         })}
@@ -96,11 +141,12 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
 
           if (node.id !== 'patient') {
             const angle = (nodes.indexOf(node) / (nodes.length - 1)) * Math.PI * 2;
-            x = center.x + Math.cos(angle) * radius;
-            y = center.y + Math.sin(angle) * radius;
+            x = center.x + Math.cos(angle) * (node.type === 'interaction' ? radius + 15 : radius);
+            y = center.y + Math.sin(angle) * (node.type === 'interaction' ? radius + 15 : radius);
           }
 
           const isCore = node.type === 'core';
+          const isInteraction = node.type === 'interaction';
 
           return (
             <motion.g 
@@ -111,29 +157,31 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
                 type: 'spring',
                 stiffness: 260,
                 damping: 20,
-                delay: i * 0.05 
+                delay: i * 0.03 
               }}
               whileHover={{ scale: 1.1 }}
               className="cursor-pointer"
+              onClick={() => onNodeClick?.(node.id)}
             >
               <circle 
                 cx={x} cy={y} 
-                r={isCore ? 28 : 20} 
-                className={`${isCore ? 'fill-[#0078D4] shadow-lg' : 'fill-white'} stroke-[#EDEBE9]`}
+                r={isCore ? 28 : isInteraction ? 22 : 18} 
+                className={`${isCore ? 'fill-[#0078D4]' : 'fill-white'} stroke-[#EDEBE9]`}
                 strokeWidth="1"
+                style={isInteraction ? { stroke: node.color, strokeOpacity: 0.4 } : {}}
               />
               {isCore && (
                 <circle cx={x} cy={y} r={35} fill="url(#nodeGradient)" />
               )}
               <foreignObject x={x - 10} y={y - 10} width="20" height="20">
                 <div className="flex items-center justify-center w-full h-full">
-                  <node.icon className={`w-4 h-4 ${isCore ? 'text-white' : 'text-[#0078D4]'}`} />
+                  <node.icon className={`w-4 h-4 ${isCore ? 'text-white' : ''}`} style={!isCore ? { color: node.color || '#0078D4' } : {}} />
                 </div>
               </foreignObject>
               <text 
                 x={x} y={y + (isCore ? 42 : 32)} 
                 textAnchor="middle" 
-                className={`text-[9px] font-bold uppercase tracking-widest ${isCore ? 'fill-[#242424]' : 'fill-[#616161]'}`}
+                className={`text-[8px] font-bold uppercase tracking-widest ${isCore ? 'fill-[#242424]' : 'fill-[#616161]'}`}
               >
                 {node.label}
               </text>
@@ -143,18 +191,20 @@ export function KnowledgeGraph({ patientId }: { patientId: string }) {
       </svg>
 
       {/* Legend/Side Panel - Styled for Rework */}
-      <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md border border-[#EDEBE9] rounded-xl p-3 shadow-md flex items-center justify-between">
+      <div className="bg-white/90 backdrop-blur-md border-t border-[#EDEBE9] p-3 flex items-center justify-between mt-auto shrink-0">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-[#F3F9FD] flex items-center justify-center">
-            <Database className="h-4 w-4 text-[#0078D4]" />
+            <Network className="h-4 w-4 text-[#0078D4]" />
           </div>
           <div>
-            <div className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Knowledge Density</div>
-            <div className="text-xs font-bold text-[#242424]">{records.length + mergedVitals.length + clinicalData.clinical_records.length} total edges</div>
+            <div className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Connectome Connectivity</div>
+            <div className="text-xs font-bold text-[#242424]">
+              {records.length + mergedVitals.length + clinicalData.clinical_records.length + patentInteractionsCombined.length} total active edges
+            </div>
           </div>
         </div>
         <div className="flex -space-x-2">
-          {[Pill, Activity, FileText].map((Icon, i) => (
+          {[Pill, Activity, HeartHandshake, DollarSign].map((Icon, i) => (
             <div key={i} className="h-6 w-6 rounded-full bg-white border border-[#EDEBE9] flex items-center justify-center shadow-sm">
               <Icon className="h-3 w-3 text-[#616161]" />
             </div>

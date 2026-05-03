@@ -1,12 +1,12 @@
 import { useQueryModel, Patient } from '../../store/eventStore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
-import { Input } from '../../../components/ui/input';
-import { Button } from '../../../components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useState } from 'react';
 import { Search, UserPlus, ArrowRight, User, Users, Activity, FileText } from 'lucide-react';
-import { Badge } from '../../../components/ui/badge';
-import { ScrollArea } from '../../../components/ui/scroll-area';
+import { Badge } from '../../components/ui/badge';
+import { ScrollArea } from '../../components/ui/scroll-area';
 
 interface PatientExplorerProps {
   onSelectPatient: (id: string) => void;
@@ -70,7 +70,7 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
                         isSelected 
                           ? 'bg-[#F3F9FD] after:content-[""] after:absolute after:left-0 after:top-2 after:bottom-2 after:w-1 after:bg-[#0078D4] after:rounded-r-sm' 
                           : 'hover:bg-[#F5F5F5]'
-                      } ${compact ? 'p-3 py-4' : 'p-6 py-4'}`}
+                      } ${compact ? 'p-2 py-3' : 'p-4 py-3'}`}
                       onClick={() => onSelectPatient(p.id)}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -136,7 +136,7 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
                 <stat.icon style={{ color: stat.color }} className="h-3 w-3" />
                 {stat.label}
               </div>
-              <div className="text-2xl font-black text-[#242424] tracking-tighter tabular-nums">{stat.value}</div>
+              <div className="text-xl font-black text-[#242424] tracking-tighter tabular-nums">{stat.value}</div>
             </div>
           ))}
         </div>

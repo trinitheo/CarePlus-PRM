@@ -189,3 +189,19 @@ export async function updatePatientVitals(patientId: string, data: any) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+// Interactions
+export async function saveInteraction(patientId: string, data: any) {
+  const path = `patients/${patientId}/interactions`;
+  try {
+    const docRef = await addDoc(collection(db, path), {
+      ...data,
+      patientId,
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}

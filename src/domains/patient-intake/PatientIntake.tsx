@@ -1,5 +1,5 @@
 import { RegistrationFlow } from './RegistrationFlow';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Users } from 'lucide-react';
 
 export function PatientIntake({ onComplete, onCancel }: { onComplete: (id: string) => void, onCancel: () => void }) {

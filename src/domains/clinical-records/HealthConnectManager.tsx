@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useCommandDispatcher } from '../../store/eventStore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
-import { Button } from '../../../components/ui/button';
-import { Badge } from '../../../components/ui/badge';
-import { Separator } from '../../../components/ui/separator';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Separator } from '../../components/ui/separator';
 import { Apple, Smartphone, Watch, Pill, Utensils, Link2, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../../../components/ui/dialog';
+import { motion, AnimatePresence } from 'motion/react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../../components/ui/dialog';
 
 interface ConnectionProps {
   patientId: string;

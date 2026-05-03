@@ -6,23 +6,23 @@ import {
   AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Button } from '../../../components/ui/button';
+import { Button } from '../../components/ui/button';
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle,
   DialogFooter
-} from '../../../components/ui/dialog';
-import { Input } from '../../../components/ui/input';
-import { Label } from '../../../components/ui/label';
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import { 
   Select, 
   SelectContent, 
   SelectItem, 
   SelectTrigger, 
   SelectValue 
-} from '../../../components/ui/select';
+} from '../../components/ui/select';
 import { updatePatientVitals } from '../../services/clinicalFirestoreService';
 import { useCommandDispatcher } from '../../store/eventStore';
 
@@ -58,7 +58,7 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
       setVitals({
         hr: currentVitals?.hr?.toString() || '',
         bp: currentVitals?.bp || '',
-        temp: currentVitals?.temp?.toString() || '',
+        temp: currentVitals?.temp !== undefined ? Number(currentVitals.temp).toFixed(1) : '',
         rr: currentVitals?.rr?.toString() || '16',
         spo2: currentVitals?.spo2?.toString() || '98',
         glucose: currentVitals?.glucose?.toString() || '98',
@@ -103,11 +103,8 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
       dispatch({
         type: 'VITALS_RECORDED',
         payload: {
-          patientId,
-          hr: payload.hr,
-          bp: payload.bp,
-          temp: payload.temp,
-          timestamp: payload.timestamp
+          ...payload,
+          patientId
         }
       });
 

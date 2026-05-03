@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { useCommandDispatcher, Patient, ClinicalIntake } from '../../store/eventStore';
 import { savePatient, saveClinicalIntake } from '../../services/clinicalFirestoreService';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
-import { Input } from '../../../components/ui/input';
-import { Label } from '../../../components/ui/label';
-import { Button } from '../../../components/ui/button';
-import { Textarea } from '../../../components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../components/ui/dialog';
-import { Checkbox } from '../../../components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '../../../components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Button } from '../../components/ui/button';
+import { Textarea } from '../../components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog';
+import { Checkbox } from '../../components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface RegistrationFlowProps {
   onComplete: (id: string) => void;
