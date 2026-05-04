@@ -50,8 +50,8 @@ export function CareEcosystem({ patientId }: { patientId: string }) {
   };
 
   return (
-    <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-      <CardHeader className="py-2.5 px-4 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between">
+    <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
+      <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between">
         <div className="flex flex-col">
           <CardTitle className="text-[12px] font-bold text-[#242424] flex items-center gap-2 uppercase tracking-widest opacity-80">
             <Users className="h-3.5 w-3.5 text-[#E3008C]" />
@@ -63,7 +63,7 @@ export function CareEcosystem({ patientId }: { patientId: string }) {
 
       <CardContent className="p-0 flex-1 flex flex-col min-h-0">
         <ScrollArea className="flex-1">
-          <div className="p-4 space-y-3">
+          <div className="p-2 space-y-2">
           {mergedInteractions.map((interaction, idx) => {
             const Icon = getIcon(interaction.type);
             const colorClass = getColor(interaction.type);

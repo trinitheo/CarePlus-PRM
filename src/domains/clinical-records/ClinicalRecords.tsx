@@ -19,7 +19,7 @@ import { NewReferralModal } from './NewReferralModal';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { VitalsCard } from './VitalsCard';
 import { InteractionEntryModal } from './InteractionEntryModal';
-import { ClinicalLog } from './ClinicalLog';
+import { ClinicalLogSidebar, ClinicalLogViewer } from './ClinicalLog';
 import { ClinicalTimelineCard } from './ClinicalTimelineCard';
 import { 
   Dialog, 
@@ -29,7 +29,9 @@ import {
 } from '../../components/ui/dialog';
 import { CareEcosystem } from './CareEcosystem';
 import { motion } from 'motion/react';
-import { useState, useMemo } from 'react';
+import { transition } from '../../lib/motion';
+import { useState, useMemo, useEffect } from 'react';
+import { useHIPAAMonitor } from '../../hooks/useHIPAAMonitor';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 
@@ -46,6 +48,15 @@ export function ClinicalRecords({
   const clinicalData = usePatientClinicalData(patientId);
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
   const [isCareEcosystemModalOpen, setIsCareEcosystemModalOpen] = useState(false);
+  const { logAccess } = useHIPAAMonitor();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (patientId) {
+      logAccess('VIEW_CLINICAL_PROFILE', 'Patient', patientId);
+    }
+  }, [patientId]);
   
   const patient = patients[patientId];
   const localVitals = vitals[patientId] || [];
@@ -75,8 +86,8 @@ export function ClinicalRecords({
   const latestVitals = patientVitals[patientVitals.length - 1];
 
   const renderMedicationsCard = (expanded = false) => (
-    <Card className={`flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white ${expanded ? 'h-[600px]' : 'h-full'}`}>
-      <CardHeader className="py-2.5 px-4 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
+    <Card className={`flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white ${expanded ? 'h-[350px]' : 'h-full'}`}>
+      <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
         <CardTitle className="text-[12px] font-bold text-[#242424] flex items-center gap-2 uppercase tracking-widest opacity-80">
           <Pill className="h-3.5 w-3.5 text-[#107C10]" />
           Current Medications
@@ -90,11 +101,11 @@ export function ClinicalRecords({
           {clinicalData.prescriptions.length > 0 ? (
             <div className="divide-y divide-[#F3F2F1]">
               {clinicalData.prescriptions.map((px: any, i: number) => (
-                <div key={i} className="px-4 py-3 hover:bg-[#F3F9FD] transition-all group pointer-events-auto cursor-pointer">
+                <div key={i} className="px-2 py-2 hover:bg-[#F3F9FD] transition-all group pointer-events-auto cursor-pointer">
                   <div className="flex items-start justify-between">
                     <div className="space-y-0.5">
-                      <h4 className="text-[13px] font-bold text-[#242424] group-hover:text-[#0078D4] transition-colors leading-tight">{px.medicationName}</h4>
-                      <p className="text-[11px] text-[#616161] font-medium">{px.dosage}, {px.frequency}</p>
+                      <h4 className="text-[11px] font-bold text-[#242424] group-hover:text-[#0078D4] transition-colors leading-tight">{px.medicationName}</h4>
+                      <p className="text-[10px] text-[#616161] font-medium">{px.dosage}, {px.frequency}</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Badge className="bg-[#DFF6DD] text-[#107C10] border-none text-[8px] font-black uppercase px-1.5 py-0.5 rounded-sm">Active</Badge>
                         <span className="text-[9px] text-[#A19F9D] font-medium tracking-tight">Prescribed: {px.createdAt ? new Date(px.createdAt?.seconds * 1000).toLocaleDateString() : 'Just now'}</span>
@@ -114,11 +125,11 @@ export function ClinicalRecords({
                 { name: 'Linagliptin 2.5 MG / metformin hydrochloride 1000 MG Oral Tablet', dose: '2.5/1000 MG', freq: 'Twice daily with meals' },
                 { name: 'Methotrexate 15mg Oral Tablet', dose: '15mg', freq: 'Once weekly' }
               ].map((med, i) => (
-                <div key={i} className="px-4 py-3 hover:bg-[#F3F9FD] transition-all group cursor-pointer">
+                <div key={i} className="px-2 py-2 hover:bg-[#F3F9FD] transition-all group cursor-pointer">
                   <div className="flex items-start justify-between">
                     <div className="space-y-0.5">
-                      <h4 className="text-[13px] font-bold text-[#242424] group-hover:text-[#0078D4] transition-colors leading-tight">{med.name}</h4>
-                      <p className="text-[11px] text-[#616161] font-medium">{med.dose}, {med.freq}</p>
+                      <h4 className="text-[11px] font-bold text-[#242424] group-hover:text-[#0078D4] transition-colors leading-tight">{med.name}</h4>
+                      <p className="text-[10px] text-[#616161] font-medium">{med.dose}, {med.freq}</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Badge className="bg-[#DFF6DD] text-[#107C10] border-none text-[8px] font-black uppercase px-1.5 py-0.5 rounded-sm">Active</Badge>
                         <span className="text-[9px] text-[#A19F9D] font-medium tracking-tight">Refills: 2 remaining</span>
@@ -143,20 +154,23 @@ export function ClinicalRecords({
   );
 
   const containerVariants = {
-    hidden: { opacity: 0, y: 10 },
+    hidden: { opacity: 0 },
     visible: { 
-      opacity: 1, 
-      y: 0,
+      opacity: 1,  
       transition: { 
-        duration: 0.4,
-        staggerChildren: 0.1
+        staggerChildren: 0.05,
+        delayChildren: 0.05,
       }
     }
   };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 10 },
-    visible: { opacity: 1, y: 0 }
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: transition.entrance
+    }
   };
 
   return (
@@ -243,92 +257,102 @@ export function ClinicalRecords({
         onClose={() => setIsInteractionModalOpen(false)}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
         {/* LEFT: Patient Detail Card (Fixed Sidebar) */}
         <div className="xl:col-span-3 flex flex-col min-h-0">
-          <motion.div variants={itemVariants} className="flex-1">
-            <Card className="h-full border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-              <div className="p-4 xl:p-5">
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
-                    {patient?.id === 'p-1' || patient?.id === 'p-2' ? (
-                      <img 
-                        src={patient?.id === 'p-1' 
-                          ? "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop" 
-                          : "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop"
-                        } 
-                        alt=""
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-[#F3F2F1]">
-                        <User className="h-8 w-8 text-[#A19F9D]" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-xl font-bold tracking-tight text-[#242424] leading-none mb-1.5">{patient?.name}</h1>
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest">Age</span>
-                        <span className="text-xs font-bold text-[#242424]">{patient?.age}y ({patient?.sex})</span>
-                      </div>
-                      <div className="h-4 w-[1px] bg-[#EDEBE9]" />
-                      <div className="flex flex-col">
-                        <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest">Blood Type</span>
-                        <span className="text-xs font-bold text-[#D13438]">{patient?.bloodType || 'A+'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid grid-cols-1 gap-5">
-                  <div className="p-3 rounded-lg border border-[#FBC6CC] bg-[#FDE7E9]/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle className="h-3.5 w-3.5 text-[#A4262C]" />
-                      <span className="text-[10px] font-bold text-[#A4262C] uppercase tracking-widest">Severe Allergies</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(intake?.allergies || 'NONE REPORTED').split(',').map((allergy, idx) => (
-                        <Badge key={idx} className="bg-[#A4262C] text-white border-none text-[9px] uppercase font-bold py-0.5 px-2 rounded-md shadow-sm">
-                          {allergy.trim()}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Ongoing Conditions</span>
-                      <Badge variant="outline" className="text-[8px] bg-[#F3F2F1] border-none text-[#616161] font-bold">ACTIVE</Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(patient?.conditions || []).map((condition, idx) => (
-                        <Badge key={idx} variant="secondary" className="bg-[#DEECF9] text-[#005A9E] border-none rounded-md px-2.5 py-1 text-[10px] font-bold shadow-sm transition-all hover:bg-[#CFE4FA]">
-                          {condition}
-                        </Badge>
-                      ))}
-                      {(!patient?.conditions || patient.conditions.length === 0) && (
-                        <span className="text-[11px] text-[#616161] italic">No active conditions.</span>
+          {activeTab === 'clinical' ? (
+            <motion.div variants={itemVariants} className="flex-1 bg-[#F8F9FA]/50 p-4 rounded-3xl border border-[#EDEBE9] h-full flex flex-col min-h-0">
+              <ClinicalLogSidebar 
+                patientId={patientId} 
+                selectedNoteId={selectedNoteId} 
+                onSelectNote={setSelectedNoteId} 
+              />
+            </motion.div>
+          ) : (
+            <motion.div variants={itemVariants} className="flex-1">
+              <Card className="h-full border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
+                <div className="p-2 xl:p-3">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
+                      {patient?.id === 'p-1' || patient?.id === 'p-2' ? (
+                        <img 
+                          src={patient?.id === 'p-1' 
+                            ? "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop" 
+                            : "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop"
+                          } 
+                          alt=""
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-[#F3F2F1]">
+                          <User className="h-8 w-8 text-[#A19F9D]" />
+                        </div>
                       )}
                     </div>
+                    <div className="flex-1 min-h-0 min-w-0">
+                      <h1 className="text-xl font-bold tracking-tight text-[#242424] leading-none mb-1.5">{patient?.name}</h1>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest">Age</span>
+                          <span className="text-xs font-bold text-[#242424]">{patient?.age}y ({patient?.sex})</span>
+                        </div>
+                        <div className="h-4 w-[1px] bg-[#EDEBE9]" />
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest">Blood Type</span>
+                          <span className="text-xs font-bold text-[#D13438]">{patient?.bloodType || 'A+'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-1 gap-5">
+                    <div className="p-3 rounded-lg border border-[#FBC6CC] bg-[#FDE7E9]/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-[#A4262C]" />
+                        <span className="text-[10px] font-bold text-[#A4262C] uppercase tracking-widest">Severe Allergies</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(intake?.allergies || 'NONE REPORTED').split(',').map((allergy, idx) => (
+                          <Badge key={idx} className="bg-[#A4262C] text-white border-none text-[9px] uppercase font-bold py-0.5 px-2 rounded-md shadow-sm">
+                            {allergy.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Ongoing Conditions</span>
+                        <Badge variant="outline" className="text-[8px] bg-[#F3F2F1] border-none text-[#616161] font-bold">ACTIVE</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(patient?.conditions || []).map((condition, idx) => (
+                          <Badge key={idx} variant="secondary" className="bg-[#DEECF9] text-[#005A9E] border-none rounded-md px-2.5 py-1 text-[10px] font-bold shadow-sm transition-all hover:bg-[#CFE4FA]">
+                            {condition}
+                          </Badge>
+                        ))}
+                        {(!patient?.conditions || patient.conditions.length === 0) && (
+                          <span className="text-[11px] text-[#616161] italic">No active conditions.</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="bg-[#FAFAFA] border-t border-[#EDEBE9] p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5 text-[#616161]" />
-                  <span className="text-[11px] text-[#616161] font-medium uppercase tracking-tight">Last Visit: {patient?.lastVisit || '--'}</span>
+                <div className="bg-[#FAFAFA] border-t border-[#EDEBE9] p-4 flex items-center justify-between mt-auto">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-[#616161]" />
+                    <span className="text-[11px] text-[#616161] font-medium uppercase tracking-tight">Last Visit: {patient?.lastVisit || '--'}</span>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          </motion.div>
+              </Card>
+            </motion.div>
+          )}
         </div>
 
         {/* RIGHT: Tabbed Content Area */}
         <div className="xl:col-span-9 flex flex-col min-h-0">
-          <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <TabsList className="bg-white border border-[#EDEBE9] p-0.5 rounded-lg shadow-sm h-auto">
                 <TabsTrigger 
@@ -355,19 +379,19 @@ export function ClinicalRecords({
               </TabsList>
             </div>
 
-            <TabsContent value="overview" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-4">
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 flex-1 min-h-0">
-                <div className="xl:col-span-8 flex flex-col min-h-0 gap-4">
+            <TabsContent value="overview" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
+                <div className="xl:col-span-8 flex flex-col min-h-0 gap-2">
                    <VitalsCard vitals={patientVitals} patientId={patientId} />
                    <div className="flex-1 min-h-0">
                       {renderMedicationsCard()}
                    </div>
                 </div>
-                <div className="xl:col-span-4 flex flex-col min-h-0 gap-4">
+                <div className="xl:col-span-4 flex flex-col min-h-0 gap-2">
                    <CareEcosystem patientId={patientId} />
                    <div className="flex-1 min-h-0">
-                      <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-                        <CardHeader className="py-2 px-4 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
+                      <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
+                        <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
                           <CardTitle className="text-[10px] font-bold text-[#242424] flex items-center gap-2 uppercase tracking-widest opacity-80">
                             <Network className="h-3 w-3 text-[#0078D4]" />
                             Knowledge Graph
@@ -386,32 +410,35 @@ export function ClinicalRecords({
             </TabsContent>
 
             <TabsContent value="clinical" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col">
-              <ScrollArea className="flex-1 -mx-4 px-4">
-                <div className="space-y-6 pb-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div className="lg:col-span-7">
-                      <VitalsCard vitals={patientVitals} patientId={patientId} />
-                    </div>
-                    <div className="lg:col-span-5">
-                      {renderMedicationsCard(true)}
-                    </div>
+              {selectedNoteId ? (
+                <div className="flex-1 h-full flex flex-col pt-1">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-4 w-1 bg-[#0078D4] rounded-full" />
+                    <h3 className="text-sm font-bold text-[#242424] uppercase tracking-widest opacity-80">Patient Notes</h3>
                   </div>
-                  <div className="h-[800px] flex flex-col pt-2">
-                    <div className="flex items-center gap-2 mb-4 px-1">
-                      <div className="h-4 w-1 bg-[#0078D4] rounded-full" />
-                      <h3 className="text-sm font-bold text-[#242424] uppercase tracking-widest opacity-80">Full Clinical Documentation</h3>
-                    </div>
-                    <ClinicalLog patientId={patientId} />
-                  </div>
+                  <ClinicalLogViewer patientId={patientId} selectedNoteId={selectedNoteId} />
                 </div>
-              </ScrollArea>
+              ) : (
+                <ScrollArea className="flex-1 -mx-4 px-4">
+                  <div className="space-y-6 pb-6 pt-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      <div className="lg:col-span-7">
+                        <VitalsCard vitals={patientVitals} patientId={patientId} />
+                      </div>
+                      <div className="lg:col-span-5">
+                        {renderMedicationsCard(true)}
+                      </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+              )}
             </TabsContent>
 
-            <TabsContent value="insights" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-6">
-               <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 min-h-0">
+            <TabsContent value="insights" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
+               <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
                   <motion.div variants={itemVariants} className="xl:col-span-8 flex flex-col min-h-0">
-                    <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white">
-                      <CardHeader className="py-2.5 px-4 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
+                    <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
+                      <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
                         <CardTitle className="text-[12px] font-bold text-[#242424] flex items-center gap-2 uppercase tracking-widest opacity-80">
                           <Network className="h-3.5 w-3.5 text-[#0078D4]" />
                           Interactive Clinical Connectome

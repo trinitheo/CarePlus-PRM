@@ -48,8 +48,8 @@ export const ClinicalTimelineCard: React.FC<ClinicalTimelineCardProps> = ({ reco
     const documentStream = useUnifiedDocumentStream(records);
 
     return (
-        <div className="bg-white p-6 rounded-2xl border border-[#EDEBE9] shadow-sm">
-            <h2 className="text-sm font-bold text-[#242424] uppercase tracking-widest mb-8 opacity-80 flex items-center gap-2">
+        <div className="bg-white p-4 rounded-lg border border-[#EDEBE9] shadow-sm">
+            <h2 className="text-sm font-bold text-[#242424] uppercase tracking-widest mb-4 opacity-80 flex items-center gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-[#0078D4]" />
                 Clinical Timeline
             </h2>
@@ -58,7 +58,7 @@ export const ClinicalTimelineCard: React.FC<ClinicalTimelineCardProps> = ({ reco
                 {/* Vertical line - Microsoft Fluent style (subtle) */}
                 <div className="absolute left-9 top-1 bottom-1 w-[1px] bg-[#EDEBE9]"></div>
 
-                <ul className="space-y-10 relative">
+                <ul className="space-y-6 relative">
                     {documentStream.map((doc, idx) => (
                         <motion.li 
                             key={doc.id} 

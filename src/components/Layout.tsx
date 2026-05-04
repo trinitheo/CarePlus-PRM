@@ -1,6 +1,7 @@
-import { Activity, Calendar, FileText, Settings, Users, CreditCard } from 'lucide-react';
-import { ReactNode } from 'react';
+import { Activity, Calendar, FileText, Settings, Users, CreditCard, ShieldCheck } from 'lucide-react';
+import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { HIPAAComplianceDashboard } from '../domains/compliance/HIPAAComplianceDashboard';
 
 const NAV_ITEMS = [
   { id: 'patients', icon: Users, label: 'Patients' },
@@ -9,7 +10,7 @@ const NAV_ITEMS = [
   { id: 'care-team', icon: FileText, label: 'Collaboration' },
 ];
 
-export function Sidebar({ currentModule, onNavigate }: { currentModule: string, onNavigate: (module: string) => void }) {
+export function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   return (
     <aside className="hidden md:flex flex-col h-screen border-r border-[#EDEBE9] bg-[#FAFAFA] transition-all duration-300 w-16 lg:w-[200px] shrink-0 shadow-sm z-20">
       <div className="p-6 flex items-center gap-3">
@@ -48,7 +49,14 @@ export function Sidebar({ currentModule, onNavigate }: { currentModule: string, 
         })}
       </nav>
 
-      <div className="p-3 border-t border-[#EDEBE9]/50">
+      <div className="p-3 border-t border-[#EDEBE9]/50 space-y-1">
+        <button 
+          onClick={onOpenHipaa}
+          className="w-full flex items-center gap-3 p-3 rounded-md text-emerald-600 hover:bg-emerald-50 transition-all duration-150"
+        >
+          <ShieldCheck className="h-5 w-5 shrink-0" />
+          <span className="hidden lg:block text-[13px] font-semibold tracking-tight">HIPAA Agent</span>
+        </button>
         <button className="w-full flex items-center gap-3 p-3 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-all duration-150">
           <Settings className="h-5 w-5 shrink-0" />
           <span className="hidden lg:block text-[13px] font-semibold tracking-tight">Settings</span>
@@ -58,7 +66,7 @@ export function Sidebar({ currentModule, onNavigate }: { currentModule: string, 
   );
 }
 
-export function BottomNav({ currentModule, onNavigate }: { currentModule: string, onNavigate: (module: string) => void }) {
+export function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-4 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       {NAV_ITEMS.map((item) => {
@@ -79,14 +87,25 @@ export function BottomNav({ currentModule, onNavigate }: { currentModule: string
           </button>
         );
       })}
+      <button
+        onClick={onOpenHipaa}
+        className="flex flex-col items-center gap-1 transition-all duration-150 text-emerald-600"
+      >
+        <div className="p-1.5 rounded-full transition-colors h-8 w-8 flex items-center justify-center">
+          <ShieldCheck className="h-5 w-5" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-tight">HIPAA</span>
+      </button>
     </nav>
   );
 }
 
 export function Shell({ children, currentModule, onNavigate }: { children: ReactNode, currentModule: string, onNavigate: (module: string) => void }) {
+  const [isHipaaOpen, setIsHipaaOpen] = useState(false);
+
   return (
     <div className="flex bg-background min-h-screen text-foreground overflow-hidden selection:bg-primary/20">
-      <Sidebar currentModule={currentModule} onNavigate={onNavigate} />
+      <Sidebar currentModule={currentModule} onNavigate={onNavigate} onOpenHipaa={() => setIsHipaaOpen(true)} />
       
       <main className="flex-1 flex flex-col min-w-0 relative pb-16 md:pb-0">
         <div className="flex-1 overflow-auto bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-muted/30 via-transparent to-transparent">
@@ -105,7 +124,12 @@ export function Shell({ children, currentModule, onNavigate }: { children: React
         </div>
       </main>
 
-      <BottomNav currentModule={currentModule} onNavigate={onNavigate} />
+      <BottomNav currentModule={currentModule} onNavigate={onNavigate} onOpenHipaa={() => setIsHipaaOpen(true)} />
+
+      <HIPAAComplianceDashboard
+        isOpen={isHipaaOpen}
+        onClose={() => setIsHipaaOpen(false)}
+      />
     </div>
   );
 }

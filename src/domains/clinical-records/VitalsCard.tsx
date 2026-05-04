@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
+import { transition } from '../../lib/motion';
 import { useWindowSizeClass } from '../../hooks/useAdaptiveWidth';
 import { Vitals } from '../../store/eventStore';
 import { ScrollArea } from '../../components/ui/scroll-area';
@@ -89,13 +90,27 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
       unit: '', 
       color: TOKENS.neutral1 
     },
+    { 
+      label: 'HbA1c',
+      value: latestVitals?.hba1c || '--',
+      icon: Droplets,
+      unit: '%',
+      color: TOKENS.warning
+    },
+    { 
+      label: 'AVPU',
+      value: latestVitals?.avpu || '--',
+      icon: AlertCircle,
+      unit: '',
+      color: TOKENS.brand
+    },
   ];
 
-  const visibleMetrics = isVitalsExpanded ? allMetrics : allMetrics.slice(0, 6);
+  const visibleMetrics = isVitalsExpanded ? allMetrics : allMetrics.slice(0, 8);
 
   return (
-    <Card className={`border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white h-full flex flex-col transition-all duration-500`}>
-      <CardHeader className="py-3 px-5 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between">
+    <Card className={`border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white h-full flex flex-col transition-all duration-500`}>
+      <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-[#0078D4]" />
           <CardTitle className="text-xl font-bold text-[#242424] tracking-tight">Vitals</CardTitle>
@@ -126,17 +141,18 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
       
       <CardContent className="p-0 flex-1 flex flex-col min-h-0 overflow-hidden">
         <ScrollArea className="flex-1">
-          <div className="p-4 space-y-4">
-            {/* Vitals Grid: 3 columns on desktop, 2 on mob */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="p-2 space-y-2">
+            {/* Vitals Grid: 4 columns */}
+          <motion.div layout className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <AnimatePresence initial={false}>
                 {visibleMetrics.map((v, i) => (
                   <motion.div 
                     key={v.label}
+                    layout="position"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2, delay: i * 0.02 }}
+                    transition={transition.entrance}
                     className="p-3 rounded-xl border border-[#EDEBE9] bg-[#FAF9F8] hover:bg-white hover:border-[#0078D4] hover:shadow-md transition-all cursor-pointer relative overflow-hidden group"
                   >
                     <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: v.color }} />
@@ -158,10 +174,10 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
                   </motion.div>
                 ))}
               </AnimatePresence>
-            </div>
+            </motion.div>
 
             {/* Expand/Collapse Toggle */}
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-2.5">
               <Button
                 variant="ghost"
                 size="sm"
@@ -183,6 +199,7 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
+                  transition={transition.entrance}
                   className="overflow-hidden"
                 >
                   <div className="bg-[#FAF9F8] rounded-2xl border border-[#EDEBE9] overflow-hidden">
