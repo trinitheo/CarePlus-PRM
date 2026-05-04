@@ -23,7 +23,7 @@ export function OrderCategorySelection({ onSelectCategory }: OrderCategorySelect
     <button
       type="button"
       onClick={(e) => handleSelect(e, type)}
-      className="w-full relative z-50 flex items-start text-left gap-4 p-5 rounded-xl border border-[#EDEBE9] bg-white hover:border-[#0078D4] hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5"
+      className="w-full flex items-start text-left gap-4 p-5 rounded-xl border border-[#EDEBE9] bg-white hover:border-[#0078D4] hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] cursor-pointer"
     >
       <div className={`p-4 rounded-xl flex-shrink-0 ${color}`}>
         {icon}
@@ -36,7 +36,7 @@ export function OrderCategorySelection({ onSelectCategory }: OrderCategorySelect
   );
 
   return (
-    <div className="space-y-4 relative z-30 pointer-events-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <OrderTypeButton 
         type="laboratory" 
         label="Laboratory / Pathology" 
