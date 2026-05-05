@@ -264,7 +264,7 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const timer = setInterval(() => {
       // Simulate an external background event
-      if (Math.random() > 0.8) {
+      if (Math.random() > 0.95) { // Reduced probability
         dispatch({
           type: 'VITALS_RECORDED',
           payload: {
@@ -278,7 +278,7 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
           },
         });
       }
-    }, 15000); // Every 15 seconds, a random update might occur
+    }, 60000); // Changed to 60 seconds instead of 15
     return () => clearInterval(timer);
   }, []);
 

@@ -69,20 +69,26 @@ export function ClinicalRecords({
   const mergedAllVitals = useMemo(() => {
     const firestoreVitalsMapped = (clinicalData.vitals as any[]).map(v => ({
       ...v,
-      timestamp: v.createdAt?.seconds ? v.createdAt.seconds * 1000 : (v.timestamp || Date.now())
+      // Use 0 as stable fallback for pending server timestamps, but avoid Date.now() in memo
+      timestamp: v.createdAt?.seconds ? v.createdAt.seconds * 1000 : (v.timestamp || 0)
     }));
 
-    // If we have firestore data, we want to combine it with local data that might not be in firestore yet
-    // We'll use a Map to de-duplicate by timestamp (or ID if we had a stable one)
     const vitalsMap = new Map();
     
     // Process local first
-    localVitals.forEach(v => vitalsMap.set(v.timestamp, v));
+    localVitals.forEach(v => {
+      if (v.timestamp) vitalsMap.set(v.timestamp, v);
+    });
     
-    // Process firestore (overwrites local with same timestamp, usually means it synced)
-    firestoreVitalsMapped.forEach(v => vitalsMap.set(v.timestamp, v));
+    // Process firestore
+    firestoreVitalsMapped.forEach(v => {
+      // Find matching timestamp or id
+      const ts = v.timestamp;
+      if (ts) vitalsMap.set(ts, v);
+    });
 
-    return Array.from(vitalsMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+    return Array.from(vitalsMap.values())
+      .sort((a, b) => a.timestamp - b.timestamp);
   }, [clinicalData.vitals, localVitals]);
 
   const patientVitals = mergedAllVitals;

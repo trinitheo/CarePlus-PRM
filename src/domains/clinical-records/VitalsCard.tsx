@@ -72,7 +72,7 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
     return found;
   }, [latestVitals]);
 
-  const allMetrics = [
+  const allMetrics = useMemo(() => [
     { label: 'Heart Rate', value: latestVitals?.hr, icon: Heart, unit: 'bpm', color: TOKENS.critical },
     { label: 'Blood Pressure', value: latestVitals?.bp, icon: Activity, unit: 'mmHg', color: TOKENS.brand },
     { label: 'Resp Rate', value: latestVitals?.rr, icon: Wind, unit: 'bpm', color: TOKENS.success },
@@ -104,9 +104,11 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
       unit: '',
       color: TOKENS.brand
     },
-  ];
+  ], [latestVitals]);
 
-  const visibleMetrics = isVitalsExpanded ? allMetrics : allMetrics.slice(0, 8);
+  const visibleMetrics = useMemo(() => 
+    isVitalsExpanded ? allMetrics : allMetrics.slice(0, 8),
+  [isVitalsExpanded, allMetrics]);
 
   return (
     <Card className={`border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white h-full flex flex-col transition-all duration-500`}>
