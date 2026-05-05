@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
-import { X, ArrowLeft, Loader2 } from 'lucide-react';
+import { X, ArrowLeft, Loader2, Send, ClipboardCheck } from 'lucide-react';
 import { saveInvestigation } from '../../services/clinicalFirestoreService';
 import { OrderCategorySelection } from './components/OrderCategorySelection';
-import { InvestigationOrderForm, OrderCategory } from './components/InvestigationOrderForm';
+import { InvestigationOrderForm, OrderCategory, validateInvestigationOrder, isFormValid } from './components/InvestigationOrderForm';
+import { RequisitionPreview } from './components/RequisitionPreview';
+import { useQueryModel } from '../../store/eventStore';
 
 interface InvestigationOrderModalProps {
   patientId: string;
@@ -14,30 +16,41 @@ interface InvestigationOrderModalProps {
 export function InvestigationOrderModal({ patientId, children }: InvestigationOrderModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { patients } = useQueryModel();
+  const patient = patients[patientId];
   
   // Workflow State
   const [category, setCategory] = useState<OrderCategory>(null);
+  const [workflowStep, setWorkflowStep] = useState<'category' | 'form' | 'preview'>('category');
 
   // Form State
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [otherTestsText, setOtherTestsText] = useState('');
   const [priority, setPriority] = useState('Routine');
   const [indication, setIndication] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const handleClose = () => {
     setIsOpen(false);
     setTimeout(() => {
       setCategory(null);
+      setWorkflowStep('category');
       setSelectedTests([]);
-      setSearchQuery('');
+      setOtherTestsText('');
       setPriority('Routine');
       setIndication('');
       setInstructions('');
+      setSubmitAttempted(false);
     }, 200);
   };
 
+  const formErrors = submitAttempted
+    ? validateInvestigationOrder(selectedTests, indication)
+    : {};
+
   const getTitle = () => {
+    if (workflowStep === 'preview') return "Confirm Requisition";
     if (!category) return "New Investigation Order";
     switch (category) {
       case 'laboratory': return "New Laboratory Order";
@@ -53,22 +66,50 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
     );
   };
 
+  const handleNextStep = () => {
+    if (workflowStep === 'category' && category) {
+      setWorkflowStep('form');
+    } else if (workflowStep === 'form') {
+      setSubmitAttempted(true);
+      const errors = validateInvestigationOrder(selectedTests, indication);
+      if (isFormValid(errors)) {
+        setWorkflowStep('preview');
+      }
+    }
+  };
+
+  const handleBackStep = () => {
+    if (workflowStep === 'preview') {
+      setWorkflowStep('form');
+    } else if (workflowStep === 'form') {
+      setWorkflowStep('category');
+      setCategory(null);
+    }
+  };
+
+  const parsedTests = [
+    ...selectedTests.map(t => ({ testName: t })),
+    ...otherTestsText
+      .split('\n')
+      .map(t => t.trim())
+      .filter(t => t.length > 0)
+      .map(name => ({ testName: name }))
+  ];
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
-      <DialogContent showCloseButton={false} className={`p-0 overflow-hidden bg-[#FAFAFA] border-[#EDEBE9] rounded-2xl flex flex-col transition-all duration-300 focus:outline-none ${!category ? 'sm:max-w-[600px] w-[95vw] shadow-lg' : 'sm:max-w-[900px] w-[95vw] h-[85vh] shadow-xl'}`}>
+      <DialogTrigger render={children} />
+      <DialogContent showCloseButton={false} className={`p-0 overflow-hidden bg-[#FAFAFA] border-[#EDEBE9] rounded-2xl flex flex-col transition-all duration-300 focus:outline-none ${workflowStep === 'category' ? 'sm:max-w-[600px] w-[95vw] shadow-lg' : 'sm:max-w-[900px] w-[95vw] h-[85vh] shadow-xl'}`}>
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#EDEBE9] shrink-0 bg-white">
           <DialogHeader className="p-0">
             <div className="flex items-center gap-3">
-                {category && (
+                {workflowStep !== 'category' && (
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => setCategory(null)}
+                      onClick={handleBackStep}
                       className="h-8 w-8 rounded-full text-[#616161] hover:bg-[#F3F2F1] -ml-2 transition-colors"
                     >
                       <ArrowLeft className="h-4 w-4" />
@@ -91,30 +132,47 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
 
         <div className="flex-1 overflow-y-auto bg-[#FAFAFA] relative z-20 pointer-events-auto">
           <div className="p-6 h-full">
-              {!category ? (
-                <OrderCategorySelection onSelectCategory={setCategory} />
-              ) : (
+              {workflowStep === 'category' && (
+                <OrderCategorySelection onSelectCategory={(cat) => {
+                  setCategory(cat);
+                  setWorkflowStep('form');
+                }} />
+              )}
+              
+              {workflowStep === 'form' && category && (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-500">
                   <InvestigationOrderForm 
                     category={category}
                     selectedTests={selectedTests}
-                    searchQuery={searchQuery}
+                    otherTestsText={otherTestsText}
                     indication={indication}
                     instructions={instructions}
                     priority={priority}
-                    onSearchChange={setSearchQuery}
+                    errors={formErrors}
                     onToggleTest={toggleTest}
+                    onOtherTestsTextChange={setOtherTestsText}
                     onIndicationChange={setIndication}
                     onInstructionsChange={setInstructions}
                     onPriorityChange={setPriority}
                   />
                 </div>
               )}
+
+              {workflowStep === 'preview' && (
+                <RequisitionPreview 
+                  patient={patient}
+                  category={category!}
+                  tests={parsedTests}
+                  priority={priority}
+                  indication={indication}
+                  instructions={instructions}
+                />
+              )}
           </div>
         </div>
 
         {/* Footer */}
-        {category && (
+        {workflowStep !== 'category' && (
           <DialogFooter className="px-6 py-4 bg-white border-t border-[#EDEBE9] flex justify-between items-center shrink-0">
             <Button 
               variant="ghost"
@@ -123,14 +181,25 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
             >
               Cancel
             </Button>
+            
+            {workflowStep === 'form' && (
               <Button 
-                disabled={isSubmitting || selectedTests.length === 0 || !indication}
+                onClick={handleNextStep}
+                className="bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[13px] rounded-lg px-8 h-10 shadow-sm transition-all"
+              >
+                Review Requisition
+              </Button>
+            )}
+
+            {workflowStep === 'preview' && (
+              <Button 
+                disabled={isSubmitting}
                 onClick={async () => {
                   setIsSubmitting(true);
                   try {
                     await saveInvestigation(patientId, {
                       category,
-                      tests: selectedTests.map(t => ({ testName: t })),
+                      tests: parsedTests,
                       priority,
                       indication,
                       instructions
@@ -138,16 +207,16 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
                     handleClose();
                   } catch (e) {
                     console.error("Failed to save", e);
-                    alert("Failed to place order. Please try again.");
                   } finally {
                     setIsSubmitting(false);
                   }
                 }}
-                className="bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[13px] rounded-lg px-8 h-10 shadow-sm transition-all disabled:opacity-50"
+                className="bg-[#107C10] hover:bg-[#0B590B] text-white font-bold text-[13px] rounded-lg px-8 h-10 shadow-sm transition-all disabled:opacity-50"
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Place Order ({selectedTests.length})
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                Confirm & Send Requisition
               </Button>
+            )}
           </DialogFooter>
         )}
       </DialogContent>

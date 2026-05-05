@@ -22,6 +22,9 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   // Form State
+  const [title, setTitle] = React.useState('Follow-up SOAP Note');
+  const [specialty, setSpecialty] = React.useState('General Practice');
+  const [priority, setPriority] = React.useState<'routine' | 'urgent' | 'critical'>('routine');
   const [subjective, setSubjective] = React.useState('');
   const [objective, setObjective] = React.useState('');
   const [assessment, setAssessment] = React.useState('');
@@ -30,11 +33,12 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
   const [searchResults, setSearchResults] = React.useState<ClinicalCode[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
   const [selectedCodes, setSelectedCodes] = React.useState<ClinicalCode[]>([]);
-  const [activeSection, setActiveSection] = React.useState<string>('subjective');
+  const [activeSection, setActiveSection] = React.useState<string>('metadata');
   
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const sections = [
+    { id: 'metadata', label: 'Encounter Info' },
     { id: 'subjective', label: 'Subjective' },
     { id: 'objective', label: 'Objective' },
     { id: 'assessment', label: 'Assessment' },
@@ -126,7 +130,7 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger render={children} nativeButton={true} />
+      <DialogTrigger render={children} />
       <DialogContent showCloseButton={false} className="sm:max-w-[1050px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col h-[90vh] focus:outline-none">
         {/* Fluent 2 Header Pattern */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#EDEBE9] shrink-0 bg-white z-10">
@@ -145,7 +149,7 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
               >
-                Clinical Evaluation (SOAP)
+                Follow-up SOAP Note
               </motion.span>
             </DialogTitle>
           </DialogHeader>
@@ -195,6 +199,53 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
               animate="visible"
               className="px-8 lg:px-12 py-10 space-y-16 max-w-5xl mx-auto pb-32"
             >
+              <motion.div id="metadata" variants={itemVariants} className="space-y-6">
+                <div className="space-y-1">
+                  <Label className="text-[12px] font-bold text-[#242424] uppercase tracking-[0.05em]">Encounter Details</Label>
+                  <p className="text-[13px] text-[#616161]">Basic information about this clinical encounter.</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-bold text-[#616161] uppercase tracking-widest">Note Title</Label>
+                    <Input 
+                      value={title} 
+                      onChange={(e) => setTitle(e.target.value)} 
+                      placeholder="e.g. Cardiology Consultation"
+                      className="h-10 bg-white border-[#8A8886] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 rounded-md text-[13px]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-bold text-[#616161] uppercase tracking-widest">Specialty</Label>
+                    <Input 
+                      value={specialty} 
+                      onChange={(e) => setSpecialty(e.target.value)} 
+                      placeholder="e.g. Cardiology"
+                      className="h-10 bg-white border-[#8A8886] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 rounded-md text-[13px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-[#616161] uppercase tracking-widest">Priority Status</Label>
+                  <div className="flex gap-2">
+                    {['routine', 'urgent', 'critical'].map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPriority(p as any)}
+                        className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                          priority === p 
+                            ? 'bg-[#0078D4] text-white shadow-md' 
+                            : 'bg-white border border-[#EDEBE9] text-[#616161] hover:bg-[#F3F2F1]'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+
               {/* Subjective & Objective */}
               <motion.div id="subjective" variants={itemVariants} className="space-y-4">
                 <div className="space-y-1">
@@ -407,15 +458,22 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                   setIsSubmitting(true);
                   try {
                     await saveSOAPNote(patientId, {
+                      title,
+                      specialty,
+                      priority,
                       subjective,
                       objective,
                       assessment,
                       plan,
                       icd10Codes: selectedCodes.map(c => c.code),
-                      status: 'signed'
+                      status: 'signed',
+                      authorName: 'Dr. Clinical User' // In real app, get from auth profile
                     });
                     setIsOpen(false);
                     // Reset form
+                    setTitle('Follow-up SOAP Note');
+                    setSpecialty('General Practice');
+                    setPriority('routine');
                     setSubjective('');
                     setObjective('');
                     setAssessment('');

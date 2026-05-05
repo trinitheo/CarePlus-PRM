@@ -38,7 +38,7 @@ export function useClinicalTimeline(patientId: string) {
       items.push({
         id: record.id,
         type: 'soap',
-        title: 'Clinical SOAP Note',
+        title: 'Follow-up SOAP Note',
         content: record.subjective || 'No content',
         timestamp: record.createdAt?.seconds ? record.createdAt.seconds * 1000 : (record.timestamp || Date.now()),
         author: 'Clinical Staff',

@@ -84,7 +84,7 @@ export async function savePrescription(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid || 'system-user',
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'active'
     });
@@ -101,13 +101,26 @@ export async function saveInvestigation(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid || 'system-user',
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'ordered'
     });
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateInvestigation(patientId: string, investigationId: string, data: any) {
+  const path = `patients/${patientId}/investigations`;
+  try {
+    const docRef = doc(db, path, investigationId);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
@@ -118,7 +131,7 @@ export async function saveProcedure(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid || 'system-user',
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'scheduled'
     });
@@ -135,7 +148,7 @@ export async function saveReferral(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), {
       ...data,
       patientId,
-      authorId: auth.currentUser?.uid || 'system-user',
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'pending'
     });

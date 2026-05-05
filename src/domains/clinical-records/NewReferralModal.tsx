@@ -55,7 +55,7 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger render={children} nativeButton={true} />
+      <DialogTrigger render={children} />
       <DialogContent showCloseButton={false} className="sm:max-w-[700px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col max-h-[90vh] focus:outline-none">
         {/* Fluent 2 Header Pattern */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#EDEBE9] shrink-0 bg-white z-10">

@@ -42,16 +42,12 @@ export function usePatientClinicalData(patientId: string) {
 
     let unsubscribers: (() => void)[] = [];
 
-    // Wait for auth to be ready
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      // Cleanup existing listeners if auth changes
+    // For demo/preview, we allow listening even if not signed in
+    // Real apps would enforce auth here
+    const setupListeners = () => {
+      // Cleanup existing listeners
       unsubscribers.forEach(unsub => unsub());
       unsubscribers = [];
-
-      if (!user) {
-        setData(prev => ({ ...prev, loading: false }));
-        return;
-      }
 
       const collections = [
         'clinical_records',
@@ -89,6 +85,16 @@ export function usePatientClinicalData(patientId: string) {
           }
         );
       });
+    };
+
+    // Initialize listeners immediately
+    setupListeners();
+
+    // Still watch auth to potentially refresh or re-auth if needed, 
+    // though for now setupListeners once is enough for anonymous demo.
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      // We could re-run setupListeners here if we wanted listeners to be auth-dependent
+      // but for this demo keeping them open is better.
     });
 
     return () => {

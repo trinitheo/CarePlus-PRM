@@ -43,11 +43,15 @@ service cloud.firestore {
     function isValidClinicalRecord(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'status']) &&
              (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
-             data.status in ['draft', 'signed'] &&
+             data.status in ['draft', 'final', 'amended', 'signed'] &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 200)) &&
+             (!('specialty' in data) || (data.specialty is string && data.specialty.size() <= 100)) &&
+             (!('priority' in data) || (data.priority in ['routine', 'urgent', 'critical'])) &&
              (!('subjective' in data) || (data.subjective is string && data.subjective.size() <= 10000)) &&
              (!('objective' in data) || (data.objective is string && data.objective.size() <= 10000)) &&
              (!('assessment' in data) || (data.assessment is string && data.assessment.size() <= 10000)) &&
              (!('plan' in data) || (data.plan is string && data.plan.size() <= 10000)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
              (!('icd10Codes' in data) || (data.icd10Codes is list && data.icd10Codes.size() <= 20));
     }
 
@@ -61,11 +65,17 @@ service cloud.firestore {
     }
 
     function isValidInvestigation(data) {
-      return data.keys().hasAll(['patientId', 'authorId', 'category', 'testName', 'status']) &&
+      return data.keys().hasAll(['patientId', 'authorId', 'category', 'tests', 'status']) &&
              (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
              data.category is string && data.category.size() <= 100 &&
-             data.testName is string && data.testName.size() <= 200 &&
-             data.status in ['ordered', 'pending', 'completed'];
+             data.tests is list && data.tests.size() <= 100 &&
+             data.status in ['ordered', 'in_progress', 'completed', 'cancelled', 'sample_collected', 'resulted', 'reviewed'] &&
+             (!('priority' in data) || (data.priority is string && data.priority.size() <= 100)) &&
+             (!('indication' in data) || (data.indication is string && data.indication.size() <= 2000)) &&
+             (!('instructions' in data) || (data.instructions is string && data.instructions.size() <= 2000)) &&
+             (!('resultSummary' in data) || (data.resultSummary is string && data.resultSummary.size() <= 10000)) &&
+             (!('resultDate' in data) || (data.resultDate is string && data.resultDate.size() <= 100)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidProcedure(data) {
@@ -89,6 +99,14 @@ service cloud.firestore {
              // Simplified validation for now to allow various vitals structures
     }
 
+    function isValidInteraction(data) {
+      return data.keys().hasAll(['patientId', 'authorId', 'authorRole', 'type', 'content']) &&
+             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
+             data.authorRole in ['doctor', 'nurse', 'pt', 'social_worker', 'financial_counselor', 'community_lead'] &&
+             data.type in ['clinical', 'nursing', 'pt', 'social_care', 'financial', 'support_group'] &&
+             data.content is string && data.content.size() <= 10000;
+    }
+
     // Collection Rules
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId);
@@ -108,7 +126,7 @@ service cloud.firestore {
       match /clinical_records/{recordId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(recordId) && isValidClinicalRecord(incoming());
-        allow update: if isSignedIn() && isValidId(recordId) && 
+        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(recordId) && 
                        existing().status == 'draft' &&
                        isValidClinicalRecord(incoming()) &&
                        incoming().authorId == existing().authorId;
@@ -117,34 +135,39 @@ service cloud.firestore {
       match /prescriptions/{prescriptionId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(prescriptionId) && isValidPrescription(incoming());
-        allow update: if isSignedIn() && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
       }
 
       match /investigations/{investigationId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(investigationId) && isValidInvestigation(incoming());
-        allow update: if isSignedIn() && isValidId(investigationId) && isValidInvestigation(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions']);
+        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(investigationId) && isValidInvestigation(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions', 'resultSummary', 'resultDate', 'updatedAt']);
       }
 
       match /procedures/{procedureId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(procedureId) && isValidProcedure(incoming());
-        allow update: if isSignedIn() && isValidId(procedureId) && isValidProcedure(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate']);
+        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(procedureId) && isValidProcedure(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate', 'updatedAt']);
       }
 
       match /referrals/{referralId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(referralId) && isValidReferral(incoming());
-        allow update: if isSignedIn() && isValidId(referralId) && isValidReferral(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
+        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(referralId) && isValidReferral(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'updatedAt']);
       }
 
       match /vitals/{vitalId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || (incoming().authorId == 'anonymous-entry' && isValidVitals(incoming())));
+      }
+
+      match /interactions/{interactionId} {
+        allow get, list: if true;
+        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(interactionId) && isValidInteraction(incoming());
       }
     }
   }

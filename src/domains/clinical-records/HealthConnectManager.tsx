@@ -10,9 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 
 interface ConnectionProps {
   patientId: string;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export function HealthConnectManager({ patientId }: ConnectionProps) {
+export function HealthConnectManager({ patientId, isOpen, onClose }: ConnectionProps) {
   const dispatch = useCommandDispatcher();
   const [status, setStatus] = useState<Record<string, 'disconnected' | 'connecting' | 'connected'>>({
     health_connect: 'disconnected',
@@ -66,13 +68,7 @@ export function HealthConnectManager({ patientId }: ConnectionProps) {
   ];
 
   return (
-    <Dialog>
-      <DialogTrigger render={
-        <button type="button" className="flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-all px-1 py-1 rounded-md border-none bg-transparent outline-none ring-0">
-          <Link2 className="h-3.5 w-3.5 text-[#0078D4]" />
-          <span className="text-[11px] font-bold text-[#424242] whitespace-nowrap tracking-tight">Sync Status</span>
-        </button>
-      } />
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px] rounded-3xl border-border bg-card/95 backdrop-blur-xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-2">

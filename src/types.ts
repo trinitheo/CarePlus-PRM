@@ -8,3 +8,21 @@ export interface MedicalRecordEntry {
     [key: string]: any;
   };
 }
+
+export type InvestigationStatus = 'ordered' | 'sample_collected' | 'resulted' | 'reviewed' | 'cancelled';
+
+export interface Investigation {
+  id: string;
+  patientId: string;
+  category: 'laboratory' | 'imaging' | 'functional';
+  tests: { testName: string; result?: string; unit?: string; referenceRange?: string }[];
+  priority: string;
+  indication: string;
+  instructions: string;
+  status: InvestigationStatus;
+  resultSummary?: string;
+  resultDate?: number;
+  authorId: string;
+  createdAt: any;
+  updatedAt?: any;
+}

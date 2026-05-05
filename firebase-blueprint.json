@@ -36,6 +36,9 @@
         "id": { "type": "string" },
         "patientId": { "type": "string" },
         "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "title": { "type": "string" },
+        "specialty": { "type": "string" },
         "subjective": { "type": "string" },
         "objective": { "type": "string" },
         "assessment": { "type": "string" },
@@ -44,7 +47,12 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "status": { "type": "string", "enum": ["draft", "signed"] },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string", "enum": ["draft", "final", "amended", "signed"] },
+        "priority": { "type": "string", "enum": ["routine", "urgent", "critical"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -80,14 +88,23 @@
         "patientId": { "type": "string" },
         "authorId": { "type": "string" },
         "category": { "type": "string" },
-        "testName": { "type": "string" },
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "testName": { "type": "string" },
+              "resultSummary": { "type": "string" }
+            }
+          }
+        },
         "priority": { "type": "string" },
         "indication": { "type": "string" },
         "instructions": { "type": "string" },
-        "status": { "type": "string", "enum": ["ordered", "pending", "completed"] },
+        "status": { "type": "string", "enum": ["ordered", "sample_collected", "resulted", "reviewed", "cancelled"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["patientId", "authorId", "category", "testName"]
+      "required": ["patientId", "authorId", "category", "tests"]
     },
     "Procedure": {
       "title": "Procedure",
@@ -157,7 +174,7 @@
         "id": { "type": "string" },
         "patientId": { "type": "string" },
         "authorId": { "type": "string" },
-        "authorRole": { "type": "string", "enum": ["doctor", "nurse", "pt", "social_worker", "financial_counselor"] },
+        "authorRole": { "type": "string", "enum": ["doctor", "nurse", "pt", "social_worker", "financial_counselor", "community_lead"] },
         "type": { "type": "string", "enum": ["clinical", "nursing", "pt", "social_care", "financial", "support_group"] },
         "content": { "type": "string" },
         "category": { "type": "string" },
