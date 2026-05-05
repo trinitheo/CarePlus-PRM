@@ -13,7 +13,7 @@ import { KnowledgeGraph } from './KnowledgeGraph';
 import { Button } from '../../components/ui/button';
 import { SOAPNoteModal } from './SOAPNoteModal';
 import { NewPrescriptionModal } from './NewPrescriptionModal';
-import { InvestigationOrderModal } from './InvestigationOrderModal';
+import { InvestigationOrderModal } from '../investigations/InvestigationOrderModal';
 import { NewProcedureModal } from './NewProcedureModal';
 import { NewReferralModal } from './NewReferralModal';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';

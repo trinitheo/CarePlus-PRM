@@ -43,6 +43,7 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
       case 'laboratory': return "New Laboratory Order";
       case 'imaging': return "New Imaging Order";
       case 'functional': return "New Functional Study";
+      default: return "New Investigation Order";
     }
   };
 
@@ -54,7 +55,9 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
-      <DialogTrigger render={children} />
+      <DialogTrigger asChild>
+        {children}
+      </DialogTrigger>
       <DialogContent showCloseButton={false} className={`p-0 overflow-hidden bg-[#FAFAFA] border-[#EDEBE9] rounded-2xl flex flex-col transition-all duration-300 focus:outline-none ${!category ? 'sm:max-w-[600px] w-[95vw] shadow-lg' : 'sm:max-w-[900px] w-[95vw] h-[85vh] shadow-xl'}`}>
         
         {/* Header */}
@@ -113,13 +116,13 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
         {/* Footer */}
         {category && (
           <DialogFooter className="px-6 py-4 bg-white border-t border-[#EDEBE9] flex justify-between items-center shrink-0">
-            <button 
-              type="button"
+            <Button 
+              variant="ghost"
               onClick={handleClose}
-              className="text-[#616161] hover:text-[#242424] font-semibold text-[13px] px-4 h-9 transition-colors border-none bg-transparent outline-none cursor-pointer"
+              className="text-[#616161] hover:text-[#242424] hover:bg-[#F3F2F1] font-semibold text-[13px] px-4 h-9"
             >
               Cancel
-            </button>
+            </Button>
               <Button 
                 disabled={isSubmitting || selectedTests.length === 0 || !indication}
                 onClick={async () => {
@@ -135,6 +138,7 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
                     handleClose();
                   } catch (e) {
                     console.error("Failed to save", e);
+                    alert("Failed to place order. Please try again.");
                   } finally {
                     setIsSubmitting(false);
                   }

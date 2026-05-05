@@ -18,6 +18,25 @@ interface RegistrationFlowProps {
   onCancel: () => void;
 }
 
+// ─── P&G Validation helpers ──────────────────────────────────────────────────
+function getPGError(gravidity: string, parity: string): string | null {
+  const g = parseInt(gravidity, 10);
+  const p = parseInt(parity, 10);
+  if (gravidity !== '' && isNaN(g)) return 'Gravidity must be a valid number.';
+  if (parity !== '' && isNaN(p)) return 'Parity must be a valid number.';
+  if (!isNaN(g) && g < 0) return 'Gravidity cannot be negative.';
+  if (!isNaN(p) && p < 0) return 'Parity cannot be negative.';
+  if (!isNaN(g) && !isNaN(p) && p > g) return 'Parity (live births) cannot exceed Gravidity (total pregnancies).';
+  return null;
+}
+
+function getPGLabel(gravidity: string, parity: string): string | null {
+  const g = parseInt(gravidity, 10);
+  const p = parseInt(parity, 10);
+  if (isNaN(g) || isNaN(p)) return null;
+  return `G${g}P${p}`;
+}
+
 export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps) {
   const dispatch = useCommandDispatcher();
   const [step, setStep] = useState(1);
@@ -73,6 +92,27 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     medications: '',
     allergies: ''
   });
+
+  // ─── Women's health state ───────────────────────────────────────────────
+  const [womensHealth, setWomensHealth] = useState({
+    lmp: '',
+    periodsRegular: '',
+    gravidity: '',   // total pregnancies
+    parity: '',      // live births
+    possibilityOfPregnancy: '',
+    lastPapSmearDate: '',
+    lastPapSmearResult: '',
+    lastMammogramDate: '',
+    lastMammogramResult: ''
+  });
+
+  const isFemale = formData.gender === 'Female';
+  const pgError = getPGError(womensHealth.gravidity, womensHealth.parity);
+  const pgLabel = !pgError ? getPGLabel(womensHealth.gravidity, womensHealth.parity) : null;
+
+  const handleWomensHealthChange = (field: keyof typeof womensHealth, value: string) => {
+    setWomensHealth(prev => ({ ...prev, [field]: value }));
+  };
 
   const [isSymptomModalOpen, setIsSymptomModalOpen] = useState(false);
   const [symptomForm, setSymptomForm] = useState({
@@ -151,11 +191,20 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
+  // Block Next on step 5 (women's health) if there's a P&G error
+  const isNextDisabled =
+    (step === 1 && !formData.name) ||
+    (step === 5 && isFemale && !!pgError);
+
   const handleSubmit = async () => {
     const newId = `p-${Date.now()}`;
     const intakeId = `intake-${Date.now()}`;
     const patientRecord = { ...formData, id: newId } as Patient;
     
+    const womensHealthSummary = isFemale
+      ? `LMP: ${womensHealth.lmp || 'N/A'} | Periods regular: ${womensHealth.periodsRegular || 'N/A'} | ${pgLabel || `G${womensHealth.gravidity || '?'}P${womensHealth.parity || '?'}`} | Pregnancy possible: ${womensHealth.possibilityOfPregnancy || 'N/A'} | Pap smear: ${womensHealth.lastPapSmearDate || 'N/A'} (${womensHealth.lastPapSmearResult || 'N/A'}) | Mammogram: ${womensHealth.lastMammogramDate || 'N/A'} (${womensHealth.lastMammogramResult || 'N/A'})`
+      : '';
+
     // Format structured data into strings for the event store
     const formattedIntake = {
       ...intakeData,
@@ -171,6 +220,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
         .filter(([_, symptoms]) => symptoms.length > 0)
         .map(([cat, symptoms]) => `${cat}: ${symptoms.join(', ')}`)
         .join(' | '),
+      womensHealth: womensHealthSummary,
       timestamp: Date.now()
     } as ClinicalIntake;
     
@@ -204,11 +254,23 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     { title: 'Contact', icon: Phone },
     { title: 'Symptom', icon: Stethoscope },
     { title: 'Medical', icon: Activity },
+    ...(isFemale ? [{ title: "Women's Health", icon: Heart }] : []),
     { title: 'Clinical', icon: ClipboardList },
     { title: 'History', icon: Home },
     { title: 'ROS', icon: FileText },
     { title: 'Confirm', icon: CheckCircle2 }
   ];
+
+  const screenId = (() => {
+    if (step <= 4) return step;
+    if (isFemale) {
+      if (step === 5) return 'womens';
+      return step - 1;
+    }
+    return step;
+  })();
+
+  const totalSteps = steps.length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
@@ -249,7 +311,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
           exit={{ opacity: 0, x: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {step === 1 && (
+          {screenId === 1 && (
             <Card className="border-border shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -302,12 +364,19 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                       </label>
                     ))}
                   </div>
+                  {/* Hint badge — appears when Female is selected */}
+                  {isFemale && (
+                    <div className="flex items-center gap-2 mt-2 text-xs text-pink-700 bg-pink-50 border border-pink-200 rounded-lg px-3 py-2">
+                      <Heart className="h-3.5 w-3.5 flex-shrink-0" />
+                      A Women's Health section will be included in the intake flow.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {step === 2 && (
+          {screenId === 2 && (
             <Card className="border-border shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -349,7 +418,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {step === 3 && (
+          {screenId === 3 && (
             <Card className="border-border shadow-md">
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div>
@@ -440,7 +509,133 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </DialogContent>
           </Dialog>
 
-          {step === 4 && (
+          {/* ── Step 4 (female only): Women's Health ── */}
+          {screenId === 'womens' && (
+            <Card className="border-border shadow-md">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-pink-500" />
+                  Women's Health
+                </CardTitle>
+                <CardDescription>Gynaecological and reproductive health history.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+
+                {/* Menstrual */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border pb-2 mb-4">Menstrual History</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Last Menstrual Period (LMP)</Label>
+                      <Input
+                        type="date"
+                        value={womensHealth.lmp}
+                        onChange={e => handleWomensHealthChange('lmp', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Are periods regular?</Label>
+                      <Select value={womensHealth.periodsRegular} onValueChange={v => handleWomensHealthChange('periodsRegular', v)}>
+                        <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="space-y-2">
+                        <Label>Any possibility of pregnancy now?</Label>
+                        <Select value={womensHealth.possibilityOfPregnancy} onValueChange={v => handleWomensHealthChange('possibilityOfPregnancy', v)}>
+                          <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Yes">Yes</SelectItem>
+                            <SelectItem value="No">No</SelectItem>
+                            <SelectItem value="Unsure">Unsure</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Obstetric / P&G */}
+                <div>
+                  <div className="flex items-center justify-between border-b border-border pb-2 mb-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Obstetric History — Gravidity &amp; Parity
+                    </p>
+                    {pgLabel && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-pink-50 text-pink-700 border border-pink-200">
+                        {pgLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Gravidity — Total Pregnancies (G)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={womensHealth.gravidity}
+                        onChange={e => handleWomensHealthChange('gravidity', e.target.value)}
+                        className={pgError ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      />
+                      <p className="text-[11px] text-muted-foreground">Includes miscarriages, terminations, and current pregnancy</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Parity — Live Births (P)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={womensHealth.parity}
+                        onChange={e => handleWomensHealthChange('parity', e.target.value)}
+                        className={pgError ? 'border-destructive focus-visible:ring-destructive' : ''}
+                      />
+                      <p className="text-[11px] text-muted-foreground">Births at or after 20 weeks gestation</p>
+                    </div>
+                  </div>
+
+                  {pgError && (
+                    <div className="mt-3 flex items-start gap-2 text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2.5">
+                      <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {pgError}
+                    </div>
+                  )}
+                </div>
+
+                {/* Screenings */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border pb-2 mb-4">Screenings</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Last Pap Smear Date</Label>
+                      <Input type="date" value={womensHealth.lastPapSmearDate} onChange={e => handleWomensHealthChange('lastPapSmearDate', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Last Pap Smear Result</Label>
+                      <Input placeholder="e.g. Normal" value={womensHealth.lastPapSmearResult} onChange={e => handleWomensHealthChange('lastPapSmearResult', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Last Mammogram Date</Label>
+                      <Input type="date" value={womensHealth.lastMammogramDate} onChange={e => handleWomensHealthChange('lastMammogramDate', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Last Mammogram Result</Label>
+                      <Input placeholder="e.g. BI-RADS 1" value={womensHealth.lastMammogramResult} onChange={e => handleWomensHealthChange('lastMammogramResult', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+          )}
+
+          {screenId === 4 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
               <Card className="border-border shadow-md h-full flex flex-col">
                 <CardHeader>
@@ -538,7 +733,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </div>
           )}
 
-          {step === 5 && (
+          {screenId === 5 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-border shadow-md flex flex-col">
                 <CardHeader>
@@ -657,7 +852,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </div>
           )}
 
-          {step === 6 && (
+          {screenId === 6 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-border shadow-md flex flex-col">
                 <CardHeader>
@@ -774,7 +969,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </div>
           )}
 
-          {step === 7 && (
+          {screenId === 7 && (
             <Card className="border-border shadow-xl overflow-hidden rounded-2xl border-2">
               <CardHeader className="bg-primary/5 border-b border-border pb-6">
                 <CardTitle className="text-2xl flex items-center gap-3">
@@ -818,7 +1013,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {step === 8 && (
+          {screenId === 8 && (
             <Card className="border-border shadow-md bg-muted/5">
               <CardHeader>
                 <CardTitle className="text-xl">Knowledge Graph Projection</CardTitle>
@@ -843,6 +1038,13 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                       <span className="text-muted-foreground uppercase text-[9px]">COMPLAINT</span>
                       <span className="truncate max-w-[180px]">{intakeData.chiefComplaint || 'UNDEFINED'}</span>
                     </div>
+                    {/* Women's health summary row — only for female patients */}
+                    {isFemale && (
+                      <div className="flex justify-between border-b border-border/30 pb-1">
+                        <span className="text-muted-foreground uppercase text-[9px]">OB_PROFILE</span>
+                        <span className="text-pink-600 font-bold">{pgLabel || '—'} · LMP {womensHealth.lmp || 'N/A'}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between border-b border-border/30 pb-1">
                       <span className="text-muted-foreground uppercase text-[9px]">RISK_PROFILE</span>
                       <span className={allergiesList.length > 0 ? "text-destructive font-bold" : "text-green-500"}>
@@ -878,8 +1080,8 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
               {step === 1 ? 'Cancel' : 'Previous'}
             </Button>
             
-            {step < 8 ? (
-              <Button onClick={nextStep} className="gap-2 h-12 px-10 text-base font-medium transition-all shadow-md" disabled={step === 1 && !formData.name}>
+            {step < totalSteps ? (
+              <Button onClick={nextStep} className="gap-2 h-12 px-10 text-base font-medium transition-all shadow-md" disabled={isNextDisabled}>
                 Next Step
                 <ChevronRight className="h-5 w-5" />
               </Button>
