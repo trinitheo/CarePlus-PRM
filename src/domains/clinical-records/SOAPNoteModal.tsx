@@ -1,41 +1,61 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight } from 'lucide-react';
+import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope } from 'lucide-react';
 import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
-import { saveSOAPNote } from '../../services/clinicalFirestoreService';
+import { saveSOAPNote, updateSOAPNote } from '../../services/clinicalFirestoreService';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface SOAPNoteModalProps {
   patientId: string;
   children: React.ReactNode;
+  initialNote?: any;
 }
 
-export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
+export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModalProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   // Form State
-  const [title, setTitle] = React.useState('Follow-up SOAP Note');
-  const [specialty, setSpecialty] = React.useState('General Practice');
-  const [priority, setPriority] = React.useState<'routine' | 'urgent' | 'critical'>('routine');
-  const [subjective, setSubjective] = React.useState('');
-  const [objective, setObjective] = React.useState('');
-  const [assessment, setAssessment] = React.useState('');
-  const [plan, setPlan] = React.useState('');
+  const [title, setTitle] = React.useState(initialNote?.title || 'Follow-up SOAP Note');
+  const [specialty, setSpecialty] = React.useState(initialNote?.specialty || 'General Practice');
+  const [priority, setPriority] = React.useState<'routine' | 'urgent' | 'critical'>(initialNote?.priority || 'routine');
+  const [subjective, setSubjective] = React.useState(initialNote?.subjective || '');
+  const [objective, setObjective] = React.useState(initialNote?.objective || '');
+  const [assessment, setAssessment] = React.useState(initialNote?.assessment || '');
+  const [plan, setPlan] = React.useState(initialNote?.plan || '');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<ClinicalCode[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
-  const [selectedCodes, setSelectedCodes] = React.useState<ClinicalCode[]>([]);
+  const [selectedCodes, setSelectedCodes] = React.useState<ClinicalCode[]>(
+    (initialNote?.icd10Codes || []).map((code: string) => ({ code, display: 'Code from Record' }))
+  );
+  const [workingDiagnoses, setWorkingDiagnoses] = React.useState<string[]>(initialNote?.workingDiagnoses || []);
+  const [workingDiagnosisInput, setWorkingDiagnosisInput] = React.useState('');
   const [activeSection, setActiveSection] = React.useState<string>('metadata');
   
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // Sync state with initialNote if it changes
+  React.useEffect(() => {
+    if (initialNote) {
+      setTitle(initialNote.title || 'Follow-up SOAP Note');
+      setSpecialty(initialNote.specialty || 'General Practice');
+      setPriority(initialNote.priority || 'routine');
+      setSubjective(initialNote.subjective || '');
+      setObjective(initialNote.objective || '');
+      setAssessment(initialNote.assessment || '');
+      setPlan(initialNote.plan || '');
+      setWorkingDiagnoses(initialNote.workingDiagnoses || []);
+      setSelectedCodes((initialNote.icd10Codes || []).map((code: string) => ({ code, display: 'Code from Record' })));
+    }
+  }, [initialNote, isOpen]);
 
   const sections = [
     { id: 'metadata', label: 'Encounter Info' },
@@ -68,6 +88,17 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
     );
     setSearchQuery('');
     setSearchResults([]);
+  };
+
+  const addWorkingDiagnosis = () => {
+    if (workingDiagnosisInput.trim() && !workingDiagnoses.includes(workingDiagnosisInput.trim())) {
+      setWorkingDiagnoses(prev => [...prev, workingDiagnosisInput.trim()]);
+      setWorkingDiagnosisInput('');
+    }
+  };
+
+  const removeWorkingDiagnosis = (diag: string) => {
+    setWorkingDiagnoses(prev => prev.filter(d => d !== diag));
   };
 
   const scrollToSection = (id: string) => {
@@ -128,9 +159,29 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
     },
   };
 
+  const handleClose = () => {
+    setIsOpen(false);
+    // Short delay to allow exit animation before resetting form
+    setTimeout(() => {
+      if (!initialNote) {
+        setSubjective('');
+        setObjective('');
+        setAssessment('');
+        setPlan('');
+        setWorkingDiagnoses([]);
+        setSelectedCodes([]);
+        setTitle('Clinical SOAP Note');
+        setSpecialty('General Medicine');
+        setPriority('routine');
+      }
+    }, 200);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger render={children} />
+    <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
+      <DialogTrigger asChild>
+        {children}
+      </DialogTrigger>
       <DialogContent showCloseButton={false} className="sm:max-w-[1050px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col h-[90vh] focus:outline-none">
         {/* Fluent 2 Header Pattern */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#EDEBE9] shrink-0 bg-white z-10">
@@ -149,18 +200,20 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
               >
-                Follow-up SOAP Note
+                {initialNote ? `Edit Note: ${initialNote.title}` : 'Follow-up SOAP Note'}
               </motion.span>
             </DialogTitle>
           </DialogHeader>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsOpen(false)} 
-            className="h-9 w-9 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </Button>
+            <DialogClose asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-9 w-9 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-colors"
+                onClick={handleClose}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </DialogClose>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
@@ -405,6 +458,56 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                       )}
                     </AnimatePresence>
                   </div>
+
+                  <Separator className="bg-[#F0F0F0] my-2" />
+
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <Label className="text-[12px] font-bold text-[#242424] uppercase tracking-[0.05em]">Working Clinical Diagnosis</Label>
+                      <p className="text-[12px] text-[#616161]">Manually add findings that are not yet officially coded (e.g., "Working diagnosis of pneumonia").</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input 
+                        placeholder="Type clinical diagnosis..." 
+                        value={workingDiagnosisInput}
+                        onChange={(e) => setWorkingDiagnosisInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addWorkingDiagnosis();
+                          }
+                        }}
+                        className="flex-1 h-11 bg-white border-[#8A8886] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 rounded-md text-[13px]"
+                      />
+                      <Button 
+                        variant="outline" 
+                        onClick={addWorkingDiagnosis}
+                        disabled={!workingDiagnosisInput.trim()}
+                        className="h-11 border-[#8A8886] text-[#0078D4] hover:bg-[#F3F9FD] px-5 font-bold text-[13px] rounded-md transition-all"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Diagnosis
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {workingDiagnoses.map((diag) => (
+                        <Badge 
+                          key={diag}
+                          variant="outline" 
+                          className="bg-[#FFF4F4] text-[#A4262C] border-[#FDE7E9] px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase flex items-center gap-2 group hover:bg-[#FDE7E9] transition-colors"
+                        >
+                          <Stethoscope className="h-3 w-3" />
+                          {diag}
+                          <button 
+                            onClick={() => removeWorkingDiagnosis(diag)}
+                            className="p-0.5 hover:bg-white/50 rounded-full transition-colors"
+                          >
+                            <X className="h-3 w-3 text-[#A4262C]" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </motion.div>
 
@@ -440,14 +543,16 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
             </motion.div>
           </div>
           <div className="flex items-center gap-4">
-            <button 
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => setIsOpen(false)}
-              className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9] rounded-lg disabled:opacity-50"
-            >
-              Discard
-            </button>
+            <DialogClose asChild>
+              <button 
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleClose}
+                className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9] rounded-lg disabled:opacity-50"
+              >
+                Discard
+              </button>
+            </DialogClose>
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -457,7 +562,7 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                 onClick={async () => {
                   setIsSubmitting(true);
                   try {
-                    await saveSOAPNote(patientId, {
+                    const noteData = {
                       title,
                       specialty,
                       priority,
@@ -466,19 +571,18 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                       assessment,
                       plan,
                       icd10Codes: selectedCodes.map(c => c.code),
+                      workingDiagnoses,
                       status: 'signed',
-                      authorName: 'Dr. Clinical User' // In real app, get from auth profile
-                    });
-                    setIsOpen(false);
-                    // Reset form
-                    setTitle('Follow-up SOAP Note');
-                    setSpecialty('General Practice');
-                    setPriority('routine');
-                    setSubjective('');
-                    setObjective('');
-                    setAssessment('');
-                    setPlan('');
-                    setSelectedCodes([]);
+                      authorName: initialNote?.authorName || 'Dr. Clinical User' // In real app, get from auth profile
+                    };
+
+                    if (initialNote?.id) {
+                      await updateSOAPNote(patientId, initialNote.id, noteData);
+                    } else {
+                      await saveSOAPNote(patientId, noteData);
+                    }
+
+                    handleClose();
                   } catch (e) {
                     // Error handled in service
                   } finally {
@@ -488,7 +592,7 @@ export function SOAPNoteModal({ patientId, children }: SOAPNoteModalProps) {
                 className="bg-[#0078D4] hover:bg-[#006ABD] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#0078D4]/20 transition-all tracking-tight"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Finalize & Sign Note
+                {initialNote ? 'Update & Finalize Record' : 'Finalize & Sign Note'}
               </Button>
             </motion.div>
           </div>

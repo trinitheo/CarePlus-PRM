@@ -12,7 +12,8 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  DialogClose
 } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -62,10 +63,10 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
         rr: currentVitals?.rr?.toString() || '16',
         spo2: currentVitals?.spo2?.toString() || '98',
         glucose: currentVitals?.glucose?.toString() || '98',
-        weight: currentVitals?.weight?.toString() || '88.5',
-        height: currentVitals?.height?.toString() || '178',
-        bmi: currentVitals?.bmi?.toString() || '27.9',
-        hba1c: currentVitals?.hba1c?.toString() || '6.8',
+        weight: currentVitals?.weight?.toString() || '',
+        height: currentVitals?.height?.toString() || '',
+        bmi: currentVitals?.bmi?.toString() || '',
+        hba1c: currentVitals?.hba1c?.toString() || '',
         gcs_e: currentVitals?.gcs_e || 4,
         gcs_v: currentVitals?.gcs_v || 5,
         gcs_m: currentVitals?.gcs_m || 6,
@@ -73,6 +74,18 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
       });
     }
   }, [isOpen, currentVitals]);
+
+  // Auto-calculate BMI
+  React.useEffect(() => {
+    const w = parseFloat(vitals.weight);
+    const h = parseFloat(vitals.height) / 100; // cm to m
+    if (w > 0 && h > 0) {
+      const bmiVal = (w / (h * h)).toFixed(1);
+      if (bmiVal !== vitals.bmi) {
+        setVitals(prev => ({ ...prev, bmi: bmiVal }));
+      }
+    }
+  }, [vitals.weight, vitals.height, vitals.bmi]);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -146,8 +159,9 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
                 <input 
                   type={field.type || 'text'}
                   value={(vitals as any)[field.key]}
+                  readOnly={field.key === 'bmi'}
                   onChange={(e) => setVitals({ ...vitals, [field.key]: e.target.value })}
-                  className="flex-1 w-0 text-base font-semibold text-[#242424] border-none focus:ring-0 p-0 placeholder:text-[#EDEBE9] bg-transparent"
+                  className={`flex-1 w-0 text-base font-semibold text-[#242424] border-none focus:ring-0 p-0 placeholder:text-[#EDEBE9] bg-transparent ${field.key === 'bmi' ? 'opacity-50 cursor-not-allowed' : ''}`}
                   placeholder={field.placeholder || ''}
                 />
                 <span className="text-[8px] font-bold text-[#A19F9D] uppercase tracking-tighter shrink-0">
@@ -218,13 +232,15 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
         </div>
 
         <DialogFooter className="p-2.5 px-4 bg-white border-t border-[#F3F2F1] flex gap-3">
-          <Button 
-            variant="ghost" 
-            onClick={onClose} 
-            className="flex-1 h-9 rounded-xl bg-[#F3F2F1] text-[#616161] font-bold hover:bg-[#EDEBE9]"
-          >
-            Cancel
-          </Button>
+          <DialogClose asChild>
+            <Button 
+              variant="ghost" 
+              onClick={onClose} 
+              className="flex-1 h-9 rounded-xl bg-[#F3F2F1] text-[#616161] font-bold hover:bg-[#EDEBE9]"
+            >
+              Cancel
+            </Button>
+          </DialogClose>
           <Button 
             onClick={handleSave} 
             disabled={isSaving}

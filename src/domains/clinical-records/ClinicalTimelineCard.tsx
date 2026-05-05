@@ -87,13 +87,13 @@ export const ClinicalTimelineCard: React.FC<ClinicalTimelineCardProps> = ({ reco
                                     {getTitleForType(doc.type)}
                                 </h4>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <div className="h-1 w-1 rounded-full bg-[#0078D4]" />
-                                    <p className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">
-                                        Provider: {doc.data.authorName}
+                                    <div className="h-1.5 w-1.5 rounded-full bg-[#0078D4]" />
+                                    <p className="text-[10px] font-black text-[#616161] uppercase tracking-widest">
+                                        PROVIDER: {doc.data.authorName || 'CLINICAL STAFF'}
                                     </p>
                                 </div>
                                 {doc.data.content && (
-                                    <div className="p-3 bg-[#FAFAFA] rounded-xl border border-[#F3F2F1] text-[12px] text-[#424242] leading-relaxed line-clamp-3">
+                                    <div className="p-4 bg-[#F8F9FA]/60 rounded-2xl border border-[#F3F2F1] text-[13px] text-[#424242] leading-[1.6] shadow-sm italic">
                                         {doc.data.content}
                                     </div>
                                 )}

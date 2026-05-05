@@ -1,4 +1,4 @@
-import { Activity, Calendar, FileText, Settings, Users, CreditCard, ShieldCheck } from 'lucide-react';
+import { Activity, Calendar, FileText, Settings, Users, CreditCard, ShieldCheck, User } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { HIPAAComplianceDashboard } from '../domains/compliance/HIPAAComplianceDashboard';
@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { id: 'care-team', icon: FileText, label: 'Collaboration' },
 ];
 
-export function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
+function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   return (
     <aside className="hidden md:flex flex-col h-screen border-r border-[#EDEBE9] bg-[#FAFAFA] transition-all duration-300 w-16 lg:w-[200px] shrink-0 shadow-sm z-20">
       <div className="p-6 flex items-center gap-3">
@@ -57,7 +57,21 @@ export function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentMod
           <ShieldCheck className="h-5 w-5 shrink-0" />
           <span className="hidden lg:block text-[13px] font-semibold tracking-tight">HIPAA Agent</span>
         </button>
-        <button className="w-full flex items-center gap-3 p-3 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-all duration-150">
+        <button 
+          className="w-full flex items-center gap-3 p-3 rounded-md text-[#616161] opacity-60 cursor-not-allowed group transition-all duration-150"
+        >
+          <div className="h-6 w-6 rounded-full bg-[#EDEBE9] flex items-center justify-center shrink-0 border border-[#EDEBE9]">
+            <User className="h-3.5 w-3.5 text-[#616161]" />
+          </div>
+          <div className="hidden lg:flex flex-col items-start min-w-0">
+            <span className="text-[13px] font-semibold tracking-tight">User Profile</span>
+            <span className="text-[8px] font-black uppercase text-[#0078D4] tracking-tighter">Coming Soon</span>
+          </div>
+        </button>
+        <button 
+          onClick={() => console.log('Settings clicked')}
+          className="w-full flex items-center gap-3 p-3 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-all duration-150"
+        >
           <Settings className="h-5 w-5 shrink-0" />
           <span className="hidden lg:block text-[13px] font-semibold tracking-tight">Settings</span>
         </button>
@@ -66,7 +80,7 @@ export function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentMod
   );
 }
 
-export function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
+function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-4 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       {NAV_ITEMS.map((item) => {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 
-export interface UserProfile {
+interface UserProfile {
   id: string;
   email: string;
   role: 'doctor' | 'nurse' | 'pt' | 'social_worker' | 'financial_counselor' | 'community_lead';

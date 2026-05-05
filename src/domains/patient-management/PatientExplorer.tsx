@@ -98,7 +98,7 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
                             </p>
                           </div>
                           <div className="flex items-center gap-2 text-[10px] font-medium text-[#616161]">
-                            <span className="tabular-nums">MRN-{p.mrn}</span>
+                            <span className="tabular-nums">MRN-{p.mrn?.startsWith('MRN-') ? p.mrn.replace('MRN-', '') : p.mrn}</span>
                             {isSelected && <Badge className="h-4 px-1 text-[8px] bg-[#0078D4] text-white border-none uppercase font-black">Active</Badge>}
                           </div>
                         </div>

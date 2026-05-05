@@ -6,7 +6,7 @@ import {
   Activity, Heart, Thermometer, User, DatabaseZap, 
   Share2, ArrowLeft, FileText, Pill, Microscope, 
   Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle,
-  Wind, Droplets, Scale, Ruler, Network, Users, LayoutDashboard, Link
+  Wind, Droplets, Scale, Ruler, Network, Users, LayoutDashboard
 } from 'lucide-react';
 import { HealthConnectManager } from './HealthConnectManager';
 import { KnowledgeGraph } from './KnowledgeGraph';
@@ -20,7 +20,6 @@ import { InvestigationWorkflow } from '../investigations/InvestigationWorkflow';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { VitalsCard } from './VitalsCard';
 import { InteractionEntryModal } from './InteractionEntryModal';
-import { ClinicalLogSidebar, ClinicalLogViewer } from './ClinicalLog';
 import { ClinicalTimelineCard } from './ClinicalTimelineCard';
 import { 
   Dialog, 
@@ -29,7 +28,9 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { CareEcosystem } from './CareEcosystem';
+import { UpcomingAppointments } from './UpcomingAppointments';
 import { PatientNotesFeed } from './PatientNotesFeed';
+import { MedicationCenter } from './MedicationCenter';
 import { motion } from 'motion/react';
 import { transition } from '../../lib/motion';
 import { useState, useMemo, useEffect } from 'react';
@@ -46,14 +47,13 @@ export function ClinicalRecords({
   onBack?: () => void;
   showBackButton?: boolean;
 }) {
-  const { patients, vitals, eventLog, clinicalIntakes } = useQueryModel();
+  const { patients, vitals, clinicalIntakes } = useQueryModel();
   const clinicalData = usePatientClinicalData(patientId);
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
   const [isCareEcosystemModalOpen, setIsCareEcosystemModalOpen] = useState(false);
   const [isHealthConnectModalOpen, setIsHealthConnectModalOpen] = useState(false);
   const { logAccess } = useHIPAAMonitor();
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
 
   useEffect(() => {
@@ -62,8 +62,36 @@ export function ClinicalRecords({
     }
   }, [patientId]);
   
-  const patient = patients[patientId];
-  const localVitals = vitals[patientId] || [];
+  const localPatient = patients ? patients[patientId] : undefined;
+  
+  const patient = useMemo(() => {
+    const firestorePatient = clinicalData.patient;
+    const merged = { ...(localPatient || {}) };
+    
+    if (firestorePatient) {
+      // Overwrite local data with firestore data only if firestore has a value
+      Object.keys(firestorePatient).forEach(key => {
+        const val = firestorePatient[key];
+        if (val !== undefined && val !== null) {
+          if (Array.isArray(val)) {
+            // Only overwrite array if not empty
+            if (val.length > 0) {
+              merged[key] = val;
+            }
+          } else if (val !== '' && val !== 0) {
+            merged[key] = val;
+          }
+        }
+      });
+    }
+    
+    // Ensure ID is set
+    if (!merged.id) merged.id = patientId;
+    
+    return merged;
+  }, [localPatient, clinicalData.patient, patientId]);
+
+  const localVitals = (vitals && vitals[patientId]) || [];
   
   // Merge vitals: prioritize firestore if available, merge with local for immediate feedback
   const mergedAllVitals = useMemo(() => {
@@ -94,6 +122,27 @@ export function ClinicalRecords({
   const patientVitals = mergedAllVitals;
   const intake = clinicalIntakes[patientId];
   const latestVitals = patientVitals[patientVitals.length - 1];
+
+  const mappedMedications = useMemo(() => {
+    const list = clinicalData.prescriptions.map((px: any) => ({
+      name: px.medicationName,
+      dosage: px.dosage,
+      frequency: px.frequency,
+      status: 'active' as const,
+      prescribedDate: px.createdAt ? new Date(px.createdAt.seconds * 1000).toLocaleDateString() : 'Just now',
+      indication: px.indication || ''
+    }));
+
+    // Add some historical ones for demo/refactoring context if empty
+    if (list.length === 0) {
+      return [
+        { name: 'Lisinopril 10 MG Oral Tablet [Zestril]', dosage: '10 MG', frequency: 'Once daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Hypertension', ePrescriptionStatus: 'dispensed' },
+        { name: 'Metformin 500 MG', dosage: '500 MG', frequency: 'Twice daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Type 2 Diabetes', ePrescriptionStatus: 'processing' },
+        { name: 'Amoxicillin 250 MG', dosage: '250 MG', frequency: 'Complete course', status: 'discontinued' as const, prescribedDate: '2023-05-20', indication: 'Infection' }
+      ];
+    }
+    return list;
+  }, [clinicalData.prescriptions]);
 
   const renderMedicationsCard = (expanded = false) => (
     <Card className={`flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white ${expanded ? 'h-[350px]' : 'h-full'}`}>
@@ -190,33 +239,15 @@ export function ClinicalRecords({
       variants={containerVariants}
       className="flex flex-col h-full space-y-4"
     >
-      <div className="flex flex-col gap-1 shrink-0 mb-4 px-2">
-        <div className="flex items-center gap-4">
-          {showBackButton && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onBack} 
-              className="rounded-full h-9 w-9 p-0 hover:bg-[#F3F2F1] text-[#616161]"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          )}
-          <h2 className="text-2xl font-black tracking-tight text-[#242424]">{patient?.name}</h2>
-          <button 
-            onClick={() => setIsHealthConnectModalOpen(true)}
-            className="flex items-center gap-1.5 px-2 py-1 bg-[#F3F9FD] border border-[#DEECF9] rounded-full scale-90 origin-left cursor-pointer hover:bg-[#DEECF9] transition-colors"
-          >
-            <div className="h-2 w-2 rounded-full bg-[#107C10] animate-pulse" />
-            <div className="text-[10px] font-black text-[#107C10] uppercase tracking-wider">SYNC ACTIVE</div>
-          </button>
-        </div>
-        <div className="flex items-center gap-3 ml-0.5">
-          <Badge variant="outline" className="font-mono text-[9px] bg-[#F3F2F1] text-[#616161] border-[#EDEBE9] px-2 py-0.5 rounded-md shadow-sm uppercase tracking-tight">
-            {patient?.mrn || 'MRN-78234-A'}
-          </Badge>
-          <span className="text-[11px] text-[#616161] font-bold uppercase tracking-tight opacity-70">DOB: {patient?.dob || '1982-04-12'}</span>
-        </div>
+      {/* Top Controls - Sync Status */}
+      <div className="flex items-center justify-end px-2 mb-2">
+        <button 
+          onClick={() => setIsHealthConnectModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1 bg-[#F3F9FD] border border-[#DEECF9] rounded-full scale-90 origin-right cursor-pointer hover:bg-[#DEECF9] transition-colors"
+        >
+          <div className="h-2 w-2 rounded-full bg-[#107C10] animate-pulse" />
+          <div className="text-[10px] font-black text-[#107C10] uppercase tracking-wider">SYNC ACTIVE</div>
+        </button>
       </div>
 
       <InteractionEntryModal 
@@ -237,9 +268,9 @@ export function ClinicalRecords({
           <div className="xl:col-span-3 flex flex-col min-h-0">
             <motion.div variants={itemVariants} className="flex-1">
               <Card className="h-full border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
-                  <div className="p-2 xl:p-3">
-                    <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 rounded-xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
+                  <div className="p-4 xl:p-6">
+                    <div className="flex items-start gap-5 mb-8">
+                      <div className="h-20 w-20 rounded-2xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
                         {patient?.id === 'p-1' || patient?.id === 'p-2' ? (
                           <img 
                             src={patient?.id === 'p-1' 
@@ -256,45 +287,44 @@ export function ClinicalRecords({
                           </div>
                         )}
                       </div>
-                      <div className="flex-1 min-h-0 min-w-0">
-                        <h1 className="text-xl font-bold tracking-tight text-[#242424] leading-none mb-1.5">{patient?.name}</h1>
-                        <div className="flex items-center gap-2.5">
+                      <div className="flex-1 min-h-0 min-w-0 pt-1">
+                        <h1 className="text-3xl font-black tracking-tight text-[#242424] leading-[0.9] mb-3">{patient?.name}</h1>
+                        <div className="flex flex-col gap-2">
                           <div className="flex flex-col">
-                            <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest">Age</span>
-                            <span className="text-xs font-bold text-[#242424]">{patient?.age}y ({patient?.sex})</span>
+                            <span className="text-[10px] text-[#616161] font-black uppercase tracking-widest leading-none mb-1">Age</span>
+                            <span className="text-sm font-bold text-[#242424]">{patient?.age}y ({patient?.sex})</span>
                           </div>
-                          <div className="h-4 w-[1px] bg-[#EDEBE9]" />
                           <div className="flex flex-col">
-                            <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest">Blood Type</span>
-                            <span className="text-xs font-bold text-[#D13438]">{patient?.bloodType || 'A+'}</span>
+                            <span className="text-[10px] text-[#616161] font-black uppercase tracking-widest leading-none mb-1">Blood Type</span>
+                            <span className="text-sm font-bold text-[#D13438]">{patient?.bloodType || 'A+'}</span>
                           </div>
                         </div>
                       </div>
                     </div>
   
-                    <div className="mt-6 grid grid-cols-1 gap-5">
-                      <div className="p-3 rounded-lg border border-[#FBC6CC] bg-[#FDE7E9]/30">
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlertCircle className="h-3.5 w-3.5 text-[#A4262C]" />
-                          <span className="text-[10px] font-bold text-[#A4262C] uppercase tracking-widest">Severe Allergies</span>
+                    <div className="space-y-8">
+                      <div className="p-4 rounded-xl border border-[#FBC6CC] bg-[#FDE7E9]/30">
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertCircle className="h-4 w-4 text-[#A4262C]" />
+                          <span className="text-[11px] font-black text-[#A4262C] uppercase tracking-widest">Severe Allergies</span>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-2">
                           {(intake?.allergies || 'NONE REPORTED').split(',').map((allergy, idx) => (
-                            <Badge key={idx} className="bg-[#A4262C] text-white border-none text-[9px] uppercase font-bold py-0.5 px-2 rounded-md shadow-sm">
+                            <Badge key={idx} className="bg-[#A4262C] text-white border-none text-[10px] uppercase font-black py-1 px-3 rounded-lg shadow-sm">
                               {allergy.trim()}
                             </Badge>
                           ))}
                         </div>
                       </div>
   
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Ongoing Conditions</span>
-                          <Badge variant="outline" className="text-[8px] bg-[#F3F2F1] border-none text-[#616161] font-bold">ACTIVE</Badge>
+                          <span className="text-[11px] font-black text-[#616161] uppercase tracking-widest">Ongoing Conditions</span>
+                          <Badge variant="outline" className="text-[10px] bg-[#F3F2F1] border-none text-[#616161] font-black px-3 py-1 rounded-full">ACTIVE</Badge>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-2">
                           {(patient?.conditions || []).map((condition, idx) => (
-                            <Badge key={idx} variant="secondary" className="bg-[#DEECF9] text-[#005A9E] border-none rounded-md px-2.5 py-1 text-[10px] font-bold shadow-sm transition-all hover:bg-[#CFE4FA]">
+                            <Badge key={idx} variant="secondary" className="bg-[#DEECF9] text-[#005A9E] border-none rounded-full px-4 py-1.5 text-[11px] font-black shadow-sm transition-all hover:bg-[#CFE4FA]">
                               {condition}
                             </Badge>
                           ))}
@@ -324,55 +354,61 @@ export function ClinicalRecords({
               setActiveTab(value);
               setIsNotesExpanded(false);
             }} 
-            className="flex-1 flex flex-col min-h-0"
+            className="flex-1 flex flex-col min-h-0 w-full"
           >
-            <div className="flex items-center justify-between mb-4 relative">
-              <TabsList className="bg-white border border-[#EDEBE9] p-1 rounded-xl shadow-sm h-auto">
-                <TabsTrigger 
-                  value="overview" 
-                  className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2"
-                >
-                  <LayoutDashboard className="h-3.5 w-3.5" />
-                  Dashboard
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="clinical" 
-                  className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2"
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  Clinical Focus
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="investigations" 
-                  className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2"
-                >
-                  <Microscope className="h-3.5 w-3.5" />
-                  Investigations
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="insights" 
-                  className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all gap-2"
-                >
-                  <Network className="h-3.5 w-3.5" />
-                  Insights
-                </TabsTrigger>
-              </TabsList>
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="flex items-center">
+                <TabsList className="bg-white border border-[#EDEBE9] p-1.5 rounded-2xl shadow-sm h-auto mx-auto border-dashed">
+                  <TabsTrigger 
+                    value="overview" 
+                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="clinical" 
+                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                  >
+                    <Activity className="h-4 w-4" />
+                    Clinical Focus
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="medications" 
+                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                  >
+                    <Pill className="h-4 w-4" />
+                    Medications
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="investigations" 
+                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                  >
+                    <Microscope className="h-4 w-4" />
+                    Investigations
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="insights" 
+                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                  >
+                    <Network className="h-4 w-4" />
+                    Insights
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-              <div className="flex items-center bg-white border border-[#EDEBE9] rounded-xl p-1 shadow-sm gap-1 ml-4 h-11 shrink-0">
+              <div className="flex items-center bg-white border border-[#EDEBE9] rounded-2xl p-1 shadow-sm gap-1 w-fit">
                 <SOAPNoteModal patientId={patientId}>
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="SOAP Note">
                     <FileText style={{ color: '#0078D4' }} className="h-5 w-5" />
                   </Button>
                 </SOAPNoteModal>
-                <Button 
-                   variant="ghost" 
-                   size="icon" 
-                   className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
-                   title="Ecosystem"
-                   onClick={() => setIsCareEcosystemModalOpen(true)}
-                >
-                  <Link style={{ color: '#107C10' }} className="h-5 w-5" />
-                </Button>
+                <div className="w-[1px] h-5 bg-[#EDEBE9]" />
+                <NewPrescriptionModal patientId={patientId}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Medication">
+                    <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
+                  </Button>
+                </NewPrescriptionModal>
                 <InvestigationOrderModal patientId={patientId}>
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Investigation">
                     <Microscope style={{ color: '#845701' }} className="h-5 w-5" />
@@ -392,28 +428,30 @@ export function ClinicalRecords({
             </div>
 
             <TabsContent value="overview" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
-                <div className="xl:col-span-8 flex flex-col min-h-0 gap-2">
-                   <VitalsCard vitals={patientVitals} patientId={patientId} />
-                   <div className="flex-1 min-h-0">
-                      {renderMedicationsCard()}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 flex-1 min-h-0">
+                {/* MIDDLE COLUMN */}
+                <div className="flex flex-col min-h-0 gap-2">
+                   <div className="flex-initial min-h-0 transition-all duration-300">
+                      <VitalsCard vitals={patientVitals} patientId={patientId} />
+                   </div>
+                   <div 
+                      className="flex-1 min-h-0"
+                      style={{ height: '250px', width: '441.25px' }}
+                   >
+                      <UpcomingAppointments patientId={patientId} />
                    </div>
                 </div>
-                <div className="xl:col-span-4 flex flex-col min-h-0 gap-2">
-                   <CareEcosystem patientId={patientId} />
+
+                {/* RIGHT COLUMN */}
+                <div className="flex flex-col min-h-0 gap-2">
                    <div className="flex-1 min-h-0">
-                      <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
-                        <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white flex flex-row items-center justify-between shrink-0">
-                          <CardTitle className="text-[10px] font-bold text-[#242424] flex items-center gap-2 uppercase tracking-widest opacity-80">
-                            <Network className="h-3 w-3 text-[#0078D4]" />
-                            Knowledge Graph
-                          </CardTitle>
-                          <div className="h-5 w-5 flex items-center justify-center">
-                            <SyncIcon />
-                          </div>
-                        </CardHeader>
-                        <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAFA]/30 relative">
-                          <KnowledgeGraph patientId={patientId} />
+                      <CareEcosystem patientId={patientId} />
+                   </div>
+                   <div className="flex-1 min-h-0">
+                      <Card className="h-full flex flex-col border-[#EDEBE9] border-dashed shadow-none rounded-lg overflow-hidden bg-[#FAFAFA]/50 items-center justify-center p-8">
+                        <div className="flex flex-col items-center gap-2 text-[#616161] opacity-40">
+                          <LayoutDashboard className="h-8 w-8" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Additional Widget Placeholder</span>
                         </div>
                       </Card>
                    </div>
@@ -426,7 +464,18 @@ export function ClinicalRecords({
                 patient={patient} 
                 isExpanded={isNotesExpanded}
                 onToggleExpand={() => setIsNotesExpanded(!isNotesExpanded)}
+                onViewMedications={() => setActiveTab('medications')}
               />
+            </TabsContent>
+
+            <TabsContent value="medications" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col">
+              <div className="flex-1 min-h-0">
+                <MedicationCenter 
+                  patientId={patientId}
+                  medications={mappedMedications}
+                  conditions={patient?.conditions || []}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="investigations" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">

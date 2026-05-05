@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
@@ -53,9 +53,24 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
     },
   };
 
+  const handleClose = () => {
+    setIsOpen(false);
+    // Short delay to allow exit animation before resetting form
+    setTimeout(() => {
+      setFromProvider('Dr. Sarah Chen');
+      setToProvider('');
+      setSpecialty('');
+      setReason('');
+      setUrgency('routine');
+      setNotes('');
+    }, 200);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger render={children} />
+    <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
+      <DialogTrigger asChild>
+        {children}
+      </DialogTrigger>
       <DialogContent showCloseButton={false} className="sm:max-w-[700px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col max-h-[90vh] focus:outline-none">
         {/* Fluent 2 Header Pattern */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#EDEBE9] shrink-0 bg-white z-10">
@@ -78,14 +93,16 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
               </motion.span>
             </DialogTitle>
           </DialogHeader>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsOpen(false)} 
-            className="h-9 w-9 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </Button>
+          <DialogClose asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleClose} 
+              className="h-9 w-9 rounded-md text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </DialogClose>
         </div>
 
         <ScrollArea 
@@ -180,14 +197,16 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
         </ScrollArea>
 
         <DialogFooter className="px-10 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9] flex justify-end items-center gap-4 shrink-0 z-10">
-          <button 
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => setIsOpen(false)}
-            className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9]"
-          >
-            Discard
-          </button>
+          <DialogClose asChild>
+            <button 
+              type="button"
+              disabled={isSubmitting}
+              className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9]"
+              onClick={handleClose}
+            >
+              Discard
+            </button>
+          </DialogClose>
           <motion.div
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -205,14 +224,7 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
                     urgency,
                     notes
                   });
-                  setIsOpen(false);
-                  // Reset form
-                  setFromProvider('Dr. Sarah Chen');
-                  setToProvider('');
-                  setSpecialty('');
-                  setReason('');
-                  setUrgency('routine');
-                  setNotes('');
+                  handleClose();
                 } catch (e) {
                   // Error handled in service
                 } finally {

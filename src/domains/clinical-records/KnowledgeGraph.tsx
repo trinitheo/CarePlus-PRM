@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { 
   Network, User, Activity, Watch, Pill, Utensils, Database, FileText, 
   Microscope, Stethoscope, UserPlus, Heart, Droplets, Users, 
-  DollarSign, Accessibility, MessagesSquare, HeartHandshake 
+  DollarSign, Accessibility, MessagesSquare, HeartHandshake, ClipboardCheck 
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
@@ -28,7 +28,29 @@ export function KnowledgeGraph({
 }) {
   const { patients, healthRecords, clinicalIntakes, interactions, vitals: mockVitals } = useQueryModel();
   const clinicalData = usePatientClinicalData(patientId);
-  const patient = patients[patientId];
+  const localPatient = patients ? patients[patientId] : undefined;
+  
+  const patient = useMemo(() => {
+    const firestorePatient = clinicalData.patient;
+    const merged = { ...(localPatient || {}) };
+    
+    if (firestorePatient) {
+      Object.keys(firestorePatient).forEach(key => {
+        const val = firestorePatient[key];
+        if (val !== undefined && val !== null) {
+          if (Array.isArray(val)) {
+            if (val.length > 0) merged[key] = val;
+          } else if (val !== '' && val !== 0) {
+            merged[key] = val;
+          }
+        }
+      });
+    }
+    
+    if (!merged.id) merged.id = patientId;
+    return merged;
+  }, [localPatient, clinicalData.patient, patientId]);
+
   const records = healthRecords[patientId] || [];
   const mockInteractions = interactions[patientId] || [];
 
@@ -61,36 +83,39 @@ export function KnowledgeGraph({
 
   // Simple "Graph" layout constants
   const center = { x: 200, y: 150 };
-  const radius = 95;
+  const radius = 100;
 
   const nodes: GraphNode[] = [
-    { id: 'patient', label: patient?.name || 'Unknown', icon: User, x: center.x, y: center.y, type: 'core' },
-    ...(latestVitals ? [
-      { id: 'vitals', label: 'Vitals', icon: Activity, type: 'source' },
-      ...(latestVitals.hr > 100 ? [{ id: 'hr', label: `HR: ${latestVitals.hr}`, icon: Heart, type: 'source' }] : []),
-      ...(latestVitals.bp?.startsWith('16') || latestVitals.bp?.startsWith('17') || latestVitals.bp?.startsWith('18') ? [{ id: 'bp', label: `BP: ${latestVitals.bp}`, icon: Activity, type: 'source' }] : []),
-      ...(latestVitals.spo2 < 95 ? [{ id: 'spo2', label: `SpO2: ${latestVitals.spo2}%`, icon: Droplets, type: 'source' }] : []),
-    ] : []) as GraphNode[],
-    ...(intake ? [{ id: 'intake', label: 'Intake', icon: Database, type: 'source' } as GraphNode] : []),
-    ...Array.from(new Set(records.map(r => r.source))).map((source) => ({
-      id: source,
-      label: (source as string).replace('_', ' ').toUpperCase(),
-      icon: source === 'watch' ? Watch : source === 'medication_log' ? Pill : Utensils,
-      type: 'source'
-    }) as GraphNode),
-    ...(clinicalData.clinical_records.length > 0 ? [{ id: 'soap', label: 'SOAP', icon: FileText, type: 'source' } as GraphNode] : []),
-    ...(clinicalData.prescriptions.length > 0 ? [{ id: 'rx', label: 'Rx', icon: Pill, type: 'source' } as GraphNode] : []),
-    ...(clinicalData.investigations.length > 0 ? [{ id: 'lab', label: 'Labs', icon: Microscope, type: 'source' } as GraphNode] : []),
-    ...(clinicalData.procedures.length > 0 ? [{ id: 'proc', label: 'Proc', icon: Stethoscope, type: 'source' } as GraphNode] : []),
-    ...(clinicalData.referrals.length > 0 ? [{ id: 'ref', label: 'Ref', icon: UserPlus, type: 'source' } as GraphNode] : []),
+    { id: 'patient', label: 'O', icon: () => <span className="text-white font-black text-xs">O</span>, x: center.x, y: center.y, type: 'core' },
+    
+    // Unified Encounter Node (Intake + SOAP)
+    ...(intake || clinicalData.clinical_records.length > 0 ? [{ 
+      id: 'encounters', 
+      label: 'Clinical Record', 
+      icon: ClipboardCheck, 
+      type: 'source',
+      color: '#0078D4'
+    } as GraphNode] : []),
+
+    ...(clinicalData.prescriptions.length > 0 || true ? [{ id: 'rx', label: 'Prescriptions', icon: Pill, type: 'source', color: '#107C10' } as GraphNode] : []),
+    ...(clinicalData.investigations.length > 0 || true ? [{ id: 'lab', label: 'LABS', icon: Microscope, type: 'source', color: '#0078D4' } as GraphNode] : []),
+    
+    // Consolidated Ongoing Conditions Node
+    ...(patient?.conditions && patient.conditions.length > 0 || true ? [{
+      id: 'ongoing-conditions',
+      label: 'CONDITIONS',
+      icon: Activity,
+      type: 'source',
+      color: '#A4262C' // Crimson red
+    } as GraphNode] : []),
     
     // Multi-disciplinary Interaction Nodes
-    ...Array.from(new Set(patentInteractionsCombined.map(i => i.type))).map(type => {
+    ...Array.from(new Set(patentInteractionsCombined.map(i => i.type))).concat(['social_care' as any]).map(type => {
       let icon = Users;
       let label = (type as string).toUpperCase();
       let color = '#0078D4';
 
-      if (type === 'social_care') { icon = HeartHandshake; label = 'Social Care'; color = '#E3008C'; }
+      if (type === 'social_care') { icon = HeartHandshake; label = 'SOCIAL CARE'; color = '#E3008C'; }
       if (type === 'financial') { icon = DollarSign; label = 'Financial'; color = '#107C10'; }
       if (type === 'pt') { icon = Accessibility; label = 'PT / Rehab'; color = '#5C2D91'; }
       if (type === 'support_group') { icon = MessagesSquare; label = 'Support'; color = '#008272'; }
@@ -165,23 +190,27 @@ export function KnowledgeGraph({
             >
               <circle 
                 cx={x} cy={y} 
-                r={isCore ? 28 : isInteraction ? 22 : 18} 
+                r={isCore ? 32 : isInteraction ? 28 : 24} 
                 className={`${isCore ? 'fill-[#0078D4]' : 'fill-white'} stroke-[#EDEBE9]`}
-                strokeWidth="1"
-                style={isInteraction ? { stroke: node.color, strokeOpacity: 0.4 } : {}}
+                strokeWidth="1.5"
+                style={isInteraction ? { stroke: node.color, strokeOpacity: 0.6 } : node.type === 'source' ? { stroke: node.color, strokeOpacity: 0.4 } : {}}
               />
               {isCore && (
-                <circle cx={x} cy={y} r={35} fill="url(#nodeGradient)" />
+                <circle cx={x} cy={y} r={40} fill="url(#nodeGradient)" />
               )}
-              <foreignObject x={x - 10} y={y - 10} width="20" height="20">
+              <foreignObject x={x - 12} y={y - 12} width="24" height="24">
                 <div className="flex items-center justify-center w-full h-full">
-                  <node.icon className={`w-4 h-4 ${isCore ? 'text-white' : ''}`} style={!isCore ? { color: node.color || '#0078D4' } : {}} />
+                  {typeof node.icon === 'function' ? (
+                    <node.icon />
+                  ) : (
+                    <node.icon className={`w-5 h-5 ${isCore ? 'text-white' : ''}`} style={!isCore ? { color: node.color || '#0078D4' } : {}} />
+                  )}
                 </div>
               </foreignObject>
               <text 
-                x={x} y={y + (isCore ? 42 : 32)} 
+                x={x} y={y + (isCore ? 48 : 42)} 
                 textAnchor="middle" 
-                className={`text-[8px] font-bold uppercase tracking-widest ${isCore ? 'fill-[#242424]' : 'fill-[#616161]'}`}
+                className={`text-[9px] font-black uppercase tracking-widest ${isCore ? 'fill-[#242424]' : 'fill-[#242424]'}`}
               >
                 {node.label}
               </text>

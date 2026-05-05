@@ -27,7 +27,6 @@ export function HIPAAMonitorProvider({ children }: { children: React.ReactNode }
   const [auditTrail, setAuditTrail] = useState<AuditEvent[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [lastActive, setLastActive] = useState(Date.now());
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const logAccess = (action: string, resourceType?: string, resourceId?: string, details?: any) => {
     const event: AuditEvent = {

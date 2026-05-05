@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { OperationType } from '../services/clinicalFirestoreService';
 
@@ -27,6 +27,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 export function usePatientClinicalData(patientId: string) {
   const [data, setData] = useState({
+    patient: { conditions: [] } as any,
     clinical_records: [],
     prescriptions: [],
     investigations: [],
@@ -42,12 +43,22 @@ export function usePatientClinicalData(patientId: string) {
 
     let unsubscribers: (() => void)[] = [];
 
-    // For demo/preview, we allow listening even if not signed in
-    // Real apps would enforce auth here
     const setupListeners = () => {
       // Cleanup existing listeners
       unsubscribers.forEach(unsub => unsub());
       unsubscribers = [];
+
+      // 1. Listen to the patient document itself for attributes like "conditions"
+      const patientDocRef = doc(db, 'patients', patientId);
+      const unsubPatient = onSnapshot(patientDocRef, (doc) => {
+        if (doc.exists()) {
+          setData(prev => ({
+            ...prev,
+            patient: { id: doc.id, ...doc.data() } as any
+          }));
+        }
+      });
+      unsubscribers.push(unsubPatient);
 
       const collections = [
         'clinical_records',
@@ -90,15 +101,7 @@ export function usePatientClinicalData(patientId: string) {
     // Initialize listeners immediately
     setupListeners();
 
-    // Still watch auth to potentially refresh or re-auth if needed, 
-    // though for now setupListeners once is enough for anonymous demo.
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      // We could re-run setupListeners here if we wanted listeners to be auth-dependent
-      // but for this demo keeping them open is better.
-    });
-
     return () => {
-      unsubscribeAuth();
       unsubscribers.forEach((unsub) => unsub());
     };
   }, [patientId]);

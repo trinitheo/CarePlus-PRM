@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
 // --- Domain Events ---
-export type DomainEvent =
+type DomainEvent =
   | { type: 'PATIENT_REGISTERED'; payload: Patient }
   | { type: 'VITALS_RECORDED'; payload: Vitals }
   | { type: 'APPOINTMENT_SCHEDULED'; payload: { id: string; patientId: string; providerId: string; time: string; reason: string } }
@@ -10,7 +10,7 @@ export type DomainEvent =
   | { type: 'INTERACTION_RECORDED'; payload: Interaction };
 
 // --- State Model ---
-export interface Interaction {
+interface Interaction {
   id: string;
   patientId: string;
   authorId: string;
@@ -50,7 +50,7 @@ export interface Patient {
   email?: string;
   phone?: string;
   address?: string;
-  status?: 'active' | 'pending' | 'discharged';
+  status?: 'active' | 'pending' | 'discharged' | 'triage';
   conditions?: string[];
   lastVisit?: string;
 }
@@ -75,7 +75,7 @@ export interface Vitals {
   timestamp: number;
 }
 
-export interface HealthRecord {
+interface HealthRecord {
   id: string;
   patientId: string;
   source: 'watch' | 'medication_log' | 'diet' | 'health_connect';
@@ -92,14 +92,13 @@ export interface Appointment {
   reason: string;
 }
 
-export interface AppState {
+interface AppState {
   patients: Record<string, Patient>;
   vitals: Record<string, Vitals[]>;
   healthRecords: Record<string, HealthRecord[]>;
   clinicalIntakes: Record<string, ClinicalIntake | undefined>;
   appointments: Record<string, Appointment>;
   interactions: Record<string, Interaction[]>;
-  eventLog: DomainEvent[];
 }
 
 const initialState: AppState = {
@@ -108,21 +107,21 @@ const initialState: AppState = {
       id: 'p-1', 
       name: 'Eleanor Vance', 
       dob: '1982-04-12', 
-      mrn: 'MRN-78234-A', 
+      mrn: '78234-A', 
       status: 'active', 
       email: 'e.vance@example.com',
       sex: 'Female',
       age: 42,
       bloodType: 'A+',
       gender: 'Woman',
-      conditions: ['Hypertensive disease', 'Inflammatory Bowel Disease', 'Diabetes mellitus type 2'],
+      conditions: ['Hypertension', 'Diabetes Mellitus', 'Heavy Drinker'],
       lastVisit: '2024-06-12'
     },
     'p-2': { 
       id: 'p-2', 
       name: 'Marcus Brody', 
       dob: '1975-11-03', 
-      mrn: 'MRN-19230-B', 
+      mrn: '19230-B', 
       status: 'active', 
       email: 'm.brody@museum.org',
       sex: 'Male',
@@ -134,25 +133,28 @@ const initialState: AppState = {
     },
   },
   vitals: {
-    'p-1': [{ patientId: 'p-1', hr: 72, bp: '120/80', temp: 98.6, timestamp: Date.now() - 3600000 }],
+    'p-1': [{ patientId: 'p-1', hr: 87, bp: '145/92', temp: 98.6, timestamp: Date.now() - 3600000 }],
   },
   healthRecords: {
-    'p-1': [],
+    'p-1': [
+      { id: 'hr-init-1', patientId: 'p-1', source: 'health_connect', type: 'heart_rate', value: 85, timestamp: Date.now() - 3600000 },
+      { id: 'hr-init-2', patientId: 'p-1', source: 'health_connect', type: 'heart_rate', value: 88, timestamp: Date.now() - 7200000 },
+    ],
   },
   clinicalIntakes: {
     'p-1': {
       id: 'intake-1',
       patientId: 'p-1',
-      chiefComplaint: 'Occasional chest pain',
-      historyOfPresentIllness: 'Chest pain exacerbated by exercise',
-      medicalHistory: 'Hypertension',
+      chiefComplaint: 'Follow up for chronic conditions',
+      historyOfPresentIllness: 'Eleanor is a 42-year-old female with a known history of hypertension and diabetes mellitus. She reports being a heavy drinker (approx. 4-5 units/day).',
+      medicalHistory: 'Hypertension, Diabetes Mellitus Type 2',
       familyHistory: 'Father with early MI',
-      socialHistory: 'Non-smoker',
-      surgicalHistory: 'Appendectomy (2005)',
+      socialHistory: 'Heavy drinker, non-smoker',
+      surgicalHistory: 'Appendectomy',
       immunizations: 'Up to date with COVID and Flu',
       hospitalizations: 'None in last 5 years',
-      reviewOfSystems: 'Negative for weight loss, positive for dyspnea',
-      medications: 'Lisinopril',
+      reviewOfSystems: 'Negative for weight loss, positive for occasional dyspnea',
+      medications: 'Lisinopril 10mg PO OD, Rosuvastatin 20mg PO OD',
       allergies: 'Penicillin',
       timestamp: Date.now() - 86400000
     }
@@ -168,7 +170,7 @@ const initialState: AppState = {
         authorId: 'sw-1',
         authorRole: 'social_worker',
         type: 'social_care',
-        content: 'Patient expressed difficulty with transportation to appointments. Connected with community shuttle program.',
+        content: 'Counseled patient on community resources for alcohol reduction programs.',
         timestamp: Date.now() - 172800000
       },
       {
@@ -177,21 +179,11 @@ const initialState: AppState = {
         authorId: 'pt-1',
         authorRole: 'pt',
         type: 'pt',
-        content: 'Post-op mobility assessment complete. Patient shows improved range of motion in right knee.',
+        content: 'Routine mobility check. No major issues noted.',
         timestamp: Date.now() - 86400000
-      },
-      {
-        id: 'i-3',
-        patientId: 'p-1',
-        authorId: 'fc-1',
-        authorRole: 'financial_counselor',
-        type: 'financial',
-        content: 'Reviewed insurance benefits for upcoming physical therapy sessions. Deductible met.',
-        timestamp: Date.now() - 259200000
       }
     ]
   },
-  eventLog: [],
 };
 
 // --- Reducer (The Projection Engine) ---
@@ -202,7 +194,6 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
       return {
         ...state,
         patients: { ...state.patients, [event.payload.id]: event.payload },
-        eventLog: [...state.eventLog, event],
       };
     case 'VITALS_RECORDED':
       return {
@@ -211,7 +202,6 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
           ...state.vitals,
           [event.payload.patientId]: [...(state.vitals[event.payload.patientId] || []), event.payload],
         },
-        eventLog: [...state.eventLog, event],
       };
     case 'HEALTH_DATA_INGESTED':
       return {
@@ -220,7 +210,6 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
           ...state.healthRecords,
           [event.payload.patientId]: [...(state.healthRecords[event.payload.patientId] || []), event.payload],
         },
-        eventLog: [...state.eventLog, event],
       };
     case 'CLINICAL_INTAKE_RECORDED':
       return {
@@ -229,13 +218,11 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
           ...state.clinicalIntakes,
           [event.payload.patientId]: event.payload,
         },
-        eventLog: [...state.eventLog, event],
       };
     case 'APPOINTMENT_SCHEDULED':
       return {
         ...state,
         appointments: { ...state.appointments, [event.payload.id]: event.payload },
-        eventLog: [...state.eventLog, event],
       };
     case 'INTERACTION_RECORDED':
       return {
@@ -244,7 +231,6 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
           ...state.interactions,
           [event.payload.patientId]: [...(state.interactions[event.payload.patientId] || []), event.payload]
         },
-        eventLog: [...state.eventLog, event],
       };
     default:
       return state;
@@ -260,25 +246,36 @@ const EventContext = createContext<{
 export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(eventReducer, initialState);
 
-  // Simulate SSE/WebSocket incoming events
+  // Simulate SSE/WebSocket incoming events (Health Connect updates every 5 mins)
   useEffect(() => {
     const timer = setInterval(() => {
-      // Simulate an external background event
-      if (Math.random() > 0.95) { // Reduced probability
-        dispatch({
-          type: 'VITALS_RECORDED',
-          payload: {
-            patientId: 'p-1',
-            hr: 70 + Math.floor(Math.random() * 15),
-            bp: `120/${75 + Math.floor(Math.random() * 10)}`,
-            temp: 98.6 + (Math.random() * 0.4 - 0.2),
-            rr: 12 + Math.floor(Math.random() * 8),
-            spo2: 95 + Math.floor(Math.random() * 5),
-            timestamp: Date.now(),
-          },
-        });
-      }
-    }, 60000); // Changed to 60 seconds instead of 15
+      // Health Connect Ingestion
+      dispatch({
+        type: 'VITALS_RECORDED',
+        payload: {
+          patientId: 'p-1',
+          hr: 82 + Math.floor(Math.random() * 10), // Focused around 87
+          bp: `140/${85 + Math.floor(Math.random() * 10)}`, // Reflecting hypertension
+          temp: 98.6 + (Math.random() * 0.4 - 0.2),
+          rr: 12 + Math.floor(Math.random() * 4),
+          spo2: 96 + Math.floor(Math.random() * 4),
+          timestamp: Date.now(),
+        },
+      });
+
+      // Also dispatch a health data ingestion event for records
+      dispatch({
+        type: 'HEALTH_DATA_INGESTED',
+        payload: {
+          id: `hr-${Date.now()}`,
+          patientId: 'p-1',
+          source: 'health_connect',
+          type: 'heart_rate_update',
+          value: 82 + Math.floor(Math.random() * 10),
+          timestamp: Date.now()
+        }
+      });
+    }, 300000); // 5 minutes in ms
     return () => clearInterval(timer);
   }, []);
 

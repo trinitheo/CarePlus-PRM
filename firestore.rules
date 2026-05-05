@@ -37,7 +37,10 @@ service cloud.firestore {
     function isValidPatient(data) {
       return data.keys().hasAll(['firstName', 'lastName']) &&
              data.firstName is string && data.firstName.size() <= 100 &&
-             data.lastName is string && data.lastName.size() <= 100;
+             data.lastName is string && data.lastName.size() <= 100 &&
+             (!('authorId' in data) || (data.authorId is string)) &&
+             (!('conditions' in data) || (data.conditions is list)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidClinicalRecord(data) {
@@ -52,7 +55,10 @@ service cloud.firestore {
              (!('assessment' in data) || (data.assessment is string && data.assessment.size() <= 10000)) &&
              (!('plan' in data) || (data.plan is string && data.plan.size() <= 10000)) &&
              (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
-             (!('icd10Codes' in data) || (data.icd10Codes is list && data.icd10Codes.size() <= 20));
+             (!('icd10Codes' in data) || (data.icd10Codes is list && data.icd10Codes.size() <= 20)) &&
+             (!('workingDiagnoses' in data) || (data.workingDiagnoses is list && data.workingDiagnoses.size() <= 20)) &&
+             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 200)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidPrescription(data) {
@@ -61,7 +67,13 @@ service cloud.firestore {
              data.medicationName is string && data.medicationName.size() <= 200 &&
              data.dosage is string && data.dosage.size() <= 100 &&
              data.frequency is string && data.frequency.size() <= 100 &&
-             data.status in ['active', 'completed', 'cancelled'];
+             data.status in ['active', 'completed', 'cancelled'] &&
+             (!('route' in data) || (data.route is string)) &&
+             (!('duration' in data) || (data.duration is string)) &&
+             (!('durationUnit' in data) || (data.durationUnit is string)) &&
+             (!('refills' in data) || (data.refills is int)) &&
+             (!('sig' in data) || (data.sig is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidInvestigation(data) {
@@ -82,7 +94,12 @@ service cloud.firestore {
       return data.keys().hasAll(['patientId', 'authorId', 'procedureName', 'status']) &&
              (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
              data.procedureName is string && data.procedureName.size() <= 200 &&
-             data.status in ['scheduled', 'completed', 'cancelled'];
+             data.status in ['scheduled', 'completed', 'cancelled'] &&
+             (!('priority' in data) || (data.priority is string)) &&
+             (!('targetDate' in data) || (data.targetDate is string)) &&
+             (!('preparation' in data) || (data.preparation is string)) &&
+             (!('notes' in data) || (data.notes is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidReferral(data) {
@@ -90,7 +107,12 @@ service cloud.firestore {
              (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
              data.specialty is string && data.specialty.size() <= 200 &&
              data.reason is string && data.reason.size() <= 1000 &&
-             data.status in ['pending', 'accepted', 'completed'];
+             data.status in ['pending', 'accepted', 'completed'] &&
+             (!('fromProvider' in data) || (data.fromProvider is string)) &&
+             (!('toProvider' in data) || (data.toProvider is string)) &&
+             (!('urgency' in data) || (data.urgency is string)) &&
+             (!('notes' in data) || (data.notes is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidVitals(data) {
@@ -119,15 +141,15 @@ service cloud.firestore {
     match /patients/{patientId} {
       allow get, list: if true; // Allow exploration for demo
       allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidPatient(incoming());
-      allow update: if isSignedIn() && isValidPatient(incoming()) &&
-                     incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'lastName', 'dateOfBirth', 'gender']);
+      allow update: if (isSignedIn() || incoming().authorId == 'anonymous-entry') &&
+                     isValidPatient(incoming()) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'lastName', 'dateOfBirth', 'gender', 'conditions', 'updatedAt']);
       
       // Sub-collections
       match /clinical_records/{recordId} {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(recordId) && isValidClinicalRecord(incoming());
         allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(recordId) && 
-                       existing().status == 'draft' &&
                        isValidClinicalRecord(incoming()) &&
                        incoming().authorId == existing().authorId;
       }

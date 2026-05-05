@@ -8,7 +8,8 @@ import {
   Sparkles,
   Database,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Pill
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '../../components/ui/badge';
@@ -38,80 +39,25 @@ interface Note {
 
 const sampleNotes: Partial<Note>[] = [
   {
-    title: 'Endocrinology Follow-up',
+    title: 'Post-Appendectomy Follow-up & Chronic Management',
     author: 'Dr. Sarah Mitchell',
-    specialty: 'Endocrinology',
-    content: `Chief Complaint: Diabetes management follow-up
-
+    specialty: 'Internal Medicine',
+    content: `Chief Complaint: Follow-up for Hypertension and Type 2 Diabetes Mellitus.
+    
 History of Present Illness:
-Patient Eleanor Vance, 42-year-old female, presents for routine diabetes follow-up. Reports improved adherence to medication regimen over the past month. Denies polydipsia, polyuria, or significant weight changes.
+Patient Eleanor Vance, 42-year-old female, presents for chronic management. She has a history of hypertension and T2DM. Patient also reports significant alcohol consumption (heavy drinker). Past surgical history notable for appendectomy.
 
 Assessment:
-HbA1c improved from 8.1% to 7.2%, demonstrating good response to current medication regimen. Blood glucose logs show values predominantly in target range (80-130 mg/dL fasting).
+1. Essential Hypertension - currently suboptimal control.
+2. Type 2 Diabetes Mellitus - continuing current regimen.
+3. Heavy Alcohol Use - counseled on reduction.
 
 Plan:
-1. Continue current Linagliptin/Metformin combination therapy
-2. Reinforce dietary modifications and exercise plan
-3. Schedule follow-up in 3 months with repeat HbA1c
-4. Patient educated on signs of hypoglycemia
-
-Patient expressed understanding and agreement with treatment plan.`,
-    tags: ['Diabetes', 'Follow-up', 'Endocrinology'],
-    status: 'final',
-    priority: 'routine',
-  },
-  {
-    title: 'Cardiology Consultation',
-    author: 'Dr. James Chen',
-    specialty: 'Cardiology',
-    content: `Reason for Consultation: Hypertension management
-
-History:
-Patient with essential hypertension, currently on Lisinopril 10mg daily. Recent home BP readings showing elevation (avg 138/84 mmHg). No chest pain, palpitations, or dyspnea.
-
-Physical Examination:
-BP: 142/86 mmHg (sitting, right arm)
-HR: 74 bpm, regular
-Heart: Regular rate and rhythm, no murmurs
-Lungs: Clear bilaterally
-
-Assessment & Recommendations:
-1. Suboptimal blood pressure control on current medication
-2. Recommend increase Lisinopril to 20mg daily
-3. Lifestyle modifications: reduce sodium intake, increase physical activity
-4. Schedule 2-week follow-up for BP recheck
-5. Consider adding HCTZ if BP remains elevated
-
-Patient counseled on medication change and lifestyle modifications.`,
-    tags: ['Hypertension', 'Cardiology', 'Consultation'],
-    status: 'final',
-    priority: 'urgent',
-  },
-  {
-    title: 'Gastroenterology Progress Note',
-    author: 'Dr. Maria Rodriguez',
-    specialty: 'Gastroenterology',
-    content: `Progress Note: Inflammatory Bowel Disease Management
-
-Subjective:
-Patient reports overall improvement in GI symptoms. Frequency of bowel movements decreased from 6-8/day to 3-4/day. No blood in stool. Minimal abdominal cramping.
-
-Medications:
-Mesalamine 800mg TID - good compliance
-
-Objective:
-Abd: Soft, non-tender, non-distended
-No rebound or guarding
-
-Assessment:
-Inflammatory bowel disease, stable on current therapy. Clinical remission achieved.
-
-Plan:
-1. Continue Mesalamine 800mg three times daily
-2. Monitor for symptom recurrence
-3. Follow-up in 3 months
-4. Annual colonoscopy scheduled for September 2024`,
-    tags: ['IBD', 'Gastroenterology', 'Progress'],
+1. Continue Lisinopril 10mg PO OD.
+2. Continue Rosuvastatin 20mg PO OD.
+3. Lifestyle modification counseling provided.
+4. Labs ordered: HbA1c, CMP, Lipid Panel.`,
+    tags: ['Hypertension', 'T2DM', 'Alcohol Use'],
     status: 'final',
     priority: 'routine',
   },
@@ -120,18 +66,12 @@ Plan:
 interface NoteCardProps {
   note: Note;
   isExpanded: boolean;
-  isEditing: boolean;
   onToggleExpand: () => void;
-  onEdit: () => void;
-  onSave: (content: string, title: string) => void;
-  onCancel: () => void;
+  patientId: string;
   key?: React.Key;
 }
 
-function NoteCard({ note, isExpanded, isEditing, onToggleExpand, onEdit, onSave, onCancel }: NoteCardProps) {
-  const [editedContent, setEditedContent] = useState(note.content);
-  const [editedTitle, setEditedTitle] = useState(note.title);
-
+function NoteCard({ note, isExpanded, onToggleExpand, patientId }: NoteCardProps) {
   const statusColors = {
     draft: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     final: 'bg-green-100 text-green-800 border-green-300',
@@ -160,24 +100,14 @@ function NoteCard({ note, isExpanded, isEditing, onToggleExpand, onEdit, onSave,
       className={`bg-white rounded-2xl shadow-sm border border-[#EDEBE9] border-l-4 ${priorityColors[note.priority || 'routine']} overflow-hidden transition-all hover:shadow-md`}
     >
       {/* Card Header */}
-      <div className="p-4 cursor-pointer" onClick={() => !isEditing && onToggleExpand()}>
+      <div className="p-4 cursor-pointer" onClick={() => onToggleExpand()}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 flex-1">
             <div className="mt-1">
               {priorityIcons[note.priority || 'routine']}
             </div>
             <div className="flex-1">
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-md font-bold w-full border-b-2 border-[#0078D4] focus:outline-none px-2 py-1 mb-2 bg-transparent"
-                />
-              ) : (
-                <h3 className="text-md font-bold text-[#242424] mb-1">{note.title}</h3>
-              )}
+              <h3 className="text-md font-bold text-[#242424] mb-1">{note.title}</h3>
               <div className="flex items-center gap-3 text-xs text-[#616161]">
                 <div className="flex items-center gap-1.5 font-medium">
                   <div className="w-5 h-5 bg-[#0078D4] rounded-full flex items-center justify-center text-white text-[9px] font-black">
@@ -207,56 +137,34 @@ function NoteCard({ note, isExpanded, isEditing, onToggleExpand, onEdit, onSave,
             </div>
           </div>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {isEditing ? (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onCancel}
-                  className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Cancel"
-                >
-                  <X className="w-4 h-4 text-gray-600" />
-                </Button>
-                <Button
-                  onClick={() => onSave(editedContent, editedTitle)}
-                  className="h-8 w-8 bg-[#0078D4] text-white rounded-lg hover:bg-[#005A9E] transition-colors p-0"
-                  title="Save"
-                >
-                  <Check className="w-4 h-4" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onEdit}
-                  className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Edit"
-                >
-                  <Edit className="w-4 h-4 text-[#616161]" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onToggleExpand}
-                  className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
-                  title={isExpanded ? "Collapse" : "Expand"}
-                >
-                  <ChevronDown
-                    className={`w-4 h-4 text-[#616161] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  />
-                </Button>
-              </>
-            )}
+            <SOAPNoteModal patientId={patientId} initialNote={note}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Edit"
+              >
+                <Edit className="w-4 h-4 text-[#616161]" />
+              </Button>
+            </SOAPNoteModal>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleExpand}
+              className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
+              title={isExpanded ? "Collapse" : "Expand"}
+            >
+              <ChevronDown
+                className={`w-4 h-4 text-[#616161] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+              />
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Card Content - Expandable */}
       <AnimatePresence>
-        {(isExpanded || isEditing) && (
+        {isExpanded && (
           <motion.div 
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -265,31 +173,14 @@ function NoteCard({ note, isExpanded, isEditing, onToggleExpand, onEdit, onSave,
             className="border-t border-[#F3F2F1] bg-[#FAFAFA]"
           >
             <div className="p-4">
-              {isEditing ? (
-                <div>
-                  <div className="mb-3 p-3 bg-[#F3F9FD] rounded-lg border border-[#DEECF9] flex items-start gap-2">
-                    <Info className="w-4 h-4 text-[#0078D4] mt-0.5 flex-shrink-0" />
-                    <div className="text-[11px] text-[#004E8C] font-medium leading-relaxed">
-                      <strong>Audit Trail Enabled:</strong> Clinical modifications are tracked for compliance.
-                    </div>
-                  </div>
-                  <textarea
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="w-full h-64 p-4 border border-[#0078D4] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0078D4]/20 font-mono text-xs resize-y bg-white leading-relaxed"
-                    placeholder="Enter clinical note content..."
-                  />
-                </div>
-              ) : (
-                <div className="prose max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-[#242424] bg-white p-5 rounded-xl border border-[#EDEBE9]">
-                    {displayContent}
-                  </pre>
-                </div>
-              )}
+              <div className="prose max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-[#242424] bg-white p-5 rounded-xl border border-[#EDEBE9]">
+                  {displayContent}
+                </pre>
+              </div>
 
               {/* Signature Block */}
-              {(note.status === 'final' || note.status === 'signed') && !isEditing && (
+              {(note.status === 'final' || note.status === 'signed') && (
                 <div className="mt-4 p-3 bg-white rounded-xl border border-[#EDEBE9] border-l-2 border-l-[#107C10]">
                   <div className="flex items-center gap-2 text-[10px] text-[#616161] font-medium">
                     <CheckCircle className="w-3.5 h-3.5 text-[#107C10]" />
@@ -310,13 +201,19 @@ interface PatientNotesFeedProps {
   onClose?: () => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  onViewMedications?: () => void;
 }
 
-export function PatientNotesFeed({ patient, onClose, isExpanded, onToggleExpand }: PatientNotesFeedProps) {
+export function PatientNotesFeed({ 
+  patient, 
+  onClose, 
+  isExpanded, 
+  onToggleExpand,
+  onViewMedications
+}: PatientNotesFeedProps) {
   const patientId = patient?.id || 'p-1';
   const clinicalData = usePatientClinicalData(patientId);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
-  const [editingNote, setEditingNote] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'final' | 'amended'>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | 'routine' | 'urgent' | 'critical'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -358,18 +255,6 @@ export function PatientNotesFeed({ patient, onClose, isExpanded, onToggleExpand 
     setExpandedNotes(newExpanded);
   };
 
-  const handleEdit = (noteId: string) => {
-    setEditingNote(noteId);
-    if (!expandedNotes.has(noteId)) {
-      setExpandedNotes(prev => new Set(prev).add(noteId));
-    }
-  };
-
-  const handleSave = (noteId: string, content: string, title: string) => {
-    // In a real app, this would update Firestore
-    setEditingNote(null);
-  };
-
   const handleSeedData = async () => {
     setIsSeeding(true);
     try {
@@ -391,10 +276,6 @@ export function PatientNotesFeed({ patient, onClose, isExpanded, onToggleExpand 
     }
   };
 
-  const handleCancel = () => {
-    setEditingNote(null);
-  };
-
   const filteredNotes = processedNotes.filter(note => {
     const statusMatch = filterStatus === 'all' || note.status === filterStatus;
     const priorityMatch = filterPriority === 'all' || note.priority === filterPriority;
@@ -407,9 +288,9 @@ export function PatientNotesFeed({ patient, onClose, isExpanded, onToggleExpand 
   return (
     <div className="flex flex-col h-full bg-[#F8F9FA]/30 overflow-hidden">
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-hidden flex pt-[3px]">
         {/* Feed Container */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col mt-0">
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-5xl mx-auto p-4 lg:p-6 space-y-4">
               {/* Header */}
@@ -496,11 +377,8 @@ export function PatientNotesFeed({ patient, onClose, isExpanded, onToggleExpand 
                     key={note.id}
                     note={note}
                     isExpanded={expandedNotes.has(note.id)}
-                    isEditing={editingNote === note.id}
                     onToggleExpand={() => toggleExpand(note.id)}
-                    onEdit={() => handleEdit(note.id)}
-                    onSave={(content, title) => handleSave(note.id, content, title)}
-                    onCancel={handleCancel}
+                    patientId={patientId}
                   />
                 ))}
               </div>
@@ -517,70 +395,79 @@ export function PatientNotesFeed({ patient, onClose, isExpanded, onToggleExpand 
 
         {/* Supporting Rail - Quick Actions */}
         <div className="hidden lg:flex w-80 bg-white border-l border-[#EDEBE9] flex-col overflow-hidden">
-          <div className="p-6 border-b border-[#F3F2F1] bg-[#FAFAFA]/50">
-            <h2 className="text-xs font-black text-[#242424] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Plus className="h-3.5 w-3.5 text-[#0078D4]" />
-              Quick Documentation
-            </h2>
+          {/* Row 1: Quick Documentation */}
+          <div className="flex-1 border-b border-[#F3F2F1] bg-[#FAFAFA]/50 overflow-hidden pt-[23px]">
+            <div className="p-6 pt-[22px]">
+              <h2 className="text-xs font-black text-[#242424] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                <Plus className="h-3.5 w-3.5 text-[#0078D4]" />
+                Quick Documentation
+              </h2>
 
-            <div className="space-y-3">
-              <SOAPNoteModal patientId={patientId}>
-                <Button variant="outline" className="w-full justify-start h-12 px-4 border-[#EDEBE9] hover:bg-[#F3F9FD] hover:text-[#0078D4] hover:border-[#0078D4] transition-all group rounded-xl">
-                  <div className="h-8 w-8 rounded-lg bg-[#F3F2F1] group-hover:bg-[#DEECF9] flex items-center justify-center mr-3 transition-colors">
-                    <Plus className="h-4 w-4" />
+              <div className="space-y-3">
+                <SOAPNoteModal patientId={patientId}>
+                  <Button variant="outline" className="w-full justify-start h-12 px-4 border-[#EDEBE9] hover:bg-[#F3F9FD] hover:text-[#0078D4] hover:border-[#0078D4] transition-all group rounded-xl">
+                    <div className="h-8 w-8 rounded-lg bg-[#F3F2F1] group-hover:bg-[#DEECF9] flex items-center justify-center mr-3 transition-colors">
+                      <Plus className="h-4 w-4" />
+                    </div>
+                    <span className="text-[11px] font-black uppercase tracking-widest">New Note</span>
+                  </Button>
+                </SOAPNoteModal>
+                
+                <Button variant="outline" disabled className="w-full justify-start h-12 px-4 border-[#EDEBE9] opacity-50 cursor-not-allowed transition-all group rounded-xl">
+                  <div className="h-8 w-8 rounded-lg bg-[#F3F2F1] flex items-center justify-center mr-3">
+                    <Mic className="h-4 w-4" />
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-widest">New Note</span>
+                  <div className="flex flex-col items-start">
+                    <span className="text-[11px] font-black uppercase tracking-widest">AI Dictation</span>
+                    <span className="text-[8px] font-bold text-[#A19F9D] uppercase tracking-widest">Coming Soon</span>
+                  </div>
                 </Button>
-              </SOAPNoteModal>
-              
-              <Button variant="outline" disabled className="w-full justify-start h-12 px-4 border-[#EDEBE9] opacity-50 cursor-not-allowed transition-all group rounded-xl">
-                <div className="h-8 w-8 rounded-lg bg-[#F3F2F1] flex items-center justify-center mr-3">
-                  <Mic className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col items-start">
-                  <span className="text-[11px] font-black uppercase tracking-widest">AI Dictation</span>
-                  <span className="text-[8px] font-bold text-[#A19F9D] uppercase tracking-widest">Coming Soon</span>
-                </div>
-              </Button>
+              </div>
             </div>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="p-6 space-y-8">
-              <div>
-                <h3 className="text-[10px] font-black text-[#A19F9D] uppercase tracking-widest mb-4">Volume Statistics</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-[#F8F9FA] rounded-2xl border border-[#EDEBE9] text-center">
-                    <div className="text-xl font-black text-[#242424]">{processedNotes.length}</div>
-                    <div className="text-[8px] font-bold text-[#616161] uppercase tracking-widest mt-1">Total</div>
-                  </div>
-                  <div className="p-3 bg-[#F8F9FA] rounded-2xl border border-[#EDEBE9] text-center">
-                    <div className="text-xl font-black text-[#107C10]">{processedNotes.filter(n => n.status === 'final').length}</div>
-                    <div className="text-[8px] font-bold text-[#616161] uppercase tracking-widest mt-1">Signed</div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-[10px] font-black text-[#A19F9D] uppercase tracking-widest mb-4">Recent Care Network Activity</h3>
-                <div className="space-y-5">
-                  {processedNotes.slice(0, 3).map((note, i) => (
-                    <div key={i} className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#DEECF9] flex items-center justify-center text-[#005A9E] text-[10px] font-black shrink-0">
-                        {note.author.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-bold text-[#242424] truncate leading-none mb-1">{note.author}</div>
-                        <div className="text-[10px] text-[#616161] font-medium leading-none">
-                          Signed note • <span className="opacity-60">{note.date}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Row 2: Current Medication */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="p-6 pb-2">
+              <h3 className="text-[10px] font-black text-[#A19F9D] uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Pill className="h-3.5 w-3.5 text-[#107C10]" />
+                Current Medication
+              </h3>
             </div>
-          </ScrollArea>
+            
+            <ScrollArea className="flex-1 px-6 pb-2">
+              <div className="space-y-3">
+                {clinicalData.prescriptions.length > 0 ? (
+                  clinicalData.prescriptions.map((px: any, i: number) => (
+                    <div key={i} className="p-3 bg-[#F8F9FA] rounded-xl border border-[#EDEBE9] hover:border-[#DEECF9] hover:bg-[#F3F9FD] transition-all">
+                      <div className="text-[11px] font-bold text-[#242424] leading-tight">{px.medicationName}</div>
+                      <div className="text-[9px] text-[#616161] font-medium mt-1">{px.dosage} • {px.frequency}</div>
+                    </div>
+                  ))
+                ) : (
+                  [
+                    { name: 'Lisinopril 10 MG Oral Tablet', dose: '10 MG', freq: 'Once daily' },
+                    { name: 'Rosuvastatin 20 MG Oral Tablet', dose: '20 MG', freq: 'Once daily' },
+                  ].map((med, i) => (
+                    <div key={i} className="p-3 bg-[#F8F9FA] rounded-xl border border-[#EDEBE9]">
+                      <div className="text-[11px] font-bold text-[#242424] leading-tight">{med.name}</div>
+                      <div className="text-[9px] text-[#616161] font-medium mt-1">{med.dose} • {med.freq}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+            
+            <div className="p-6 pt-2 bg-[#FAFAFA]/50 border-t border-[#F3F2F1]">
+              <Button 
+                variant="link" 
+                onClick={onViewMedications}
+                className="w-full text-[10px] font-black text-[#107C10] h-auto p-0 uppercase tracking-widest hover:text-[#0b590b]"
+              >
+                View Full Medication List
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

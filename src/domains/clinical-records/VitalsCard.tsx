@@ -48,25 +48,51 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
     if (!latestVitals) return [];
     const found = [];
     
-    if (latestVitals.hr > 110) {
-      found.push({ id: 'hr-high', type: 'critical', title: 'Severe Tachycardia', detail: 'Sustained heart rate above 110 bpm.', icon: Heart });
-    } else if (latestVitals.hr > 100) {
-      found.push({ id: 'hr-elev', type: 'warning', title: 'Elevated HR', detail: 'Heart rate slightly elevated.', icon: Heart });
+    // Heart Rate: Red-flagged if < 60 or > 100 bpm
+    if (latestVitals.hr > 100) {
+      found.push({ id: 'hr-high', type: 'critical', title: 'Tachycardia', detail: `Heart rate elevated at ${latestVitals.hr} bpm.`, icon: Heart });
+    } else if (latestVitals.hr < 60) {
+      found.push({ id: 'hr-low', type: 'critical', title: 'Bradycardia', detail: `Heart rate low at ${latestVitals.hr} bpm.`, icon: Heart });
     }
 
+    // Blood Pressure: Flagged if Systolic ≥ 130 or < 90, or Diastolic ≥ 85
     const bpParts = latestVitals.bp?.split('/');
     if (bpParts && bpParts.length === 2) {
       const [sys, dia] = bpParts.map(Number);
-      if (sys > 160 || dia > 100) {
-        found.push({ id: 'bp-critical', type: 'critical', title: 'Hypertensive Crisis', detail: 'Immediate clinical review required.', icon: Activity });
-      } else if (sys > 140 || dia > 90) {
-        found.push({ id: 'bp-alert', type: 'warning', title: 'Hypertension Stage 2', detail: 'BP consistently above target.', icon: Activity });
+      if (sys >= 130) {
+        found.push({ id: 'bp-high-sys', type: 'warning', title: 'Elevated Systolic BP', detail: `Systolic BP ${sys} mmHg is ≥ 130.`, icon: Activity });
+      } else if (sys < 90) {
+        found.push({ id: 'bp-low-sys', type: 'critical', title: 'Hypotension', detail: `Systolic BP ${sys} mmHg is critically low (< 90).`, icon: Activity });
+      }
+      
+      if (dia >= 85) {
+        found.push({ id: 'bp-high-dia', type: 'warning', title: 'Elevated Diastolic BP', detail: `Diastolic BP ${dia} mmHg is ≥ 85.`, icon: Activity });
       }
     }
 
+    // Oxygen (SpO2): Flagged if < 95%
     const spo2 = latestVitals?.spo2 ?? 98;
     if (spo2 < 95) {
-      found.push({ id: 'spo2-low', type: 'warning', title: 'Borderline Hypoxia', detail: 'O2 saturation below 95%.', icon: Droplets });
+      found.push({ id: 'spo2-low', type: 'critical', title: 'Hypoxia Risk', detail: `O2 saturation dropped below 95% (${spo2}%).`, icon: Droplets });
+    }
+
+    // Temperature: Flagged if outside 36.5°C – 37.5°C
+    const temp = Number(latestVitals?.temp);
+    if (!isNaN(temp)) {
+      if (temp > 37.5) {
+        found.push({ id: 'temp-high', type: 'critical', title: 'Hyperthermia', detail: `Temperature elevated at ${temp.toFixed(1)}°C.`, icon: Thermometer });
+      } else if (temp < 36.5) {
+        found.push({ id: 'temp-low', type: 'critical', title: 'Hypothermia', detail: `Temperature low at ${temp.toFixed(1)}°C.`, icon: Thermometer });
+      }
+    }
+
+    // Neurological: Flagged if GCS < 15
+    const gcsMatch = latestVitals?.gcs?.match(/^(\d+)\/15$/);
+    if (gcsMatch) {
+      const gcsTotal = parseInt(gcsMatch[1]);
+      if (gcsTotal < 15) {
+        found.push({ id: 'gcs-low', type: 'critical', title: 'Neuro Impairment', detail: `GCS score is ${gcsTotal}/15 (below baseline).`, icon: ShieldAlert });
+      }
     }
 
     return found;
@@ -111,8 +137,8 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
   [isVitalsExpanded, allMetrics]);
 
   return (
-    <Card className={`border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white h-full flex flex-col transition-all duration-500`}>
-      <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between">
+    <Card className={`border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white flex flex-col transition-all duration-500 ${isVitalsExpanded ? 'h-[460px]' : 'h-[320px]'}`}>
+      <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between" style={{ paddingBottom: '18px' }}>
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-[#0078D4]" />
           <CardTitle className="text-xl font-bold text-[#242424] tracking-tight">Vitals</CardTitle>

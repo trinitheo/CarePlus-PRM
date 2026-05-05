@@ -33,13 +33,58 @@ export async function searchICD10(query: string): Promise<ClinicalCode[]> {
 }
 
 /**
- * Searches SNOMED CT via a public terminology service or similar.
- * Note: SNOMED usually requires an API key for most production services.
- * We'll mock it or use an alternative if available. 
- * For this demo, we'll stick to ICD-10 search results but tagged appropriately if query fits.
+ * Searches the NIH RxNorm API for medications.
+ * Documentation: https://clinicaltables.nlm.nih.gov/apidoc/rxnorm/v3/doc.html
  */
-export async function searchSNOMED(query: string): Promise<ClinicalCode[]> {
-  // For the purpose of this demonstration, we'll reuse the ICD search 
-  // but we could integrate with a SNOMED browser API if one is readily available without auth.
-  return [];
+export async function searchMedications(query: string): Promise<ClinicalCode[]> {
+  if (!query || query.length < 2) return [];
+
+  try {
+    const response = await fetch(
+      `https://clinicaltables.nlm.nih.gov/api/rxnorm/v3/search?terms=${encodeURIComponent(query)}&max=10`
+    );
+    const data = await response.json();
+    
+    // NLM API returns [count, codes, null, descriptions]
+    const codes = data[1] || [];
+    const descriptions = data[3] || [];
+    
+    return codes.map((code: string, index: number) => ({
+      code,
+      display: descriptions[index][0],
+      system: 'RxNorm'
+    }));
+  } catch (error) {
+    console.error('Failed to fetch medications:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetches available strengths and forms for a given RxNorm drug name.
+ * Uses NIH RxTerms API.
+ */
+export async function getMedicationStrengths(name: string): Promise<string[]> {
+  try {
+    const response = await fetch(
+      `https://clinicaltables.nlm.nih.gov/api/rxnorm/v3/search?terms=${encodeURIComponent(name)}&ef=STRENGTHS_AND_FORMS`
+    );
+    const data = await response.json();
+    
+    // The strengths are often in the extra fields index if requested
+    // For simplicity, we can also parse the display names if they contain strengths
+    // or use the 'getDrugs' endpoint for more specific info.
+    // Let's use a simpler heuristic for now: filtering the descriptions.
+    const descriptions = data[3] || [];
+    const strengths = descriptions
+      .map((d: string[]) => d[0])
+      .filter((d: string) => d.toLowerCase().includes(name.toLowerCase()))
+      .map((d: string) => d.replace(new RegExp(name, 'gi'), '').trim())
+      .filter((s: string) => s.length > 0);
+
+    return [...new Set(strengths)]; // Unique strengths
+  } catch (error) {
+    console.error('Failed to fetch strengths:', error);
+    return [];
+  }
 }

@@ -3,16 +3,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Button } from '../../components/ui/button';
+import { Label } from '../../components/ui/label';
 import { 
   FileText, Clock, ChevronRight, Search, 
   Plus, Edit, Eye, History, Filter,
-  Stethoscope, ClipboardCheck
+  Stethoscope, ClipboardCheck, Loader2, Check, X
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { useQueryModel } from '../../store/eventStore';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { SOAPNoteModal } from './SOAPNoteModal';
 import { motion, AnimatePresence } from 'motion/react';
+import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
+import { updateSOAPNote } from '../../services/clinicalFirestoreService';
 
 export function useClinicalTimeline(patientId: string) {
   const { clinicalIntakes } = useQueryModel();
@@ -159,6 +162,22 @@ export function ClinicalLogViewer({ patientId, selectedNoteId }: { patientId: st
   const [editedAssessment, setEditedAssessment] = useState('');
   const [editedPlan, setEditedPlan] = useState('');
   const [editedContent, setEditedContent] = useState(''); // fallback for non-soap notes
+  const [activeSection, setActiveSection] = useState('metadata');
+  const [codeSearchQuery, setCodeSearchQuery] = useState('');
+  const [codeSearchResults, setCodeSearchResults] = useState<ClinicalCode[]>([]);
+  const [selectedCodes, setSelectedCodes] = useState<ClinicalCode[]>([]);
+  const [workingDiagnoses, setWorkingDiagnoses] = useState<string[]>([]);
+  const [workingDiagnosisInput, setWorkingDiagnosisInput] = useState('');
+  const [isSearchingCodes, setIsSearchingCodes] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const sections = [
+    { id: 'metadata', label: 'Info' },
+    { id: 'subjective', label: 'Subjective' },
+    { id: 'objective', label: 'Objective' },
+    { id: 'assessment', label: 'Assessment' },
+    { id: 'plan', label: 'Plan' },
+  ];
 
   useEffect(() => {
     if (selectedNote) {
@@ -169,8 +188,11 @@ export function ClinicalLogViewer({ patientId, selectedNoteId }: { patientId: st
         setEditedObjective(selectedNote.data?.objective || '');
         setEditedAssessment(selectedNote.data?.assessment || '');
         setEditedPlan(selectedNote.data?.plan || '');
+        setSelectedCodes((selectedNote.data?.icd10Codes || []).map((c: string) => ({ code: c, display: 'Associated Diagnosis' })));
+        setWorkingDiagnoses(selectedNote.data?.workingDiagnoses || []);
       }
       setIsEditing(false);
+      setActiveSection('metadata');
     }
   }, [selectedNote]);
 
@@ -178,10 +200,47 @@ export function ClinicalLogViewer({ patientId, selectedNoteId }: { patientId: st
     setIsEditing(true);
   };
 
-  const handleSave = () => {
-    // In a real app, this would save to Firestore via a hook or service.
-    // For now, we simply toggle off edit mode to simulate saving success.
-    setIsEditing(false);
+  const toggleCode = (code: ClinicalCode) => {
+    setSelectedCodes(prev => 
+      prev.find(c => c.code === code.code) 
+        ? prev.filter(c => c.code !== code.code)
+        : [...prev, code]
+    );
+    setCodeSearchQuery('');
+    setCodeSearchResults([]);
+  };
+
+  const addWorkingDiagnosis = () => {
+    if (workingDiagnosisInput.trim() && !workingDiagnoses.includes(workingDiagnosisInput.trim())) {
+      setWorkingDiagnoses(prev => [...prev, workingDiagnosisInput.trim()]);
+      setWorkingDiagnosisInput('');
+    }
+  };
+
+  const removeWorkingDiagnosis = (diag: string) => {
+    setWorkingDiagnoses(prev => prev.filter(d => d !== diag));
+  };
+
+  const handleSave = async () => {
+    if (!selectedNote || selectedNote.type !== 'soap') return;
+    
+    setIsSaving(true);
+    try {
+      await updateSOAPNote(patientId, selectedNote.id, {
+        title: editedTitle,
+        subjective: editedSubjective,
+        objective: editedObjective,
+        assessment: editedAssessment,
+        plan: editedPlan,
+        icd10Codes: selectedCodes.map(c => c.code),
+        workingDiagnoses,
+      });
+      setIsEditing(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -193,9 +252,20 @@ export function ClinicalLogViewer({ patientId, selectedNoteId }: { patientId: st
         setEditedObjective(selectedNote.data?.objective || '');
         setEditedAssessment(selectedNote.data?.assessment || '');
         setEditedPlan(selectedNote.data?.plan || '');
+        setSelectedCodes((selectedNote.data?.icd10Codes || []).map((c: string) => ({ code: c, display: 'Associated Diagnosis' })));
+        setWorkingDiagnoses(selectedNote.data?.workingDiagnoses || []);
       }
     }
     setIsEditing(false);
+  };
+
+  // Sections navigation helper
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(`viewer-section-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActiveSection(id);
+    }
   };
 
   const statusColors: Record<string, string> = {
@@ -215,246 +285,404 @@ export function ClinicalLogViewer({ patientId, selectedNoteId }: { patientId: st
   const tags = selectedNote.type === 'intake' ? ['Intake', 'Patient Reported'] : ['SOAP', 'Clinical'];
 
   return (
-    <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-      {/* Top App Bar */}
-      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-4">
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          {isEditing ? (
-            <input
-              type="text"
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              className="text-lg font-bold border-b-2 border-blue-500 focus:outline-none px-2 py-1 text-gray-900 bg-transparent"
-              placeholder="Note Title"
-            />
-          ) : (
-            <h2 className="text-lg font-bold text-gray-900">{selectedNote.title}</h2>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <>
-              <button
-                onClick={handleCancel}
-                className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Save
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleEdit}
-                className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Note Content Area */}
-      <ScrollArea className="flex-1 bg-[#FAFAFA]">
-        <div className="p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
-            
-            {/* Note Metadata */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Author</div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold">
-                      {selectedNote.author.split(' ').map(n => n[0]).join('').substring(0, 2)}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{selectedNote.author}</div>
-                      <div className="text-xs text-gray-500">Internal Medicine</div>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Date & Time</div>
-                  <div className="text-sm text-gray-900 font-medium">
-                    {new Date(selectedNote.timestamp).toLocaleDateString()} at {new Date(selectedNote.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Status</div>
-                  <span className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusColors[status]}`}>
-                    {status.toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Tags</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tags.map((tag) => (
-                      <span key={tag} className="text-[11px] font-medium px-2 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+    <div className="flex-1 flex flex-col bg-white rounded-2xl border border-[#EDEBE9] overflow-hidden shadow-sm relative">
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="absolute left-0 top-[73px] bottom-0 w-40 bg-[#FAFAFA] border-r border-[#EDEBE9] py-6 px-3 z-10 hidden md:block"
+          >
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-[#616161] uppercase tracking-[0.08em] px-2 mb-3">Sections</p>
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => scrollToSection(section.id)}
+                  className={`w-full text-left px-2 py-1.5 rounded-md transition-all flex items-center justify-between group ${
+                    activeSection === section.id 
+                      ? 'bg-white text-[#0078D4] shadow-sm font-bold border border-[#EDEBE9]' 
+                      : 'text-[#616161] hover:bg-[#F3F2F1]'
+                  }`}
+                >
+                  <span className="text-[11px]">{section.label}</span>
+                  {activeSection === section.id && <ChevronRight className="h-3 w-3" />}
+                </button>
+              ))}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Note Body */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              {isEditing ? (
-                <div className="space-y-4">
-                  <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100 flex items-start gap-3">
-                    <svg className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-sm text-blue-900">
-                      <strong>Edit Mode:</strong> You are currently editing this clinical note. All changes are tracked and will create an audit trail entry upon saving.
-                    </p>
-                  </div>
-
-                  {selectedNote.type === 'soap' ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Subjective</label>
-                        <textarea
-                          value={editedSubjective}
-                          onChange={(e) => setEditedSubjective(e.target.value)}
-                          className="w-full min-h-[100px] p-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y transition-shadow"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Objective</label>
-                        <textarea
-                          value={editedObjective}
-                          onChange={(e) => setEditedObjective(e.target.value)}
-                          className="w-full min-h-[100px] p-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y transition-shadow"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Assessment</label>
-                        <textarea
-                          value={editedAssessment}
-                          onChange={(e) => setEditedAssessment(e.target.value)}
-                          className="w-full min-h-[100px] p-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y transition-shadow"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Plan</label>
-                        <textarea
-                          value={editedPlan}
-                          onChange={(e) => setEditedPlan(e.target.value)}
-                          className="w-full min-h-[100px] p-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y transition-shadow"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <textarea
-                        value={editedContent}
-                        onChange={(e) => setEditedContent(e.target.value)}
-                        className="w-full min-h-[300px] p-4 font-mono text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y transition-shadow"
-                        placeholder="Enter clinical note content..."
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="prose max-w-none text-sm text-gray-800 leading-relaxed">
-                  {selectedNote.type === 'soap' ? (
-                    <div className="space-y-6">
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                          <span className="h-5 w-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center">S</span>
-                          Subjective
-                        </h4>
-                        <p className="whitespace-pre-wrap">{selectedNote.data?.subjective}</p>
-                      </div>
-                      <div className="w-full h-px bg-gray-100" />
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                          <span className="h-5 w-5 rounded bg-green-100 text-green-700 flex items-center justify-center">O</span>
-                          Objective
-                        </h4>
-                        <p className="whitespace-pre-wrap">{selectedNote.data?.objective}</p>
-                      </div>
-                      <div className="w-full h-px bg-gray-100" />
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                          <span className="h-5 w-5 rounded bg-yellow-100 text-yellow-700 flex items-center justify-center">A</span>
-                          Assessment
-                        </h4>
-                        <p className="whitespace-pre-wrap">{selectedNote.data?.assessment}</p>
-                      </div>
-                      <div className="w-full h-px bg-gray-100" />
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                          <span className="h-5 w-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center">P</span>
-                          Plan
-                        </h4>
-                        <p className="whitespace-pre-wrap">{selectedNote.data?.plan}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <pre className="whitespace-pre-wrap font-sans">
-                      {selectedNote.content}
-                    </pre>
-                  )}
-                </div>
-              )}
+      <div className={`flex flex-col flex-1 ${isEditing ? 'md:ml-40' : ''} transition-all duration-300`}>
+        {/* Top App Bar */}
+        <div className="bg-white border-b border-[#EDEBE9] p-4 flex items-center justify-between z-20 shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="h-9 w-9 bg-[#F3F2F1] rounded-lg flex items-center justify-center">
+              <FileText className="h-5 w-5 text-[#0078D4]" />
             </div>
-
-            {/* Signature Block */}
-            {status === 'final' && !isEditing && (
-              <div className="bg-gray-50 rounded-xl border border-gray-200 p-5 shrink-0">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Electronically Signed By</div>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-semibold text-gray-900">{selectedNote.author}</span>
-                    </div>
-                  </div>
-                  <div className="text-xs font-medium text-gray-500 text-right">
-                    Signed on {new Date(selectedNote.timestamp).toLocaleDateString()}<br/>
-                    at {new Date(selectedNote.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              </div>
+            {isEditing ? (
+              <Input
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                className="h-9 text-sm font-bold border-[#0078D4] focus-visible:ring-1 focus-visible:ring-[#0078D4] px-2 text-[#242424] bg-white w-[250px]"
+                placeholder="Note Title"
+              />
+            ) : (
+              <h2 className="text-sm font-bold text-[#242424]">{selectedNote.title}</h2>
             )}
-            
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancel}
+                  className="h-9 text-[11px] font-bold uppercase tracking-widest text-[#616161] hover:bg-[#F3F2F1]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  size="sm"
+                  disabled={isSaving}
+                  className="h-9 bg-[#0078D4] hover:bg-[#005A9E] text-[11px] font-bold uppercase tracking-widest px-4 shadow-sm"
+                >
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1.5" />}
+                  Save Note
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-[#616161] hover:bg-[#F3F2F1]">
+                  <Eye className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={handleEdit}
+                  size="sm"
+                  className="h-9 bg-[#0078D4] hover:bg-[#005A9E] text-[11px] font-bold uppercase tracking-widest px-4 shadow-sm ml-2"
+                >
+                  <Edit className="w-3.5 h-3.5 mr-1.5" />
+                  Edit Records
+                </Button>
+              </>
+            )}
           </div>
         </div>
-      </ScrollArea>
+
+        {/* Note Content Area */}
+        <ScrollArea className="flex-1 bg-[#FAFAFA]">
+          <div className="p-6">
+            <div className="max-w-4xl mx-auto space-y-4">
+              
+              {/* Note Metadata Section */}
+              <div id="viewer-section-metadata" className="space-y-4">
+                <div className="bg-white rounded-xl shadow-sm border border-[#EDEBE9] p-5">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-[10px] font-bold text-[#A19F9D] mb-1.5 uppercase tracking-widest">Clinician</div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-[#0078D4] rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
+                          {selectedNote.author.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-[#242424]">{selectedNote.author}</div>
+                          <div className="text-[10px] text-[#616161] font-medium uppercase tracking-tight">Internal Medicine</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-[#A19F9D] mb-1.5 uppercase tracking-widest">Timestamp</div>
+                      <div className="text-xs text-[#242424] font-bold flex items-center gap-1.5">
+                        <Clock className="h-3 w-3 text-[#616161]" />
+                        {new Date(selectedNote.timestamp).toLocaleDateString()} at {new Date(selectedNote.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-[#A19F9D] mb-1.5 uppercase tracking-widest">Record Info</div>
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}>
+                        {status.toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-[#A19F9D] mb-1.5 uppercase tracking-widest">Encounter Tags</div>
+                      <div className="flex flex-wrap gap-1">
+                        {tags.map((tag) => (
+                          <span key={tag} className="text-[9px] font-bold px-1.5 py-0.5 bg-[#F3F2F1] text-[#616161] rounded border border-[#EDEBE9]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {isEditing && (
+                  <div className="p-4 bg-[#F3F9FD] rounded-xl border border-[#DEECF9] flex items-start gap-3 shadow-sm">
+                    <ClipboardCheck className="w-5 h-5 text-[#0078D4] mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-[#004E8C] uppercase tracking-widest">Audit Trail Active</p>
+                      <p className="text-[12px] text-[#242424] leading-relaxed">
+                        All clinical modifications are tracked. Significant changes to assessment or plan will require re-signing the encounter record.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Note Body Sections */}
+              <div className="space-y-4">
+                {selectedNote.type === 'soap' ? (
+                  <>
+                    <div id="viewer-section-subjective" className="bg-white rounded-xl shadow-sm border border-[#EDEBE9] overflow-hidden">
+                      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[#F3F2F1] flex items-center gap-2">
+                        <div className="h-5 w-5 bg-[#0078D4]/10 text-[#0078D4] rounded flex items-center justify-center text-[10px] font-black">S</div>
+                        <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Subjective</span>
+                      </div>
+                      <div className="p-4">
+                        {isEditing ? (
+                          <textarea
+                            value={editedSubjective}
+                            onChange={(e) => setEditedSubjective(e.target.value)}
+                            className="w-full min-h-[120px] p-4 text-[13px] text-[#242424] bg-[#FAFAFA] border border-[#8A8886] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0078D4] resize-none leading-relaxed"
+                            placeholder="Patient reported symptoms and history..."
+                          />
+                        ) : (
+                          <p className="text-[13px] text-[#242424] leading-relaxed whitespace-pre-wrap">{selectedNote.data?.subjective}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div id="viewer-section-objective" className="bg-white rounded-xl shadow-sm border border-[#EDEBE9] overflow-hidden">
+                      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[#F3F2F1] flex items-center gap-2">
+                        <div className="h-5 w-5 bg-[#107C10]/10 text-[#107C10] rounded flex items-center justify-center text-[10px] font-black">O</div>
+                        <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Objective</span>
+                      </div>
+                      <div className="p-4">
+                        {isEditing ? (
+                          <textarea
+                            value={editedObjective}
+                            onChange={(e) => setEditedObjective(e.target.value)}
+                            className="w-full min-h-[120px] p-4 text-[13px] text-[#242424] bg-[#FAFAFA] border border-[#8A8886] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0078D4] resize-none leading-relaxed"
+                            placeholder="Physical findings and vitals..."
+                          />
+                        ) : (
+                          <p className="text-[13px] text-[#242424] leading-relaxed whitespace-pre-wrap">{selectedNote.data?.objective}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div id="viewer-section-assessment" className="bg-white rounded-xl shadow-sm border border-[#EDEBE9] overflow-hidden">
+                      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[#F3F2F1] flex items-center gap-2">
+                        <div className="h-5 w-5 bg-[#D13438]/10 text-[#D13438] rounded flex items-center justify-center text-[10px] font-black">A</div>
+                        <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Assessment</span>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        {isEditing ? (
+                          <>
+                            <textarea
+                              value={editedAssessment}
+                              onChange={(e) => setEditedAssessment(e.target.value)}
+                              className="w-full min-h-[120px] p-4 text-[13px] text-[#242424] bg-[#FAFAFA] border border-[#8A8886] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0078D4] resize-none leading-relaxed"
+                              placeholder="Clinical diagnosis and analysis..."
+                            />
+                            
+                            <div className="pt-4 border-t border-[#F3F2F1]">
+                              <Label className="text-[11px] font-bold text-[#616161] uppercase tracking-widest mb-2 block">Linked Diagnostic Codes</Label>
+                              <div className="flex gap-2 mb-3">
+                                <div className="relative flex-1">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#616161]" />
+                                  <Input 
+                                    value={codeSearchQuery}
+                                    onChange={(e) => setCodeSearchQuery(e.target.value)}
+                                    placeholder="Search ICD-10 registry..."
+                                    className="pl-9 h-10 text-xs bg-[#FAFAFA]"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        setIsSearchingCodes(true);
+                                        searchICD10(codeSearchQuery).then(res => {
+                                          setCodeSearchResults(res);
+                                          setIsSearchingCodes(false);
+                                        });
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  disabled={isSearchingCodes || !codeSearchQuery}
+                                  onClick={async () => {
+                                    setIsSearchingCodes(true);
+                                    const results = await searchICD10(codeSearchQuery);
+                                    setCodeSearchResults(results);
+                                    setIsSearchingCodes(false);
+                                  }}
+                                  className="h-10 border-[#8A8886]"
+                                >
+                                  {isSearchingCodes ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+                                </Button>
+                              </div>
+
+                              <AnimatePresence>
+                                {codeSearchResults.length > 0 && (
+                                  <motion.div 
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mt-2 bg-white border border-[#EDEBE9] rounded-lg shadow-lg overflow-hidden max-h-[200px] overflow-y-auto z-50 sticky"
+                                  >
+                                    <div className="px-3 py-1 bg-[#FAFAFA] border-b border-[#EDEBE9] flex justify-between items-center sticky top-0 bg-white">
+                                      <span className="text-[9px] font-bold text-[#A19F9D] uppercase tracking-wider">Results</span>
+                                      <button onClick={() => setCodeSearchResults([])} className="text-[#A19F9D] hover:text-[#242424]"><X className="h-3 w-3" /></button>
+                                    </div>
+                                    {codeSearchResults.map(code => (
+                                      <button
+                                        key={code.code}
+                                        onClick={() => toggleCode(code)}
+                                        className="w-full text-left px-3 py-2 hover:bg-[#F3F9FD] border-b border-[#F3F2F1] last:border-0"
+                                      >
+                                        <div className="text-[11px] font-bold text-[#0078D4]">{code.code}</div>
+                                        <div className="text-[12px] text-[#242424]">{code.display}</div>
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {selectedCodes.map(code => (
+                                  <Badge key={code.code} className="bg-[#DEECF9] text-[#005A9E] border-none px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5">
+                                    {code.code}: {code.display.substring(0, 30)}...
+                                    <X className="h-3 w-3 cursor-pointer" onClick={() => toggleCode(code)} />
+                                  </Badge>
+                                ))}
+                                {selectedCodes.length === 0 && <span className="text-[10px] text-[#A19F9D] italic">No codes linked</span>}
+                              </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-[#F3F2F1] space-y-4">
+                              <div className="space-y-1">
+                                <Label className="text-[11px] font-bold text-[#616161] uppercase tracking-widest block">Working Clinical Diagnoses</Label>
+                                <p className="text-[10px] text-[#A19F9D]">Add clinical findings managed outside formal coding.</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Input 
+                                  placeholder="Enter working diagnosis..." 
+                                  value={workingDiagnosisInput}
+                                  onChange={(e) => setWorkingDiagnosisInput(e.target.value)}
+                                  className="h-10 text-xs bg-[#FAFAFA]"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      addWorkingDiagnosis();
+                                    }
+                                  }}
+                                />
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={addWorkingDiagnosis}
+                                  className="h-10 border-[#8A8886]"
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {workingDiagnoses.map(diag => (
+                                  <Badge key={diag} className="bg-[#FFF4F4] text-[#A4262C] border-none px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5">
+                                    {diag}
+                                    <X className="h-3 w-3 cursor-pointer" onClick={() => removeWorkingDiagnosis(diag)} />
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="space-y-3">
+                            <p className="text-[13px] text-[#242424] leading-relaxed whitespace-pre-wrap">{selectedNote.data?.assessment}</p>
+                            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#F3F2F1]">
+                              {(selectedNote.data?.icd10Codes || []).map((code: string) => (
+                                <Badge key={code} variant="secondary" className="bg-[#F3F2F1] text-[#616161] border-none px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight">
+                                  {code}
+                                </Badge>
+                              ))}
+                              {(selectedNote.data?.workingDiagnoses || []).map((diag: string) => (
+                                <Badge key={diag} variant="secondary" className="bg-[#FFF4F4] text-[#A4262C] border-none px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight">
+                                  {diag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div id="viewer-section-plan" className="bg-white rounded-xl shadow-sm border border-[#EDEBE9] overflow-hidden">
+                      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[#F3F2F1] flex items-center gap-2">
+                        <div className="h-5 w-5 bg-[#5C2D91]/10 text-[#5C2D91] rounded flex items-center justify-center text-[10px] font-black">P</div>
+                        <span className="text-[10px] font-bold text-[#616161] uppercase tracking-widest">Plan</span>
+                      </div>
+                      <div className="p-4">
+                        {isEditing ? (
+                          <textarea
+                            value={editedPlan}
+                            onChange={(e) => setEditedPlan(e.target.value)}
+                            className="w-full min-h-[300px] p-4 text-[13px] text-[#242424] bg-[#FAFAFA] border border-[#8A8886] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0078D4] resize-none leading-relaxed font-mono text-xs"
+                            placeholder="Next steps, medications, and follow-up..."
+                          />
+                        ) : (
+                          <p className="text-[13px] text-[#242424] leading-relaxed whitespace-pre-wrap font-sans">{selectedNote.data?.plan}</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div id="viewer-section-metadata" className="bg-white rounded-xl shadow-sm border border-[#EDEBE9] overflow-hidden">
+                    <div className="p-6">
+                      {isEditing ? (
+                        <textarea
+                          value={editedContent}
+                          onChange={(e) => setEditedContent(e.target.value)}
+                          className="w-full min-h-[500px] p-6 font-mono text-[13px] text-[#242424] bg-[#FAFAFA] border border-[#8A8886] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0078D4]/20 resize-y leading-relaxed"
+                          placeholder="Enter clinical note content..."
+                        />
+                      ) : (
+                        <pre className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-[#242424]">
+                          {selectedNote.content}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Signature Block */}
+              {!isEditing && (
+                <div className="bg-[#F8F9FA] rounded-xl border border-[#EDEBE9] p-5 shrink-0 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-[#A19F9D] mb-1.5 uppercase tracking-widest">Electronically Certified By</div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-4 w-4 rounded-full bg-[#107C10] flex items-center justify-center">
+                        <Check className="h-2.5 w-2.5 text-white" />
+                      </div>
+                      <span className="text-xs font-bold text-[#242424]">{selectedNote.author}</span>
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-medium text-[#616161] text-right uppercase tracking-tight">
+                    Secured Timestamp<br/>
+                    {new Date(selectedNote.timestamp).toLocaleDateString()} at {new Date(selectedNote.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
+              )}
+              
+            </div>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export type WindowSizeClass = 'compact' | 'medium' | 'expanded';
+type WindowSizeClass = 'compact' | 'medium' | 'expanded';
 
 export function useWindowSizeClass() {
   const [sizeClass, setSizeClass] = useState<WindowSizeClass>('compact');

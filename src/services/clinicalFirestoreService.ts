@@ -9,7 +9,8 @@ import {
   query, 
   where, 
   serverTimestamp,
-  orderBy
+  orderBy,
+  arrayUnion
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 
@@ -71,9 +72,57 @@ export async function saveSOAPNote(patientId: string, data: any) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    // 2. Automatically sync codes/diagnoses to Ongoing Conditions
+    const conditionsToSync = [
+      ...(data.icd10Codes || []),
+      ...(data.workingDiagnoses || [])
+    ];
+    
+    if (conditionsToSync.length > 0) {
+      await updatePatientConditions(patientId, conditionsToSync);
+    }
+
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+// Sync conditions to master patient record
+export async function updatePatientConditions(patientId: string, conditions: string[]) {
+  const path = `patients`;
+  try {
+    const patientRef = doc(db, path, patientId);
+    await updateDoc(patientRef, {
+      conditions: arrayUnion(...conditions),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateSOAPNote(patientId: string, noteId: string, data: any) {
+  const path = `patients/${patientId}/clinical_records`;
+  try {
+    const docRef = doc(db, path, noteId);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Automatically sync codes/diagnoses to Ongoing Conditions
+    const conditionsToSync = [
+      ...(data.icd10Codes || []),
+      ...(data.workingDiagnoses || [])
+    ];
+    
+    if (conditionsToSync.length > 0) {
+      await updatePatientConditions(patientId, conditionsToSync);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
@@ -200,6 +249,18 @@ export async function updatePatientVitals(patientId: string, data: any) {
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function updatePatientStatus(patientId: string, status: string) {
+  const path = `patients/${patientId}`;
+  try {
+    await updateDoc(doc(db, 'patients', patientId), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

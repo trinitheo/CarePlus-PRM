@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
 import { X, ArrowLeft, Loader2, Send, ClipboardCheck } from 'lucide-react';
 import { saveInvestigation } from '../../services/clinicalFirestoreService';
@@ -98,7 +98,9 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
-      <DialogTrigger render={children} />
+      <DialogTrigger asChild>
+        {children}
+      </DialogTrigger>
       <DialogContent showCloseButton={false} className={`p-0 overflow-hidden bg-[#FAFAFA] border-[#EDEBE9] rounded-2xl flex flex-col transition-all duration-300 focus:outline-none ${workflowStep === 'category' ? 'sm:max-w-[600px] w-[95vw] shadow-lg' : 'sm:max-w-[900px] w-[95vw] h-[85vh] shadow-xl'}`}>
         
         {/* Header */}
@@ -120,14 +122,16 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
               </DialogTitle>
             </div>
           </DialogHeader>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={handleClose} 
-            className="h-8 w-8 rounded-md text-[#A19F9D] hover:bg-[#F3F2F1] hover:text-[#242424] transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <DialogClose asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleClose} 
+              className="h-8 w-8 rounded-md text-[#A19F9D] hover:bg-[#F3F2F1] hover:text-[#242424] transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
         </div>
 
         <div className="flex-1 overflow-y-auto bg-[#FAFAFA] relative z-20 pointer-events-auto">
@@ -174,6 +178,7 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
         {/* Footer */}
         {workflowStep !== 'category' && (
           <DialogFooter className="px-6 py-4 bg-white border-t border-[#EDEBE9] flex justify-between items-center shrink-0">
+          <DialogClose asChild>
             <Button 
               variant="ghost"
               onClick={handleClose}
@@ -181,6 +186,7 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
             >
               Cancel
             </Button>
+          </DialogClose>
             
             {workflowStep === 'form' && (
               <Button 

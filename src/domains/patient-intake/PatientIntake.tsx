@@ -3,14 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Users } from 'lucide-react';
 
 export function PatientIntake({ onComplete, onCancel }: { onComplete: (id: string) => void, onCancel: () => void }) {
-  const handleComplete = (patientId: string) => {
-    onComplete(patientId);
-  };
-
-  const handleCancel = () => {
-    onCancel();
-  };
-
   return (
     <div className="flex flex-col gap-6 py-4">
       <div className="flex items-center gap-3 mb-2">
@@ -23,7 +15,7 @@ export function PatientIntake({ onComplete, onCancel }: { onComplete: (id: strin
         </div>
       </div>
 
-      <RegistrationFlow onComplete={handleComplete} onCancel={handleCancel} />
+      <RegistrationFlow onComplete={onComplete} onCancel={onCancel} />
     </div>
   );
 }

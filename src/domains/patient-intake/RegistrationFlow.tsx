@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '../../components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X } from 'lucide-react';
+import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface RegistrationFlowProps {
@@ -43,12 +43,12 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
   const [formData, setFormData] = useState<Partial<Patient>>({
     name: '',
     dob: '',
-    mrn: `MRN-${Math.floor(100000 + Math.random() * 900000)}`,
+    mrn: `${Math.floor(100000 + Math.random() * 900000)}`,
     gender: '',
     email: '',
     phone: '',
     address: '',
-    status: 'active'
+    status: 'triage'
   });
 
   // Structured state for complex history inputs
@@ -106,9 +106,44 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     lastMammogramResult: ''
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [vitalsData, setVitalsData] = useState({
+    hr: '',
+    bp: '',
+    temp: '',
+    rr: '',
+    spo2: '',
+    glucose: '',
+    weight: '',
+    height: '',
+    bmi: '',
+    hba1c: '',
+    gcs_e: 4,
+    gcs_v: 5,
+    gcs_m: 6,
+    avpu: 'Alert'
+  });
+
+  // Auto-calculate BMI in registration flow
+  useState(() => {
+    // This is just to satisfy the effect-like behavior if I were using it, 
+    // but better to use a useEffect
+  });
+
+  useEffect(() => {
+    const w = parseFloat(vitalsData.weight);
+    const h = parseFloat(vitalsData.height) / 100;
+    if (w > 0 && h > 0) {
+      const bmiVal = (w / (h * h)).toFixed(1);
+      if (bmiVal !== vitalsData.bmi) {
+        setVitalsData(prev => ({ ...prev, bmi: bmiVal }));
+      }
+    }
+  }, [vitalsData.weight, vitalsData.height, vitalsData.bmi]);
+
   const isFemale = formData.gender === 'Female';
-  const pgError = getPGError(womensHealth.gravidity, womensHealth.parity);
-  const pgLabel = !pgError ? getPGLabel(womensHealth.gravidity, womensHealth.parity) : null;
+  const pgError = getPGError(womensHealth.gravidity || '', womensHealth.parity || '');
+  const pgLabel = !pgError ? getPGLabel(womensHealth.gravidity || '', womensHealth.parity || '') : null;
 
   const handleWomensHealthChange = (field: keyof typeof womensHealth, value: string) => {
     setWomensHealth(prev => ({ ...prev, [field]: value }));
@@ -197,9 +232,15 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     (step === 5 && isFemale && !!pgError);
 
   const handleSubmit = async () => {
+    console.log("Committing to graph...");
+    setIsSubmitting(true);
     const newId = `p-${Date.now()}`;
     const intakeId = `intake-${Date.now()}`;
-    const patientRecord = { ...formData, id: newId } as Patient;
+    // Strip "MRN-" prefix for storage as PatientExplorer adds it back in UI,
+    // or just store it as is and fix PatientExplorer.
+    // Let's keep it consistent: Mrn should be just the number.
+    const cleanMrn = (formData.mrn || '').replace('MRN-', '');
+    const patientRecord = { ...formData, id: newId, mrn: cleanMrn } as Patient;
     
     const womensHealthSummary = isFemale
       ? `LMP: ${womensHealth.lmp || 'N/A'} | Periods regular: ${womensHealth.periodsRegular || 'N/A'} | ${pgLabel || `G${womensHealth.gravidity || '?'}P${womensHealth.parity || '?'}`} | Pregnancy possible: ${womensHealth.possibilityOfPregnancy || 'N/A'} | Pap smear: ${womensHealth.lastPapSmearDate || 'N/A'} (${womensHealth.lastPapSmearResult || 'N/A'}) | Mammogram: ${womensHealth.lastMammogramDate || 'N/A'} (${womensHealth.lastMammogramResult || 'N/A'})`
@@ -225,10 +266,39 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     } as ClinicalIntake;
     
     try {
+      console.log("Saving patient to Firestore...");
       // Save to Firestore
       await savePatient(newId, patientRecord);
       await saveClinicalIntake(newId, intakeId, formattedIntake);
 
+      // Save Initial Vitals if provided
+      if (vitalsData.hr || vitalsData.bp || vitalsData.temp) {
+        const gcsTotal = Number(vitalsData.gcs_e) + Number(vitalsData.gcs_v) + Number(vitalsData.gcs_m);
+        const vitalsPayload = {
+          ...vitalsData,
+          hr: vitalsData.hr ? Number(vitalsData.hr) : 0,
+          temp: vitalsData.temp ? Number(vitalsData.temp) : 0,
+          rr: vitalsData.rr ? Number(vitalsData.rr) : 16,
+          spo2: vitalsData.spo2 ? Number(vitalsData.spo2) : 98,
+          glucose: vitalsData.glucose ? Number(vitalsData.glucose) : 0,
+          weight: vitalsData.weight ? Number(vitalsData.weight) : 0,
+          height: vitalsData.height ? Number(vitalsData.height) : 0,
+          bmi: vitalsData.bmi ? Number(vitalsData.bmi) : 0,
+          hba1c: vitalsData.hba1c ? Number(vitalsData.hba1c) : 0,
+          gcs: `${gcsTotal}/15`,
+          timestamp: Date.now(),
+          patientId: newId
+        };
+        const { updatePatientVitals } = await import('../../services/clinicalFirestoreService');
+        await updatePatientVitals(newId, vitalsPayload);
+        
+        dispatch({
+          type: 'VITALS_RECORDED',
+          payload: vitalsPayload
+        });
+      }
+
+      console.log("Dispatching events...");
       // Emit Registration
       dispatch({
         type: 'PATIENT_REGISTERED',
@@ -241,11 +311,14 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
         payload: formattedIntake
       });
       
+      console.log("Onboarding complete, navigating...");
       onComplete(newId);
     } catch (e) {
       console.error("Failed to save patient to cloud:", e);
       // Fallback: still complete locally if we want, or show error
       onComplete(newId);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -258,6 +331,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     { title: 'Clinical', icon: ClipboardList },
     { title: 'History', icon: Home },
     { title: 'ROS', icon: FileText },
+    { title: 'Vitals', icon: Activity },
     { title: 'Confirm', icon: CheckCircle2 }
   ];
 
@@ -265,8 +339,10 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     if (step <= 4) return step;
     if (isFemale) {
       if (step === 5) return 'womens';
+      if (step === 9) return 'vitals';
       return step - 1;
     }
+    if (step === 8) return 'vitals';
     return step;
   })();
 
@@ -1013,7 +1089,162 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {screenId === 8 && (
+          {screenId === 'vitals' && (
+            <Card className="border-border shadow-md">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Clinical Baseline (Vitals)
+                </CardTitle>
+                <CardDescription>Initial physiological measurements for the clinical record.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Heart Rate (bpm)</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.hr} 
+                      onChange={e => setVitalsData({ ...vitalsData, hr: e.target.value })} 
+                      placeholder="e.g. 72"
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Blood Pressure</Label>
+                    <Input 
+                      value={vitalsData.bp} 
+                      onChange={e => setVitalsData({ ...vitalsData, bp: e.target.value })} 
+                      placeholder="e.g. 120/80"
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Temp (°C)</Label>
+                    <Input 
+                      type="number" 
+                      step="0.1"
+                      value={vitalsData.temp} 
+                      onChange={e => setVitalsData({ ...vitalsData, temp: e.target.value })} 
+                      placeholder="e.g. 36.8"
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">SpO2 (%)</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.spo2} 
+                      onChange={e => setVitalsData({ ...vitalsData, spo2: e.target.value })} 
+                      placeholder="e.g. 98"
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Resp Rate</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.rr} 
+                      onChange={e => setVitalsData({ ...vitalsData, rr: e.target.value })} 
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Weight (kg)</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.weight} 
+                      onChange={e => setVitalsData({ ...vitalsData, weight: e.target.value })} 
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Height (cm)</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.height} 
+                      onChange={e => setVitalsData({ ...vitalsData, height: e.target.value })} 
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">BMI Ratio</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.bmi} 
+                      readOnly
+                      className="h-11 bg-muted/10 font-bold opacity-60 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">Blood Glucose (mg/dL)</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.glucose} 
+                      onChange={e => setVitalsData({ ...vitalsData, glucose: e.target.value })} 
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">HbA1c (%)</Label>
+                    <Input 
+                      type="number" 
+                      value={vitalsData.hba1c} 
+                      onChange={e => setVitalsData({ ...vitalsData, hba1c: e.target.value })} 
+                      className="h-11 bg-muted/5 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-wider opacity-60">AVPU Assessment</Label>
+                    <Select value={vitalsData.avpu} onValueChange={v => setVitalsData({ ...vitalsData, avpu: v })}>
+                      <SelectTrigger className="h-11 bg-muted/5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Alert">Alert</SelectItem>
+                        <SelectItem value="Voice">Voice</SelectItem>
+                        <SelectItem value="Pain">Pain</SelectItem>
+                        <SelectItem value="Unresponsive">Unresponsive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-border bg-muted/5">
+                  <Label className="text-[10px] font-black uppercase tracking-wider opacity-60 mb-3 block">GCS Assessment</Label>
+                  <div className="flex items-center justify-between gap-6">
+                    <div className="flex flex-col gap-1.5 flex-1">
+                      <span className="text-[9px] font-bold text-muted-foreground">EYE (1-4)</span>
+                      <Input type="number" min="1" max="4" value={vitalsData.gcs_e} onChange={e => setVitalsData({...vitalsData, gcs_e: Number(e.target.value)})} className="h-10" />
+                    </div>
+                    <div className="flex flex-col gap-1.5 flex-1">
+                      <span className="text-[9px] font-bold text-muted-foreground">VERBAL (1-5)</span>
+                      <Input type="number" min="1" max="5" value={vitalsData.gcs_v} onChange={e => setVitalsData({...vitalsData, gcs_v: Number(e.target.value)})} className="h-10" />
+                    </div>
+                    <div className="flex flex-col gap-1.5 flex-1">
+                      <span className="text-[9px] font-bold text-muted-foreground">MOTOR (1-6)</span>
+                      <Input type="number" min="1" max="6" value={vitalsData.gcs_m} onChange={e => setVitalsData({...vitalsData, gcs_m: Number(e.target.value)})} className="h-10" />
+                    </div>
+                    <div className="flex flex-col items-center justify-center px-4 border-l border-border">
+                      <span className="text-[9px] font-black uppercase text-muted-foreground mb-1">TOTAL</span>
+                      <span className="text-xl font-black text-primary">{vitalsData.gcs_e + vitalsData.gcs_v + vitalsData.gcs_m}/15</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {screenId === 9 && (
             <Card className="border-border shadow-md bg-muted/5">
               <CardHeader>
                 <CardTitle className="text-xl">Knowledge Graph Projection</CardTitle>
@@ -1045,6 +1276,12 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                         <span className="text-pink-600 font-bold">{pgLabel || '—'} · LMP {womensHealth.lmp || 'N/A'}</span>
                       </div>
                     )}
+                    <div className="flex justify-between border-b border-border/30 pb-1">
+                      <span className="text-muted-foreground uppercase text-[9px]">VITALS_CAPTURE</span>
+                      <span className={vitalsData.hr ? "text-primary font-bold" : "text-muted-foreground italic"}>
+                        {vitalsData.hr ? `HR ${vitalsData.hr}, BP ${vitalsData.bp}` : 'BYPASSED'}
+                      </span>
+                    </div>
                     <div className="flex justify-between border-b border-border/30 pb-1">
                       <span className="text-muted-foreground uppercase text-[9px]">RISK_PROFILE</span>
                       <span className={allergiesList.length > 0 ? "text-destructive font-bold" : "text-green-500"}>
@@ -1086,9 +1323,17 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                 <ChevronRight className="h-5 w-5" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} className="gap-2 bg-green-600 hover:bg-green-700 text-white h-12 px-10 text-base font-medium shadow-lg shadow-green-500/20 transition-all">
-                <Save className="h-5 w-5" />
-                Commit to Graph
+              <Button 
+                onClick={handleSubmit} 
+                disabled={isSubmitting}
+                className="gap-2 bg-green-600 hover:bg-green-700 text-white h-12 px-10 text-base font-medium shadow-lg shadow-green-500/20 transition-all disabled:opacity-70"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Save className="h-5 w-5" />
+                )}
+                {isSubmitting ? 'Processing...' : 'Commit to Graph'}
               </Button>
             )}
           </div>

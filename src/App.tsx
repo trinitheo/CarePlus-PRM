@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { EventStoreProvider } from './store/eventStore';
 import { HIPAAMonitorProvider } from './hooks/useHIPAAMonitor';
 import { Shell } from './components/Layout';
@@ -8,6 +8,7 @@ import { db, auth } from './lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
+import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
 import { Activity, ChevronRight, User, PanelLeft, PanelLeftClose } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,7 +17,6 @@ import { transition } from './lib/motion';
 export default function App() {
   const sizeClass = useWindowSizeClass();
   const [currentModule, setCurrentModule] = useState('patients');
-  const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
     // Ensure user is signed in for Firestore operations if possible
@@ -34,8 +34,6 @@ export default function App() {
         } else {
           console.error('Auth error:', error);
         }
-      } finally {
-        setIsAuthReady(true);
       }
     };
     login();
@@ -182,7 +180,7 @@ export default function App() {
         )}
         
         {/* Module Sandbox Placeholder */}
-        {['scheduling', 'billing', 'care-team'].includes(currentModule) && (
+        {['scheduling', 'billing'].includes(currentModule) && (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-12">
             <div className="h-24 w-24 rounded-full bg-primary/5 flex items-center justify-center mb-8">
               <Activity className="h-12 w-12 text-primary/20" />
@@ -191,6 +189,12 @@ export default function App() {
             <p className="text-sm mt-2 max-w-sm text-center opacity-60 leading-relaxed">
               The <span className="font-bold text-foreground">{currentModule.replace('-', ' ')}</span> module is part of the next development phase in the Precision Health roadmap.
             </p>
+          </div>
+        )}
+
+        {currentModule === 'care-team' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <NurseWorkflow />
           </div>
         )}
       </Shell>
