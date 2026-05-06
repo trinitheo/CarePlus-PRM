@@ -67,12 +67,15 @@ service cloud.firestore {
              data.medicationName is string && data.medicationName.size() <= 200 &&
              data.dosage is string && data.dosage.size() <= 100 &&
              data.frequency is string && data.frequency.size() <= 100 &&
-             data.status in ['active', 'completed', 'cancelled'] &&
+             data.status in ['active', 'completed', 'cancelled', 'discontinued'] &&
              (!('route' in data) || (data.route is string)) &&
              (!('duration' in data) || (data.duration is string)) &&
              (!('durationUnit' in data) || (data.durationUnit is string)) &&
              (!('refills' in data) || (data.refills is int)) &&
              (!('sig' in data) || (data.sig is string)) &&
+             (!('adherenceStatus' in data) || (data.adherenceStatus in ['optimal', 'partial', 'poor', 'uncertain'])) &&
+             (!('adherenceScore' in data) || (data.adherenceScore is number)) &&
+             (!('authorName' in data) || (data.authorName is string)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
@@ -158,7 +161,8 @@ service cloud.firestore {
         allow get, list: if true;
         allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(prescriptionId) && isValidPrescription(incoming());
         allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adherenceStatus', 'adherenceScore', 'updatedAt']);
+        allow delete: if isSignedIn() || existing().authorId == 'anonymous-entry';
       }
 
       match /investigations/{investigationId} {

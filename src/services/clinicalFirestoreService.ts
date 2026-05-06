@@ -143,6 +143,46 @@ export async function savePrescription(patientId: string, data: any) {
   }
 }
 
+export async function deletePrescription(patientId: string, prescriptionId: string) {
+  const path = `patients/${patientId}/prescriptions`;
+  try {
+    const docRef = doc(db, path, prescriptionId);
+    // Physically delete from record for this demo/requirement
+    // In production, soft-delete is usually preferred via updatePrescriptionStatus
+    const { deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function updatePrescriptionStatus(patientId: string, prescriptionId: string, status: 'active' | 'discontinued') {
+  const path = `patients/${patientId}/prescriptions`;
+  try {
+    const docRef = doc(db, path, prescriptionId);
+    await updateDoc(docRef, {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updatePrescriptionAdherence(patientId: string, prescriptionId: string, status: 'optimal' | 'partial' | 'poor' | 'uncertain', score: number) {
+  const path = `patients/${patientId}/prescriptions`;
+  try {
+    const docRef = doc(db, path, prescriptionId);
+    await updateDoc(docRef, {
+      adherenceStatus: status,
+      adherenceScore: score,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 // Investigations
 export async function saveInvestigation(patientId: string, data: any) {
   const path = `patients/${patientId}/investigations`;

@@ -91,8 +91,10 @@ function NoteCard({ note, isExpanded, onToggleExpand, patientId }: NoteCardProps
     critical: <AlertCircle className="w-5 h-5 text-red-600" />,
   };
 
-  const displayContent = note.content || 
-    `${note.subjective ? `Subjective:\n${note.subjective}\n\n` : ''}${note.objective ? `Objective:\n${note.objective}\n\n` : ''}${note.assessment ? `Assessment:\n${note.assessment}\n\n` : ''}${note.plan ? `Plan:\n${note.plan}` : ''}`.trim();
+  const hasStructuredData = note.subjective || note.objective || note.assessment || note.plan;
+  const displayContent = hasStructuredData 
+    ? `${note.subjective ? `Subjective:\n${note.subjective}\n\n` : ''}${note.objective ? `Objective:\n${note.objective}\n\n` : ''}${note.assessment ? `Assessment:\n${note.assessment}\n\n` : ''}${note.plan ? `Plan:\n${note.plan}` : ''}`.trim()
+    : note.content;
 
   return (
     <div 

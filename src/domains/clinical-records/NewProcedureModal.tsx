@@ -8,6 +8,7 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { Stethoscope, X, Search, ChevronDown, Clock, ShieldAlert } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { saveProcedure } from '../../services/clinicalFirestoreService';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ interface NewProcedureModalProps {
 }
 
 export function NewProcedureModal({ patientId, children }: NewProcedureModalProps) {
+  const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -218,7 +220,8 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
                     priority,
                     targetDate,
                     preparation,
-                    notes
+                    notes,
+                    authorName: userProfile?.displayName || 'Clinical Provider'
                   });
                   handleClose();
                 } catch (e) {

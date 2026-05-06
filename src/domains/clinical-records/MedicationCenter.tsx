@@ -1,27 +1,40 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
+import { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { 
-  Pill, Search, AlertTriangle, CheckCircle2, History, 
-  FlaskConical, Info, ArrowUpRight, TrendingUp,
-  Brain, FileWarning, RefreshCcw, Sparkles
+  Pill, Search, CheckCircle2, History, 
+  FlaskConical, Info, TrendingUp,
+  Brain, FileWarning, RefreshCcw, Sparkles, Trash2, User, X, Loader2, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { transition } from '../../lib/motion';
 import { checkDrugInteractions, generateClinicalMedicationReview } from '../../services/aiService';
+import { deletePrescription, updatePrescriptionStatus, updatePrescriptionAdherence } from '../../services/clinicalFirestoreService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import Markdown from 'react-markdown';
 
 interface Medication {
+  id?: string;
   name: string;
   dosage: string;
   frequency: string;
   status: 'active' | 'discontinued';
   prescribedDate?: string;
   indication?: string;
+  authorName?: string;
+  source?: string;
+  adherenceStatus?: 'optimal' | 'partial' | 'poor' | 'uncertain';
+  adherenceScore?: number;
   ePrescriptionStatus?: 'sent' | 'received' | 'processing' | 'dispensed' | 'verified';
 }
+
+const ADHERENCE_MAP = {
+  optimal: { label: 'Optimal', color: 'bg-[#DFF6DD] text-[#107C10]', score: 100 },
+  partial: { label: 'Partial', color: 'bg-[#FFF4CE] text-[#794500]', score: 60 },
+  poor: { label: 'Poor', color: 'bg-[#FDE7E9] text-[#A4262C]', score: 20 },
+  uncertain: { label: 'Uncertain', color: 'bg-[#F3F2F1] text-[#616161]', score: 0 },
+};
 
 function PrescriptionStatusSteps({ status }: { status: Medication['ePrescriptionStatus'] }) {
   const steps = ['sent', 'received', 'processing', 'dispensed'];
@@ -52,6 +65,11 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
   const [interactionResult, setInteractionResult] = useState<string | null>(null);
   const [clinicalReview, setClinicalReview] = useState<string | null>(null);
   const [isGeneratingReview, setIsGeneratingReview] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDiscontinueId, setConfirmDiscontinueId] = useState<string | null>(null);
+  const [selectedFdaMed, setSelectedFdaMed] = useState<Medication | null>(null);
+  const [fdaData, setFdaData] = useState<any>(null);
+  const [isLoadingFda, setIsLoadingFda] = useState(false);
 
   const filteredMeds = useMemo(() => {
     return medications.filter(m => 
@@ -87,6 +105,71 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
       setIsGeneratingReview(false);
     }
   };
+
+  const handleDiscontinue = async (medId: string) => {
+    try {
+      await updatePrescriptionStatus(patientId, medId, 'discontinued');
+      setConfirmDiscontinueId(null);
+    } catch (e) {
+      console.error('Failed to discontinue medication', e);
+    }
+  };
+
+  const handleFetchFdaDetails = async (med: Medication) => {
+    setSelectedFdaMed(med);
+    setIsLoadingFda(true);
+    setFdaData(null);
+    
+    try {
+      // Clean name for search (remove dosage/strengths)
+      const cleanName = med.name.split(' ')[0].replace(/[^a-zA-Z]/g, '');
+      const response = await fetch(`https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${cleanName}"&limit=1`);
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        setFdaData(data.results[0]);
+      } else {
+        setFdaData({ error: 'No detailed FDA label found for this medication.' });
+      }
+    } catch (e) {
+      setFdaData({ error: 'Failed to connect to OpenFDA service.' });
+    } finally {
+      setIsLoadingFda(false);
+    }
+  };
+
+  const handlePermanentDelete = async (medId: string) => {
+    try {
+      await deletePrescription(patientId, medId);
+      setConfirmDeleteId(null);
+    } catch (e) {
+      console.error('Failed to delete medication', e);
+    }
+  };
+
+  const handleReactivate = async (med: Medication) => {
+    if (!med.id) return;
+    try {
+      await updatePrescriptionStatus(patientId, med.id, 'active');
+    } catch (e) {
+      console.error('Failed to reactivate medication', e);
+    }
+  };
+
+  const handleUpdateAdherence = async (med: Medication, status: keyof typeof ADHERENCE_MAP) => {
+    if (!med.id) return;
+    try {
+      await updatePrescriptionAdherence(patientId, med.id, status, ADHERENCE_MAP[status].score);
+    } catch (e) {
+      console.error('Failed to update adherence', e);
+    }
+  };
+
+  const overallAdherence = useMemo(() => {
+    if (activeMeds.length === 0) return 100;
+    const scores = activeMeds.map(m => m.adherenceScore ?? 100);
+    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  }, [activeMeds]);
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -158,7 +241,7 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                         <div className="flex items-center gap-1.5">
                           <TrendingUp className="h-3 w-3 text-[#A19F9D]" />
                           <span className="text-[13px] font-bold text-[#616161]">{med.dosage}</span>
@@ -167,20 +250,133 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                           <History className="h-3 w-3 text-[#A19F9D]" />
                           <span className="text-[13px] font-bold text-[#616161]">{med.frequency}</span>
                         </div>
+                        <div className="flex items-center gap-1.5 py-0.5 px-2 bg-[#F3F9FD] rounded-lg border border-[#DEECF9]">
+                          <User className="h-3 w-3 text-[#0078D4]" />
+                          <span className="text-[10px] font-black text-[#0078D4] uppercase tracking-tight">Provider: {med.authorName || med.source || 'Hospital Record'}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 mt-3">
-                        <Badge className="bg-[#DFF6DD] text-[#107C10] border-none text-[9px] font-black uppercase px-2 py-0.5 rounded-sm">Verified Adherence</Badge>
+                        <div className="flex items-center gap-1 group/adh">
+                          <Badge className={`${ADHERENCE_MAP[med.adherenceStatus || 'optimal'].color} border-none text-[9px] font-black uppercase px-2 py-0.5 rounded-sm`}>
+                            {ADHERENCE_MAP[med.adherenceStatus || 'optimal'].label} Adherence
+                          </Badge>
+                          <div className="hidden group-hover/adh:flex items-center bg-white border border-[#EDEBE9] rounded-md shadow-sm p-0.5 ml-1">
+                            {(Object.keys(ADHERENCE_MAP) as Array<keyof typeof ADHERENCE_MAP>).map((status) => (
+                              <button
+                                key={status}
+                                onClick={() => handleUpdateAdherence(med, status)}
+                                className={`px-1.5 py-0.5 text-[8px] font-black uppercase rounded transition-colors ${med.adherenceStatus === status ? 'bg-[#0078D4] text-white' : 'hover:bg-[#F3F2F1] text-[#616161]'}`}
+                              >
+                                {status[0]}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <span className="text-[9px] font-black text-[#BDBDBD] uppercase tracking-wider">Started: {med.prescribedDate || 'N/A'}</span>
                       </div>
                       {med.status === 'active' && <PrescriptionStatusSteps status={med.ePrescriptionStatus || 'dispensed'} />}
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#0078D4] hover:bg-[#DEECF9]">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#0078D4] hover:bg-[#DEECF9]" 
+                        title="FDA Drug Labels & Details"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFetchFdaDetails(med);
+                        }}
+                      >
                         <Info className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9]">
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Button>
+                      
+                      {confirmDiscontinueId === med.id ? (
+                        <div 
+                          className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#5C2D91]/20 shadow-lg animate-in zoom-in-95"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-[10px] font-black text-[#5C2D91] px-2 uppercase">Discontinue?</span>
+                          <Button 
+                            variant="default" 
+                            size="sm" 
+                            className="h-7 px-3 text-[10px] font-black uppercase bg-[#5C2D91] hover:bg-[#4a2475] text-white rounded-lg shadow-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              med.id && handleDiscontinue(med.id);
+                            }}
+                          >
+                            Yes
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDiscontinueId(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#5C2D91] hover:bg-[#F3F2F1]" 
+                          title="Discontinue"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDiscontinueId(med.id || null);
+                          }}
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      )}
+
+                      {confirmDeleteId === med.id ? (
+                        <div 
+                          className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#D13438]/20 shadow-lg animate-in zoom-in-95"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-[10px] font-black text-[#D13438] px-2 uppercase">Confirm?</span>
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="h-7 px-3 text-[10px] font-black uppercase bg-[#D13438] hover:bg-[#a4262c] text-white rounded-lg shadow-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              med.id && handlePermanentDelete(med.id);
+                            }}
+                          >
+                            Delete
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeleteId(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9]" 
+                          title="Delete Record"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(med.id || null);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </motion.div>
                 )) : (
@@ -194,7 +390,7 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
           </Card>
 
           {/* History / Discontinued Section */}
-          <Card className="h-48 border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col">
+          <Card className="h-[236px] w-[322px] border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col pt-0">
             <CardHeader className="py-2 px-6 border-b border-[#F3F2F1] bg-[#FAFAFA]/50 shrink-0">
                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-[#A19F9D] flex items-center gap-2">
                 <History className="h-3.5 w-3.5" />
@@ -204,12 +400,25 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
             <ScrollArea className="flex-1">
               <div className="divide-y divide-[#F3F2F1]">
                 {historyMeds.length > 0 ? historyMeds.map((med, i) => (
-                   <div key={i} className="p-3 px-6 flex items-center justify-between opacity-60">
-                    <div>
+                   <div key={i} className="p-3 px-6 flex items-center justify-between opacity-60 hover:opacity-100 transition-opacity group">
+                    <div className="flex-1">
                       <h4 className="text-[12px] font-bold text-[#616161]">{med.name}</h4>
-                      <p className="text-[10px] text-[#A19F9D] uppercase font-black">Discontinued • {med.frequency}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] text-[#A19F9D] uppercase font-black">Discontinued • {med.frequency}</p>
+                        <span className="text-[9px] font-bold text-[#0078D4]/60 uppercase tracking-tighter">via {med.authorName?.split(' ')[0] || 'System'}</span>
+                      </div>
                     </div>
-                    <Badge variant="ghost" className="text-[9px] font-black text-[#A19F9D] uppercase tracking-tighter">Complete Cycle</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-[9px] font-black uppercase text-[#0078D4] hover:bg-[#DEECF9] rounded-md hidden group-hover:flex"
+                        onClick={() => handleReactivate(med)}
+                      >
+                        Reactivate
+                      </Button>
+                      <Badge variant="ghost" className="text-[9px] font-black text-[#A19F9D] uppercase tracking-tighter">Complete Cycle</Badge>
+                    </div>
                   </div>
                 )) : (
                   <div className="p-6 text-center text-[#A19F9D] text-[10px] font-bold uppercase tracking-widest">Empty History</div>
@@ -251,7 +460,7 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
           </AnimatePresence>
 
           {/* Clinical Focus Review */}
-          <Card className="flex-1 border-[#DEECF9] bg-[#F3F9FD]/50 rounded-2xl shadow-sm border overflow-hidden flex flex-col">
+          <Card className="flex-1 border-[#DEECF9] bg-[#F3F9FD]/50 rounded-2xl shadow-sm border overflow-hidden flex flex-col pt-[13px] pb-[6px] ml-0 mt-[-150px]">
             <CardHeader className="py-4 px-6 border-b border-[#DEECF9]/30 bg-white shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-[11px] font-black uppercase tracking-widest text-[#0078D4] flex items-center gap-2">
@@ -287,22 +496,127 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
           <Card className="shrink-0 border-[#EDEBE9] rounded-2xl bg-white shadow-sm overflow-hidden">
              <div className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${overallAdherence > 80 ? 'bg-green-50' : overallAdherence > 50 ? 'bg-amber-50' : 'bg-red-50'}`}>
+                    <CheckCircle2 className={`h-5 w-5 ${overallAdherence > 80 ? 'text-green-600' : overallAdherence > 50 ? 'text-amber-600' : 'text-red-600'}`} />
                   </div>
                   <div>
-                    <h4 className="text-[12px] font-black text-[#242424]">98.2% Adherence</h4>
+                    <h4 className="text-[12px] font-black text-[#242424]">{overallAdherence}% Adherence</h4>
                     <p className="text-[9px] font-black text-[#616161] uppercase tracking-widest">Across all compounds</p>
                   </div>
                 </div>
                 <div className="h-8 w-24 bg-[#FAFAFA] rounded-full border border-[#EDEBE9] relative overflow-hidden flex items-center justify-center">
-                   <div className="absolute left-0 top-0 h-full bg-green-500/20 w-[98.2%]" />
-                   <span className="text-[10px] font-black text-green-700 relative z-10">OPTIMAL</span>
+                   <div 
+                     className={`absolute left-0 top-0 h-full ${overallAdherence > 80 ? 'bg-green-500/20' : overallAdherence > 50 ? 'bg-amber-500/20' : 'bg-red-500/20'}`} 
+                     style={{ width: `${overallAdherence}%` }}
+                   />
+                   <span className={`text-[10px] font-black relative z-10 ${overallAdherence > 80 ? 'text-green-700' : overallAdherence > 50 ? 'text-amber-700' : 'text-red-700'}`}>
+                     {overallAdherence > 80 ? 'OPTIMAL' : overallAdherence > 50 ? 'CONCERNING' : 'CRITICAL'}
+                   </span>
                 </div>
              </div>
           </Card>
         </div>
       </div>
+
+      {/* FDA Details Modal */}
+      <Dialog open={!!selectedFdaMed} onOpenChange={(open) => !open && setSelectedFdaMed(null)}>
+        <DialogContent className="max-w-5xl w-[98vw] h-[95vh] sm:h-[90vh] overflow-hidden flex flex-col p-0 border-none rounded-t-3xl sm:rounded-3xl shadow-2xl bg-white">
+          <DialogHeader className="p-6 sm:p-10 bg-[#FAFAFA] border-b border-[#EDEBE9] shrink-0">
+            <div className="flex items-center gap-6">
+              <div className="h-16 w-16 rounded-2xl bg-[#0078D4] flex items-center justify-center shadow-lg shadow-[#0078D4]/20 shrink-0">
+                <Pill className="h-8 w-8 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <DialogTitle className="text-xl sm:text-3xl font-black text-[#242424] leading-tight truncate">
+                  {selectedFdaMed?.name}
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-black text-[#616161] uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
+                  <Badge variant="outline" className="bg-[#DEECF9] text-[#0078D4] border-none text-[10px] px-2">OFFICIAL FDA LABEL</Badge>
+                  Reference Information
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 bg-white">
+            <div className="p-8 sm:p-12 space-y-12">
+              {isLoadingFda ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <Loader2 className="h-10 w-10 text-[#0078D4] animate-spin" />
+                  <p className="text-sm font-black text-[#616161] uppercase tracking-widest">Consulting FDA Database...</p>
+                </div>
+              ) : fdaData?.error ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
+                  <FileWarning className="h-12 w-12 text-[#D13438] mb-4" />
+                  <p className="font-bold text-[#242424]">{fdaData.error}</p>
+                  <p className="text-[11px] text-[#616161] mt-2 max-w-xs">FDA label information might not be indexed for this specific brand variant.</p>
+                </div>
+              ) : fdaData ? (
+                <div className="space-y-8 pb-10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-[#F3F9FD] rounded-2xl border border-[#DEECF9]">
+                      <h5 className="text-[10px] font-black text-[#0078D4] uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                         <TrendingUp className="h-3 w-3" /> Generic Name
+                      </h5>
+                      <p className="text-sm font-bold text-[#242424]">{fdaData.openfda?.generic_name?.[0] || 'N/A'}</p>
+                    </div>
+                    <div className="p-4 bg-[#F3F9FD] rounded-2xl border border-[#DEECF9]">
+                      <h5 className="text-[10px] font-black text-[#0078D4] uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                         <Pill className="h-3 w-3" /> Brand Name
+                      </h5>
+                      <p className="text-sm font-bold text-[#242424]">{fdaData.openfda?.brand_name?.[0] || 'N/A'}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    {fdaData.indications_and_usage && (
+                      <section>
+                        <h4 className="text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Indications & Usage</h4>
+                        <p className="text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.indications_and_usage[0]}</p>
+                      </section>
+                    )}
+
+                    {fdaData.dosage_and_administration && (
+                      <section>
+                        <h4 className="text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Clinical Administration</h4>
+                        <p className="text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.dosage_and_administration[0]}</p>
+                      </section>
+                    )}
+
+                    {fdaData.warnings && (
+                      <section className="p-5 bg-red-50/50 rounded-2xl border border-red-100">
+                        <h4 className="text-xs font-black text-[#A4262C] uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <FileWarning className="h-4 w-4" /> Critical Warnings
+                        </h4>
+                        <p className="text-[13px] leading-relaxed text-[#A4262C] font-semibold whitespace-pre-wrap">{fdaData.warnings[0]}</p>
+                      </section>
+                    )}
+
+                    {fdaData.adverse_reactions && (
+                      <section>
+                        <h4 className="text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Adverse Reactions</h4>
+                        <p className="text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.adverse_reactions[0]}</p>
+                      </section>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-6 border-t border-[#F3F2F1]">
+                     <Button 
+                      variant="link" 
+                      className="p-0 h-auto text-[11px] font-black uppercase text-[#0078D4] flex items-center gap-1.5"
+                      asChild
+                     >
+                      <a href={`https://labels.fda.gov/`} target="_blank" rel="noopener noreferrer">
+                        View Official FDA Label <ExternalLink className="h-3 w-3" />
+                      </a>
+                     </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

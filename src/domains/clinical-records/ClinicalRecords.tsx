@@ -3,16 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { 
-  Activity, Heart, Thermometer, User, DatabaseZap, 
-  Share2, ArrowLeft, FileText, Pill, Microscope, 
+  Activity, Heart, Thermometer, User, 
+  FileText, Pill, Microscope, 
   Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle,
-  Wind, Droplets, Scale, Ruler, Network, Users, LayoutDashboard
+  Network, LayoutDashboard
 } from 'lucide-react';
 import { HealthConnectManager } from './HealthConnectManager';
 import { KnowledgeGraph } from './KnowledgeGraph';
 import { Button } from '../../components/ui/button';
 import { SOAPNoteModal } from './SOAPNoteModal';
-import { NewPrescriptionModal } from './NewPrescriptionModal';
+import { PrescriptionPadModal } from './PrescriptionPadModal';
 import { InvestigationOrderModal } from '../investigations/InvestigationOrderModal';
 import { NewProcedureModal } from './NewProcedureModal';
 import { NewReferralModal } from './NewReferralModal';
@@ -52,6 +52,7 @@ export function ClinicalRecords({
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
   const [isCareEcosystemModalOpen, setIsCareEcosystemModalOpen] = useState(false);
   const [isHealthConnectModalOpen, setIsHealthConnectModalOpen] = useState(false);
+  const [isPrescriptionPadOpen, setIsPrescriptionPadOpen] = useState(false);
   const { logAccess } = useHIPAAMonitor();
   const [activeTab, setActiveTab] = useState('overview');
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
@@ -125,20 +126,25 @@ export function ClinicalRecords({
 
   const mappedMedications = useMemo(() => {
     const list = clinicalData.prescriptions.map((px: any) => ({
+      id: px.id,
       name: px.medicationName,
       dosage: px.dosage,
       frequency: px.frequency,
-      status: 'active' as const,
+      status: px.status || 'active',
       prescribedDate: px.createdAt ? new Date(px.createdAt.seconds * 1000).toLocaleDateString() : 'Just now',
-      indication: px.indication || ''
+      indication: px.indication || '',
+      authorName: px.authorName,
+      adherenceStatus: px.adherenceStatus,
+      adherenceScore: px.adherenceScore,
+      ePrescriptionStatus: px.ePrescriptionStatus
     }));
 
     // Add some historical ones for demo/refactoring context if empty
     if (list.length === 0) {
       return [
-        { name: 'Lisinopril 10 MG Oral Tablet [Zestril]', dosage: '10 MG', frequency: 'Once daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Hypertension', ePrescriptionStatus: 'dispensed' },
-        { name: 'Metformin 500 MG', dosage: '500 MG', frequency: 'Twice daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Type 2 Diabetes', ePrescriptionStatus: 'processing' },
-        { name: 'Amoxicillin 250 MG', dosage: '250 MG', frequency: 'Complete course', status: 'discontinued' as const, prescribedDate: '2023-05-20', indication: 'Infection' }
+        { id: 'demo-1', name: 'Lisinopril 10 MG Oral Tablet [Zestril]', dosage: '10 MG', frequency: 'Once daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Hypertension', authorName: 'Dr. Sarah Chen', adherenceStatus: 'optimal' as const, adherenceScore: 100, ePrescriptionStatus: 'dispensed' as const },
+        { id: 'demo-2', name: 'Metformin 500 MG', dosage: '500 MG', frequency: 'Twice daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Type 2 Diabetes', authorName: 'Dr. Sarah Chen', adherenceStatus: 'partial' as const, adherenceScore: 60, ePrescriptionStatus: 'processing' as const },
+        { id: 'demo-3', name: 'Amoxicillin 250 MG', dosage: '250 MG', frequency: 'Complete course', status: 'discontinued' as const, prescribedDate: '2023-05-20', indication: 'Infection', authorName: 'Hospital System', adherenceStatus: 'optimal' as const, adherenceScore: 100 }
       ];
     }
     return list;
@@ -260,6 +266,13 @@ export function ClinicalRecords({
         patientId={patientId}
         isOpen={isHealthConnectModalOpen}
         onClose={() => setIsHealthConnectModalOpen(false)}
+      />
+
+      <PrescriptionPadModal 
+        isOpen={isPrescriptionPadOpen}
+        onClose={() => setIsPrescriptionPadOpen(false)}
+        patientId={patientId}
+        patientName={patient?.name || 'Patient'}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
@@ -404,11 +417,16 @@ export function ClinicalRecords({
                   </Button>
                 </SOAPNoteModal>
                 <div className="w-[1px] h-5 bg-[#EDEBE9]" />
-                <NewPrescriptionModal patientId={patientId}>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Medication">
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
+                    title="Prescription Pad"
+                    onClick={() => setIsPrescriptionPadOpen(true)}
+                >
                     <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
-                  </Button>
-                </NewPrescriptionModal>
+                </Button>
+                <div className="w-[1px] h-5 bg-[#EDEBE9]" />
                 <InvestigationOrderModal patientId={patientId}>
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Investigation">
                     <Microscope style={{ color: '#845701' }} className="h-5 w-5" />

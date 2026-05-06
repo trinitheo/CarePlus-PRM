@@ -75,14 +75,14 @@ export async function getMedicationStrengths(name: string): Promise<string[]> {
     // For simplicity, we can also parse the display names if they contain strengths
     // or use the 'getDrugs' endpoint for more specific info.
     // Let's use a simpler heuristic for now: filtering the descriptions.
-    const descriptions = data[3] || [];
+    const descriptions: string[][] = data[3] || [];
     const strengths = descriptions
       .map((d: string[]) => d[0])
       .filter((d: string) => d.toLowerCase().includes(name.toLowerCase()))
       .map((d: string) => d.replace(new RegExp(name, 'gi'), '').trim())
       .filter((s: string) => s.length > 0);
 
-    return [...new Set(strengths)]; // Unique strengths
+    return Array.from(new Set(strengths)); // Unique strengths
   } catch (error) {
     console.error('Failed to fetch strengths:', error);
     return [];

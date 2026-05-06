@@ -74,7 +74,9 @@
         "durationUnit": { "type": "string" },
         "refills": { "type": "number" },
         "sig": { "type": "string" },
-        "status": { "type": "string", "enum": ["active", "completed", "cancelled"] },
+        "status": { "type": "string", "enum": ["active", "completed", "cancelled", "discontinued"] },
+        "adherenceStatus": { "type": "string", "enum": ["optimal", "partial", "poor", "uncertain"] },
+        "adherenceScore": { "type": "number", "description": "Percentage 0-100" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "authorId", "medicationName", "dosage", "frequency"]

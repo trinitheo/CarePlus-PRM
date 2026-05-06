@@ -110,7 +110,7 @@ export function KnowledgeGraph({
     } as GraphNode] : []),
     
     // Multi-disciplinary Interaction Nodes
-    ...Array.from(new Set(patentInteractionsCombined.map(i => i.type))).concat(['social_care' as any]).map(type => {
+    ...Array.from(new Set([...patentInteractionsCombined.map(i => i.type), 'social_care'])).map(type => {
       let icon = Users;
       let label = (type as string).toUpperCase();
       let color = '#0078D4';

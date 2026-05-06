@@ -8,6 +8,7 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { UserPlus, X, Search, ChevronDown, Flag } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { saveReferral } from '../../services/clinicalFirestoreService';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
@@ -17,12 +18,13 @@ interface NewReferralModalProps {
 }
 
 export function NewReferralModal({ patientId, children }: NewReferralModalProps) {
+  const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Form State
-  const [fromProvider, setFromProvider] = React.useState('Dr. Sarah Chen');
+  const [fromProvider, setFromProvider] = React.useState(userProfile?.displayName || 'Clinical Provider');
   const [toProvider, setToProvider] = React.useState('');
   const [specialty, setSpecialty] = React.useState('');
   const [reason, setReason] = React.useState('');
@@ -57,7 +59,7 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
     setIsOpen(false);
     // Short delay to allow exit animation before resetting form
     setTimeout(() => {
-      setFromProvider('Dr. Sarah Chen');
+      setFromProvider(userProfile?.displayName || 'Clinical Provider');
       setToProvider('');
       setSpecialty('');
       setReason('');

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCommandDispatcher, Patient, ClinicalIntake } from '../../store/eventStore';
 import { savePatient, saveClinicalIntake } from '../../services/clinicalFirestoreService';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';

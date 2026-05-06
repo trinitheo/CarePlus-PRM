@@ -10,6 +10,7 @@ import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
 import { saveSOAPNote, updateSOAPNote } from '../../services/clinicalFirestoreService';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface SOAPNoteModalProps {
@@ -19,6 +20,7 @@ interface SOAPNoteModalProps {
 }
 
 export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModalProps) {
+  const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
@@ -538,8 +540,8 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
               transition={{ delay: 0.4 }}
               className="flex flex-col"
             >
-              <p className="text-[13px] text-[#242424] font-bold">Auto-save enabled</p>
-              <p className="text-[11px] text-[#616161]">Draft saved at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+              <p className="text-[13px] text-[#242424] font-bold">Cloud Sync Active</p>
+              <p className="text-[11px] text-[#616161]">Notes are finalized to permanent record</p>
             </motion.div>
           </div>
           <div className="flex items-center gap-4">
@@ -573,7 +575,8 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
                       icd10Codes: selectedCodes.map(c => c.code),
                       workingDiagnoses,
                       status: 'signed',
-                      authorName: initialNote?.authorName || 'Dr. Clinical User' // In real app, get from auth profile
+                      authorName: userProfile?.displayName || initialNote?.authorName || 'Clinical Provider',
+                      specialty: userProfile?.specialty || specialty || 'General Practice'
                     };
 
                     if (initialNote?.id) {
