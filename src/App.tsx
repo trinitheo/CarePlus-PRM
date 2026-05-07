@@ -5,39 +5,22 @@ import { Shell } from './components/Layout';
 import { ClinicalRecords } from './domains/clinical-records/ClinicalRecords';
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
-import { signInAnonymously } from 'firebase/auth';
 import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
-import { Activity, ChevronRight, User, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { Activity, ChevronRight, User, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
+import { DemoLogin } from './components/DemoLogin';
+import { useCurrentUser } from './hooks/useCurrentUser';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
+  const { userProfile, loading } = useCurrentUser();
   const [currentModule, setCurrentModule] = useState('patients');
 
   useEffect(() => {
-    // Ensure user is signed in for Firestore operations if possible
-    const login = async () => {
-      try {
-        if (!auth.currentUser) {
-          // Check if anonymous auth is likely available (not usually possible via JS, so we just try/catch)
-          await signInAnonymously(auth);
-          console.log('Signed in anonymously');
-        }
-      } catch (error: any) {
-        // If anonymous auth is disabled in console, we'll see admin-restricted-operation
-        if (error?.code === 'auth/admin-restricted-operation') {
-          console.warn('Anonymous Auth is disabled in Firebase Console. Please enable it under Auth > Sign-in Method to track specific authored records.');
-        } else {
-          console.error('Auth error:', error);
-        }
-      }
-    };
-    login();
-
     async function testFirestoreConnection() {
       try {
         await getDocFromServer(doc(db, '_diagnostics', 'connection'));
@@ -49,6 +32,7 @@ export default function App() {
     }
     testFirestoreConnection();
   }, []);
+
   const [viewState, setViewState] = useState<{
     subView: 'explorer' | 'detail' | 'onboarding';
     selectedPatientId: string | null;
@@ -58,6 +42,21 @@ export default function App() {
   });
 
   const [isListOpen, setIsListOpen] = useState(true);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-[#FAFAFA]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-[#0078D4]" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#616161]">Initializing Clinical Core...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!userProfile) {
+    return <DemoLogin />;
+  }
 
   const handleNavigate = (module: string) => {
     setCurrentModule(module);

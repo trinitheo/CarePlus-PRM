@@ -2,17 +2,38 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Clinical staff member",
+      "description": "Healthcare worker or staff member",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
-        "role": { "type": "string", "enum": ["doctor", "nurse", "admin"] },
-        "specialty": { "type": "string" },
+        "role": { 
+          "type": "string", 
+          "enum": ["clinician", "nurse", "allied_health", "admin", "financial", "patient"] 
+        },
+        "specialty": { "type": "string", "description": "e.g. Physiotherapist, Psychologist, Optometrist" },
+        "organizationId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "role"]
+    },
+    "CareTeamMember": {
+      "title": "Care Team Member",
+      "description": "Relationship mapping a provider to a patient's care team",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userRole": { "type": "string" },
+        "userSpecialty": { "type": "string" },
+        "accessLevel": { "type": "string", "enum": ["clinical_full", "clinical_limited", "administrative"] },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "assignedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "Automatic revocation of access" }
+      },
+      "required": ["patientId", "userId", "accessLevel", "status"]
     },
     "Patient": {
       "title": "Patient",
@@ -193,6 +214,10 @@
     "/patients/{patientId}": {
       "schema": "Patient",
       "description": "Patient records"
+    },
+    "/patients/{patientId}/care_teams/{memberId}": {
+      "schema": "CareTeamMember",
+      "description": "The specific team of providers assigned to this patient"
     },
     "/patients/{patientId}/clinical_records/{recordId}": {
       "schema": "ClinicalRecord",

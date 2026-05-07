@@ -12,6 +12,8 @@ import { HeartHandshake, DollarSign, Accessibility, MessagesSquare, Stethoscope,
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { saveInteraction } from '../../services/clinicalFirestoreService';
 
+import { UserRole } from '../../types';
+
 interface InteractionEntryModalProps {
   patientId: string;
   isOpen: boolean;
@@ -22,7 +24,7 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
   const dispatch = useCommandDispatcher();
   const { userProfile, loading: userLoading } = useCurrentUser();
   const [type, setType] = useState<'clinical' | 'nursing' | 'pt' | 'social_care' | 'financial' | 'support_group'>('clinical');
-  const [role, setRole] = useState<'doctor' | 'nurse' | 'pt' | 'social_worker' | 'financial_counselor' | 'community_lead'>('doctor');
+  const [role, setRole] = useState<UserRole>('clinician');
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,12 +33,12 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
       setRole(userProfile.role);
       // Auto-assign type based on role
       switch (userProfile.role) {
-        case 'doctor': setType('clinical'); break;
+        case 'clinician': setType('clinical'); break;
         case 'nurse': setType('nursing'); break;
-        case 'pt': setType('pt'); break;
-        case 'social_worker': setType('social_care'); break;
-        case 'financial_counselor': setType('financial'); break;
-        case 'community_lead': setType('support_group'); break;
+        case 'allied_health': setType('pt'); break;
+        case 'financial': setType('financial'); break;
+        case 'admin': setType('social_care'); break;
+        case 'patient': setType('support_group'); break;
       }
     }
   }, [userProfile, isOpen]);
@@ -98,12 +100,12 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="doctor">Clinician / MD</SelectItem>
+                  <SelectItem value="clinician">Clinician / MD</SelectItem>
                   <SelectItem value="nurse">Nurse / RN</SelectItem>
-                  <SelectItem value="pt">Physical Therapist</SelectItem>
-                  <SelectItem value="social_worker">Social Worker</SelectItem>
-                  <SelectItem value="financial_counselor">Financial Counselor</SelectItem>
-                  <SelectItem value="community_lead">Community Lead</SelectItem>
+                  <SelectItem value="allied_health">Allied Professional</SelectItem>
+                  <SelectItem value="admin">Administrator</SelectItem>
+                  <SelectItem value="financial">Financial Desk</SelectItem>
+                  <SelectItem value="patient">Patient Self-Entry</SelectItem>
                 </SelectContent>
               </Select>
             </div>

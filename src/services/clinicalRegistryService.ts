@@ -15,6 +15,18 @@ export async function searchICD10(query: string): Promise<ClinicalCode[]> {
     const response = await fetch(
       `https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search?terms=${encodeURIComponent(query)}&max=10`
     );
+
+    if (!response.ok) {
+      console.warn(`ICD-10 search API returned status: ${response.status}`);
+      return [];
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.warn(`ICD-10 search API returned non-JSON content: ${contentType}`);
+      return [];
+    }
+
     const data = await response.json();
     
     // NLM API returns [count, codes, null, descriptions]
@@ -43,6 +55,18 @@ export async function searchMedications(query: string): Promise<ClinicalCode[]> 
     const response = await fetch(
       `https://clinicaltables.nlm.nih.gov/api/rxnorm/v3/search?terms=${encodeURIComponent(query)}&max=10`
     );
+    
+    if (!response.ok) {
+      console.warn(`Medication search API returned status: ${response.status}`);
+      return [];
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.warn(`Medication search API returned non-JSON content: ${contentType}`);
+      return [];
+    }
+
     const data = await response.json();
     
     // NLM API returns [count, codes, null, descriptions]
@@ -69,6 +93,12 @@ export async function getMedicationStrengths(name: string): Promise<string[]> {
     const response = await fetch(
       `https://clinicaltables.nlm.nih.gov/api/rxnorm/v3/search?terms=${encodeURIComponent(name)}&ef=STRENGTHS_AND_FORMS`
     );
+    
+    if (!response.ok) return [];
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) return [];
+
     const data = await response.json();
     
     // The strengths are often in the extra fields index if requested

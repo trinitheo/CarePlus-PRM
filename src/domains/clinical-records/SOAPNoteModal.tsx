@@ -11,7 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
 import { saveSOAPNote, updateSOAPNote } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Variants } from 'motion/react';
 
 interface SOAPNoteModalProps {
   patientId: string;
@@ -138,7 +138,7 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
   }, [isOpen]);
 
   // Fluent 2 Motion Variants
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -149,14 +149,14 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 12 },
     visible: { 
       opacity: 1, 
       y: 0,
       transition: {
         duration: 0.4,
-        ease: [0.33, 0, 0.1, 1] // Fluent 2 natural easing
+        ease: "easeInOut"
       }
     },
   };
@@ -566,7 +566,6 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
                   try {
                     const noteData = {
                       title,
-                      specialty,
                       priority,
                       subjective,
                       objective,

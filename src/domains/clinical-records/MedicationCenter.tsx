@@ -19,7 +19,7 @@ interface Medication {
   name: string;
   dosage: string;
   frequency: string;
-  status: 'active' | 'discontinued';
+  status: 'active' | 'discontinued' | 'cancelled';
   prescribedDate?: string;
   indication?: string;
   authorName?: string;
@@ -70,15 +70,31 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
   const [selectedFdaMed, setSelectedFdaMed] = useState<Medication | null>(null);
   const [fdaData, setFdaData] = useState<any>(null);
   const [isLoadingFda, setIsLoadingFda] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [localStatusOverrides, setLocalStatusOverrides] = useState<Record<string, Medication['status']>>({});
+
+  const processedMeds = useMemo(() => {
+    return medications.map(med => {
+      if (med.id && localStatusOverrides[med.id]) {
+        return { ...med, status: localStatusOverrides[med.id] };
+      }
+      return med;
+    });
+  }, [medications, localStatusOverrides]);
 
   const filteredMeds = useMemo(() => {
-    return medications.filter(m => 
+    return processedMeds.filter(m => 
       m.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [medications, searchTerm]);
+  }, [processedMeds, searchTerm]);
 
-  const activeMeds = useMemo(() => filteredMeds.filter(m => m.status === 'active'), [filteredMeds]);
-  const historyMeds = useMemo(() => filteredMeds.filter(m => m.status === 'discontinued'), [filteredMeds]);
+  const activeMeds = useMemo(() => 
+    filteredMeds.filter(m => m.status === 'active' || !m.status), 
+  [filteredMeds]);
+  
+  const historyMeds = useMemo(() => 
+    filteredMeds.filter(m => m.status === 'discontinued' || m.status === 'cancelled'), 
+  [filteredMeds]);
 
   const handleInteractionCheck = async () => {
     if (activeMeds.length < 2) return;
@@ -107,11 +123,21 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
   };
 
   const handleDiscontinue = async (medId: string) => {
+    if (medId.startsWith('demo-')) {
+      // Update local state for demo record simulation
+      setLocalStatusOverrides(prev => ({ ...prev, [medId]: 'discontinued' }));
+      setConfirmDiscontinueId(null);
+      console.info('Medication discontinuation simulated for demo record');
+      return;
+    }
+    setActionLoading(medId);
     try {
       await updatePrescriptionStatus(patientId, medId, 'discontinued');
       setConfirmDiscontinueId(null);
     } catch (e) {
       console.error('Failed to discontinue medication', e);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -124,6 +150,13 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
       // Clean name for search (remove dosage/strengths)
       const cleanName = med.name.split(' ')[0].replace(/[^a-zA-Z]/g, '');
       const response = await fetch(`https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${cleanName}"&limit=1`);
+      
+      const contentType = response.headers.get('content-type');
+      if (!response.ok || !contentType || !contentType.includes('application/json')) {
+        setFdaData({ error: 'FDA service returned an invalid response. Please try again later.' });
+        return;
+      }
+
       const data = await response.json();
       
       if (data.results && data.results.length > 0) {
@@ -139,16 +172,36 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
   };
 
   const handlePermanentDelete = async (medId: string) => {
+    if (medId.startsWith('demo-')) {
+       // Update local state for demo record simulation
+       setLocalStatusOverrides(prev => ({ ...prev, [medId]: 'cancelled' }));
+       setConfirmDeleteId(null);
+       console.info('Medication deletion (cancellation) simulated for demo record');
+       return;
+    }
+    setActionLoading(medId);
     try {
-      await deletePrescription(patientId, medId);
+      // For clinical audit, we move to cancelled status instead of physical deletion
+      await updatePrescriptionStatus(patientId, medId, 'cancelled' as any, 'Record removed from active regimen');
       setConfirmDeleteId(null);
     } catch (e) {
       console.error('Failed to delete medication', e);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleReactivate = async (med: Medication) => {
     if (!med.id) return;
+    if (med.id.startsWith('demo-')) {
+      setLocalStatusOverrides(prev => {
+        const next = { ...prev };
+        delete next[med.id!];
+        return next;
+      });
+      console.info('Medication reactivation simulated for demo record');
+      return;
+    }
     try {
       await updatePrescriptionStatus(patientId, med.id, 'active');
     } catch (e) {
@@ -158,6 +211,10 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
 
   const handleUpdateAdherence = async (med: Medication, status: keyof typeof ADHERENCE_MAP) => {
     if (!med.id) return;
+    if (med.id.startsWith('demo-')) {
+      console.info('Adherence update simulated for demo record');
+      return;
+    }
     try {
       await updatePrescriptionAdherence(patientId, med.id, status, ADHERENCE_MAP[status].score);
     } catch (e) {
@@ -209,8 +266,8 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 flex-1 min-h-0">
         {/* Main List Section */}
-        <div className="xl:col-span-8 flex flex-col gap-4 min-h-0">
-          <Card className="flex-1 border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col">
+        <div className="xl:col-span-8 flex flex-col gap-4 min-h-0 overflow-hidden">
+          <Card className="flex-1 border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col min-h-[400px]">
             <CardHeader className="bg-[#FAFAFA] border-b border-[#EDEBE9] py-3 px-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-[11px] font-black uppercase tracking-widest text-[#616161] flex items-center gap-2">
@@ -282,39 +339,28 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                         size="icon" 
                         className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#0078D4] hover:bg-[#DEECF9]" 
                         title="FDA Drug Labels & Details"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFetchFdaDetails(med);
-                        }}
+                        onClick={() => handleFetchFdaDetails(med)}
                       >
                         <Info className="h-4 w-4" />
                       </Button>
                       
                       {confirmDiscontinueId === med.id ? (
-                        <div 
-                          className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#5C2D91]/20 shadow-lg animate-in zoom-in-95"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#5C2D91]/20 shadow-lg animate-in zoom-in-95">
                           <span className="text-[10px] font-black text-[#5C2D91] px-2 uppercase">Discontinue?</span>
                           <Button 
                             variant="default" 
                             size="sm" 
+                            disabled={actionLoading === med.id}
                             className="h-7 px-3 text-[10px] font-black uppercase bg-[#5C2D91] hover:bg-[#4a2475] text-white rounded-lg shadow-sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              med.id && handleDiscontinue(med.id);
-                            }}
+                            onClick={() => handleDiscontinue(med.id || '')}
                           >
-                            Yes
+                            {actionLoading === med.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Yes'}
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm" 
                             className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setConfirmDiscontinueId(null);
-                            }}
+                            onClick={() => setConfirmDiscontinueId(null)}
                           >
                             Cancel
                           </Button>
@@ -325,40 +371,29 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                           size="icon" 
                           className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#5C2D91] hover:bg-[#F3F2F1]" 
                           title="Discontinue"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmDiscontinueId(med.id || null);
-                          }}
+                          onClick={() => setConfirmDiscontinueId(med.id || null)}
                         >
                           <History className="h-4 w-4" />
                         </Button>
                       )}
 
                       {confirmDeleteId === med.id ? (
-                        <div 
-                          className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#D13438]/20 shadow-lg animate-in zoom-in-95"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#D13438]/20 shadow-lg animate-in zoom-in-95">
                           <span className="text-[10px] font-black text-[#D13438] px-2 uppercase">Confirm?</span>
                           <Button 
                             variant="destructive" 
                             size="sm" 
+                            disabled={actionLoading === med.id}
                             className="h-7 px-3 text-[10px] font-black uppercase bg-[#D13438] hover:bg-[#a4262c] text-white rounded-lg shadow-sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              med.id && handlePermanentDelete(med.id);
-                            }}
+                            onClick={() => handlePermanentDelete(med.id || '')}
                           >
-                            Delete
+                            {actionLoading === med.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Delete'}
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm" 
                             className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setConfirmDeleteId(null);
-                            }}
+                            onClick={() => setConfirmDeleteId(null)}
                           >
                             Cancel
                           </Button>
@@ -369,10 +404,7 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                           size="icon" 
                           className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9]" 
                           title="Delete Record"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmDeleteId(med.id || null);
-                          }}
+                          onClick={() => setConfirmDeleteId(med.id || null)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -390,7 +422,7 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
           </Card>
 
           {/* History / Discontinued Section */}
-          <Card className="h-[236px] w-[322px] border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col pt-0">
+          <Card className="flex-1 min-h-[300px] border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col pt-0">
             <CardHeader className="py-2 px-6 border-b border-[#F3F2F1] bg-[#FAFAFA]/50 shrink-0">
                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-[#A19F9D] flex items-center gap-2">
                 <History className="h-3.5 w-3.5" />
@@ -404,7 +436,9 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                     <div className="flex-1">
                       <h4 className="text-[12px] font-bold text-[#616161]">{med.name}</h4>
                       <div className="flex items-center gap-2">
-                        <p className="text-[10px] text-[#A19F9D] uppercase font-black">Discontinued • {med.frequency}</p>
+                        <p className="text-[10px] text-[#A19F9D] uppercase font-black">
+                          {med.status === 'cancelled' ? 'Record Voided' : 'Discontinued'} • {med.frequency}
+                        </p>
                         <span className="text-[9px] font-bold text-[#0078D4]/60 uppercase tracking-tighter">via {med.authorName?.split(' ')[0] || 'System'}</span>
                       </div>
                     </div>
@@ -415,9 +449,11 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                         className="h-6 px-2 text-[9px] font-black uppercase text-[#0078D4] hover:bg-[#DEECF9] rounded-md hidden group-hover:flex"
                         onClick={() => handleReactivate(med)}
                       >
-                        Reactivate
+                        Restore
                       </Button>
-                      <Badge variant="ghost" className="text-[9px] font-black text-[#A19F9D] uppercase tracking-tighter">Complete Cycle</Badge>
+                      <Badge variant="ghost" className={`text-[9px] font-black uppercase tracking-tighter ${med.status === 'cancelled' ? 'text-[#D13438]' : 'text-[#A19F9D]'}`}>
+                        {med.status === 'cancelled' ? 'Voided' : 'Complete Cycle'}
+                      </Badge>
                     </div>
                   </div>
                 )) : (
@@ -460,7 +496,7 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
           </AnimatePresence>
 
           {/* Clinical Focus Review */}
-          <Card className="flex-1 border-[#DEECF9] bg-[#F3F9FD]/50 rounded-2xl shadow-sm border overflow-hidden flex flex-col pt-[13px] pb-[6px] ml-0 mt-[-150px]">
+          <Card className="flex-1 border-[#DEECF9] bg-[#F3F9FD]/50 rounded-2xl shadow-sm border overflow-hidden flex flex-col pt-[13px] pb-[6px] ml-0 min-h-[400px]">
             <CardHeader className="py-4 px-6 border-b border-[#DEECF9]/30 bg-white shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-[11px] font-black uppercase tracking-widest text-[#0078D4] flex items-center gap-2">
@@ -520,101 +556,102 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
 
       {/* FDA Details Modal */}
       <Dialog open={!!selectedFdaMed} onOpenChange={(open) => !open && setSelectedFdaMed(null)}>
-        <DialogContent className="max-w-5xl w-[98vw] h-[95vh] sm:h-[90vh] overflow-hidden flex flex-col p-0 border-none rounded-t-3xl sm:rounded-3xl shadow-2xl bg-white">
+        <DialogContent className="max-w-5xl w-full max-sm:fixed max-sm:bottom-0 max-sm:top-auto max-sm:translate-y-0 max-sm:rounded-t-[32px] max-sm:rounded-b-none h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-white focus-visible:outline-none">
+          <div className="sm:hidden w-12 h-1.5 bg-[#EDEBE9] rounded-full mx-auto mt-4 shrink-0" />
+          
           <DialogHeader className="p-6 sm:p-10 bg-[#FAFAFA] border-b border-[#EDEBE9] shrink-0">
-            <div className="flex items-center gap-6">
-              <div className="h-16 w-16 rounded-2xl bg-[#0078D4] flex items-center justify-center shadow-lg shadow-[#0078D4]/20 shrink-0">
-                <Pill className="h-8 w-8 text-white" />
+            <div className="flex items-center gap-4 sm:gap-6">
+              <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-2xl bg-[#0078D4] flex items-center justify-center shadow-lg shadow-[#0078D4]/20 shrink-0">
+                <Pill className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <DialogTitle className="text-xl sm:text-3xl font-black text-[#242424] leading-tight truncate">
+                <DialogTitle className="text-lg sm:text-3xl font-black text-[#242424] leading-tight truncate">
                   {selectedFdaMed?.name}
                 </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm font-black text-[#616161] uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
-                  <Badge variant="outline" className="bg-[#DEECF9] text-[#0078D4] border-none text-[10px] px-2">OFFICIAL FDA LABEL</Badge>
+                <DialogDescription className="text-[10px] sm:text-sm font-black text-[#616161] uppercase tracking-[0.15em] sm:tracking-[0.2em] mt-1 sm:mt-1.5 flex items-center gap-2">
+                  <Badge variant="outline" className="bg-[#DEECF9] text-[#0078D4] border-none text-[8px] sm:text-[10px] px-1.5 sm:px-2">OFFICIAL FDA LABEL</Badge>
                   Reference Information
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 bg-white">
-            <div className="p-8 sm:p-12 space-y-12">
+          <div className="flex-1 overflow-y-auto bg-white overscroll-contain">
+            <div className="p-6 sm:p-12 space-y-8 sm:space-y-12">
               {isLoadingFda ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4">
-                  <Loader2 className="h-10 w-10 text-[#0078D4] animate-spin" />
-                  <p className="text-sm font-black text-[#616161] uppercase tracking-widest">Consulting FDA Database...</p>
+                  <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 text-[#0078D4] animate-spin" />
+                  <p className="text-[10px] sm:text-sm font-black text-[#616161] uppercase tracking-widest text-center">Consulting FDA Database...</p>
                 </div>
               ) : fdaData?.error ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
-                  <FileWarning className="h-12 w-12 text-[#D13438] mb-4" />
-                  <p className="font-bold text-[#242424]">{fdaData.error}</p>
-                  <p className="text-[11px] text-[#616161] mt-2 max-w-xs">FDA label information might not be indexed for this specific brand variant.</p>
+                  <FileWarning className="h-10 w-10 sm:h-12 sm:w-12 text-[#D13438] mb-4" />
+                  <p className="font-bold text-[#242424] text-sm sm:text-base">{fdaData.error}</p>
+                  <p className="text-[10px] sm:text-[11px] text-[#616161] mt-2 max-w-xs mx-auto">FDA label information might not be indexed for this specific brand variant.</p>
                 </div>
               ) : fdaData ? (
                 <div className="space-y-8 pb-10">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="p-4 bg-[#F3F9FD] rounded-2xl border border-[#DEECF9]">
-                      <h5 className="text-[10px] font-black text-[#0078D4] uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                      <h5 className="text-[9px] sm:text-[10px] font-black text-[#0078D4] uppercase tracking-widest mb-1.5 flex items-center gap-2">
                          <TrendingUp className="h-3 w-3" /> Generic Name
                       </h5>
-                      <p className="text-sm font-bold text-[#242424]">{fdaData.openfda?.generic_name?.[0] || 'N/A'}</p>
+                      <p className="text-xs sm:text-sm font-bold text-[#242424]">{fdaData.openfda?.generic_name?.[0] || 'N/A'}</p>
                     </div>
                     <div className="p-4 bg-[#F3F9FD] rounded-2xl border border-[#DEECF9]">
-                      <h5 className="text-[10px] font-black text-[#0078D4] uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                      <h5 className="text-[9px] sm:text-[10px] font-black text-[#0078D4] uppercase tracking-widest mb-1.5 flex items-center gap-2">
                          <Pill className="h-3 w-3" /> Brand Name
                       </h5>
-                      <p className="text-sm font-bold text-[#242424]">{fdaData.openfda?.brand_name?.[0] || 'N/A'}</p>
+                      <p className="text-xs sm:text-sm font-bold text-[#242424]">{fdaData.openfda?.brand_name?.[0] || 'N/A'}</p>
                     </div>
                   </div>
 
                   <div className="space-y-6">
                     {fdaData.indications_and_usage && (
                       <section>
-                        <h4 className="text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Indications & Usage</h4>
-                        <p className="text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.indications_and_usage[0]}</p>
+                        <h4 className="text-[10px] sm:text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Indications & Usage</h4>
+                        <p className="text-xs sm:text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.indications_and_usage[0]}</p>
                       </section>
                     )}
 
                     {fdaData.dosage_and_administration && (
                       <section>
-                        <h4 className="text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Clinical Administration</h4>
-                        <p className="text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.dosage_and_administration[0]}</p>
+                        <h4 className="text-[10px] sm:text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Clinical Administration</h4>
+                        <p className="text-xs sm:text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.dosage_and_administration[0]}</p>
                       </section>
                     )}
 
                     {fdaData.warnings && (
-                      <section className="p-5 bg-red-50/50 rounded-2xl border border-red-100">
-                        <h4 className="text-xs font-black text-[#A4262C] uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <section className="p-4 sm:p-5 bg-red-50/50 rounded-2xl border border-red-100">
+                        <h4 className="text-[10px] sm:text-xs font-black text-[#A4262C] uppercase tracking-widest mb-3 flex items-center gap-2">
                           <FileWarning className="h-4 w-4" /> Critical Warnings
                         </h4>
-                        <p className="text-[13px] leading-relaxed text-[#A4262C] font-semibold whitespace-pre-wrap">{fdaData.warnings[0]}</p>
+                        <p className="text-xs sm:text-[13px] leading-relaxed text-[#A4262C] font-semibold whitespace-pre-wrap">{fdaData.warnings[0]}</p>
                       </section>
                     )}
 
                     {fdaData.adverse_reactions && (
                       <section>
-                        <h4 className="text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Adverse Reactions</h4>
-                        <p className="text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.adverse_reactions[0]}</p>
+                        <h4 className="text-[10px] sm:text-xs font-black text-[#242424] uppercase tracking-widest mb-3 pb-2 border-b border-[#F3F2F1]">Adverse Reactions</h4>
+                        <p className="text-xs sm:text-[13px] leading-relaxed text-[#616161] font-medium whitespace-pre-wrap">{fdaData.adverse_reactions[0]}</p>
                       </section>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2 pt-6 border-t border-[#F3F2F1]">
-                     <Button 
-                      variant="link" 
-                      className="p-0 h-auto text-[11px] font-black uppercase text-[#0078D4] flex items-center gap-1.5"
-                      asChild
-                     >
-                      <a href={`https://labels.fda.gov/`} target="_blank" rel="noopener noreferrer">
+                      <a 
+                        href={`https://labels.fda.gov/`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] sm:text-[11px] font-black uppercase text-[#0078D4] hover:underline flex items-center gap-1.5"
+                      >
                         View Official FDA Label <ExternalLink className="h-3 w-3" />
                       </a>
-                     </Button>
                   </div>
                 </div>
               ) : null}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

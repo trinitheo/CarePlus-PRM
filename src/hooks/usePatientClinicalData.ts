@@ -35,6 +35,7 @@ export function usePatientClinicalData(patientId: string) {
     referrals: [],
     vitals: [],
     interactions: [],
+    care_teams: [],
     loading: true,
   });
 
@@ -68,6 +69,7 @@ export function usePatientClinicalData(patientId: string) {
         'referrals',
         'vitals',
         'interactions',
+        'care_teams',
       ];
 
       unsubscribers = collections.map((colName) => {

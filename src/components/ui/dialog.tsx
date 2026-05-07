@@ -11,7 +11,7 @@ function Dialog({ ...props }: DialogPrimitive.Root.Props) {
 
 function DialogTrigger({ asChild, render, ...props }: DialogPrimitive.Trigger.Props & { asChild?: boolean }) {
   if (asChild && !render) {
-    return <DialogPrimitive.Trigger data-slot="dialog-trigger" render={props.children} {...props} children={null} />
+    return <DialogPrimitive.Trigger data-slot="dialog-trigger" render={props.children as any} {...props} children={null} />
   }
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" render={render} {...props} />
 }
@@ -22,7 +22,7 @@ function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
 
 function DialogClose({ asChild, render, ...props }: DialogPrimitive.Close.Props & { asChild?: boolean }) {
   if (asChild && !render) {
-    return <DialogPrimitive.Close data-slot="dialog-close" render={props.children} {...props} children={null} />
+    return <DialogPrimitive.Close data-slot="dialog-close" render={props.children as any} {...props} children={null} />
   }
   return <DialogPrimitive.Close data-slot="dialog-close" render={render} {...props} />
 }

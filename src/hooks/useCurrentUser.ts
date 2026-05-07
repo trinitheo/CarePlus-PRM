@@ -1,17 +1,10 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-
-interface UserProfile {
-  id: string;
-  email: string;
-  role: 'doctor' | 'nurse' | 'pt' | 'social_worker' | 'financial_counselor' | 'community_lead';
-  displayName: string;
-  specialty?: string;
-}
+import { User, UserRole } from '../types';
 
 export function useCurrentUser() {
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,17 +18,13 @@ export function useCurrentUser() {
       const userDocRef = doc(db, 'users', user.uid);
       const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
         if (docSnap.exists()) {
-          setUserProfile({ id: docSnap.id, ...docSnap.data() } as UserProfile);
+          setUserProfile({ id: docSnap.id, ...docSnap.data() } as User);
         } else {
-          // Default fallback for demo purposes if no profile exists yet
-          // In a real app, this might redirect to profile setup
-          setUserProfile({
-            id: user.uid,
-            email: user.email || '',
-            displayName: user.displayName || 'Staff Member',
-            role: 'doctor', // Default role
-          });
+          setUserProfile(null);
         }
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching user profile:", error);
         setLoading(false);
       });
 
@@ -45,5 +34,5 @@ export function useCurrentUser() {
     return () => unsubscribeAuth();
   }, []);
 
-  return { userProfile, loading };
+  return { userProfile, loading, authUser: auth.currentUser };
 }

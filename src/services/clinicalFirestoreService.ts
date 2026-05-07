@@ -3,6 +3,7 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
+  deleteDoc,
   setDoc,
   getDocs, 
   getDoc, 
@@ -59,6 +60,57 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+// User Management
+export async function saveUserProfile(userId: string, data: any) {
+  const path = `users`;
+  try {
+    await setDoc(doc(db, path, userId), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function getUserProfile(userId: string) {
+  const path = `users`;
+  try {
+    const docSnap = await getDoc(doc(db, path, userId));
+    return docSnap.exists() ? docSnap.data() : null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+  }
+}
+
+// Care Team Management
+export async function addToCareTeam(patientId: string, userId: string, data: { accessLevel: string, userRole: string, userSpecialty?: string }) {
+  const path = `patients/${patientId}/care_teams`;
+  try {
+    await setDoc(doc(db, path, userId), {
+      ...data,
+      patientId,
+      userId,
+      status: 'active',
+      assignedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function removeFromCareTeam(patientId: string, userId: string) {
+  const path = `patients/${patientId}/care_teams`;
+  try {
+    await updateDoc(doc(db, path, userId), {
+      status: 'inactive',
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
 }
 
 // SOAP Notes
@@ -149,21 +201,28 @@ export async function deletePrescription(patientId: string, prescriptionId: stri
     const docRef = doc(db, path, prescriptionId);
     // Physically delete from record for this demo/requirement
     // In production, soft-delete is usually preferred via updatePrescriptionStatus
-    const { deleteDoc } = await import('firebase/firestore');
     await deleteDoc(docRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
-export async function updatePrescriptionStatus(patientId: string, prescriptionId: string, status: 'active' | 'discontinued') {
+export async function updatePrescriptionStatus(patientId: string, prescriptionId: string, status: 'active' | 'discontinued', reason?: string) {
   const path = `patients/${patientId}/prescriptions`;
   try {
     const docRef = doc(db, path, prescriptionId);
-    await updateDoc(docRef, {
+    const updateData: any = {
       status,
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (status === 'discontinued') {
+      updateData.discontinuationReason = reason || 'Provider discontinued';
+      updateData.discontinuedAt = serverTimestamp();
+      updateData.discontinuedBy = auth.currentUser?.displayName || 'Clinical Provider';
+    }
+
+    await updateDoc(docRef, updateData);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

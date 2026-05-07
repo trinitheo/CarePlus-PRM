@@ -1,3 +1,38 @@
+export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'financial' | 'patient';
+
+export type AlliedHealthSpecialty = 
+  | 'Physiotherapist' 
+  | 'Psychologist' 
+  | 'Physical Therapist' 
+  | 'Speech Therapist' 
+  | 'Medical assistant' 
+  | 'Nursing assistant' 
+  | 'Dietitian' 
+  | 'Nutritionist' 
+  | 'Optometrist';
+
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  specialty?: string | AlliedHealthSpecialty;
+  organizationId?: string;
+  createdAt: any;
+}
+
+export interface CareTeamMember {
+  id: string;
+  patientId: string;
+  userId: string;
+  userRole: string;
+  userSpecialty: string;
+  accessLevel: 'clinical_full' | 'clinical_limited' | 'administrative';
+  status: 'active' | 'inactive';
+  assignedAt: any;
+  expiresAt?: any;
+}
+
 export interface MedicalRecordEntry {
   id: string;
   type: 'InitialEncounter' | 'FollowUp' | 'Prescription' | 'Referral' | 'Procedure' | 'AISummary' | 'ClinicalRecord' | 'Investigation';

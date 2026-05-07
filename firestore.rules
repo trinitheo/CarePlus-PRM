@@ -27,11 +27,48 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == "karlanwartheodore@gmail.com";
+    }
+
+    function getStaffUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isCareTeamMember(patientId) {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)) ||
+        isAdmin()
+      );
+    }
+
+    function getCareTeamAccess(patientId) {
+      return get(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)).data.accessLevel;
+    }
+
+    // Global Admin Bypass
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    function isAuthor(data) {
+      return data != null && (
+        (isSignedIn() && data.get('authorId', '') == request.auth.uid) || 
+        (data.get('authorId', 'anonymous-entry') == 'anonymous-entry')
+      );
+    }
+
     // Entity Validations
     function isValidUser(data) {
       return data.keys().hasAll(['email', 'role']) &&
              data.email is string && data.email.size() <= 256 &&
-             data.role in ['doctor', 'nurse', 'admin'];
+             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient'];
+    }
+
+    function isValidCareTeamMember(data) {
+      return data.keys().hasAll(['patientId', 'userId', 'accessLevel', 'status']) &&
+             data.accessLevel in ['clinical_full', 'clinical_limited', 'administrative'] &&
+             data.status in ['active', 'inactive'];
     }
 
     function isValidPatient(data) {
@@ -45,7 +82,7 @@ service cloud.firestore {
 
     function isValidClinicalRecord(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'status']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
              data.status in ['draft', 'final', 'amended', 'signed'] &&
              (!('title' in data) || (data.title is string && data.title.size() <= 200)) &&
              (!('specialty' in data) || (data.specialty is string && data.specialty.size() <= 100)) &&
@@ -63,7 +100,7 @@ service cloud.firestore {
 
     function isValidPrescription(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'medicationName', 'dosage', 'frequency', 'status']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
              data.medicationName is string && data.medicationName.size() <= 200 &&
              data.dosage is string && data.dosage.size() <= 100 &&
              data.frequency is string && data.frequency.size() <= 100 &&
@@ -73,6 +110,9 @@ service cloud.firestore {
              (!('durationUnit' in data) || (data.durationUnit is string)) &&
              (!('refills' in data) || (data.refills is int)) &&
              (!('sig' in data) || (data.sig is string)) &&
+             (!('discontinuationReason' in data) || (data.discontinuationReason is string)) &&
+             (!('discontinuedAt' in data) || (data.discontinuedAt is timestamp)) &&
+             (!('discontinuedBy' in data) || (data.discontinuedBy is string)) &&
              (!('adherenceStatus' in data) || (data.adherenceStatus in ['optimal', 'partial', 'poor', 'uncertain'])) &&
              (!('adherenceScore' in data) || (data.adherenceScore is number)) &&
              (!('authorName' in data) || (data.authorName is string)) &&
@@ -81,7 +121,7 @@ service cloud.firestore {
 
     function isValidInvestigation(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'category', 'tests', 'status']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
              data.category is string && data.category.size() <= 100 &&
              data.tests is list && data.tests.size() <= 100 &&
              data.status in ['ordered', 'in_progress', 'completed', 'cancelled', 'sample_collected', 'resulted', 'reviewed'] &&
@@ -95,7 +135,7 @@ service cloud.firestore {
 
     function isValidProcedure(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'procedureName', 'status']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
              data.procedureName is string && data.procedureName.size() <= 200 &&
              data.status in ['scheduled', 'completed', 'cancelled'] &&
              (!('priority' in data) || (data.priority is string)) &&
@@ -107,7 +147,7 @@ service cloud.firestore {
 
     function isValidReferral(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'specialty', 'reason', 'status']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
              data.specialty is string && data.specialty.size() <= 200 &&
              data.reason is string && data.reason.size() <= 1000 &&
              data.status in ['pending', 'accepted', 'completed'] &&
@@ -120,14 +160,14 @@ service cloud.firestore {
 
     function isValidVitals(data) {
       return data.keys().hasAll(['authorId']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid));
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid));
              // Simplified validation for now to allow various vitals structures
     }
 
     function isValidInteraction(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'authorRole', 'type', 'content']) &&
-             (data.authorId == 'anonymous-entry' || (request.auth != null && data.authorId == request.auth.uid)) &&
-             data.authorRole in ['doctor', 'nurse', 'pt', 'social_worker', 'financial_counselor', 'community_lead'] &&
+             (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
+             data.authorRole in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient'] &&
              data.type in ['clinical', 'nursing', 'pt', 'social_care', 'financial', 'support_group'] &&
              data.content is string && data.content.size() <= 10000;
     }
@@ -136,65 +176,63 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId);
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
-      allow update: if isSignedIn() && request.auth.uid == userId && 
+      allow update: if (isSignedIn() && request.auth.uid == userId) && 
                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'specialty']) &&
                      isValidUser(incoming());
     }
 
     match /patients/{patientId} {
-      allow get, list: if true; // Allow exploration for demo
-      allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidPatient(incoming());
-      allow update: if (isSignedIn() || incoming().authorId == 'anonymous-entry') &&
-                     isValidPatient(incoming()) &&
+      allow get, list: if isSignedIn(); 
+      allow create: if (isSignedIn() || (incoming().authorId == 'anonymous-entry')) && isValidPatient(incoming());
+      allow update: if (isAuthor(existing()) || isAdmin()) &&
                      incoming().diff(existing()).affectedKeys().hasOnly(['firstName', 'lastName', 'dateOfBirth', 'gender', 'conditions', 'updatedAt']);
       
       // Sub-collections
+      match /care_teams/{memberId} {
+        allow get, list: if isSignedIn();
+        allow create, update, delete: if isAdmin() || (isSignedIn() && getStaffUser().role == 'admin');
+      }
+
       match /clinical_records/{recordId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(recordId) && isValidClinicalRecord(incoming());
-        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(recordId) && 
-                       isValidClinicalRecord(incoming()) &&
-                       incoming().authorId == existing().authorId;
+        allow get, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
+        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(recordId) && isValidClinicalRecord(incoming());
+        allow update: if isAuthor(existing()) && isValidId(recordId) && 
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'title', 'subjective', 'objective', 'assessment', 'plan', 'icd10Codes', 'workingDiagnoses', 'updatedAt']);
+        allow delete: if isAdmin();
       }
 
       match /prescriptions/{prescriptionId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(prescriptionId) && isValidPrescription(incoming());
-        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(prescriptionId) && isValidPrescription(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adherenceStatus', 'adherenceScore', 'updatedAt']);
-        allow delete: if isSignedIn() || existing().authorId == 'anonymous-entry';
+        allow read, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
+        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(prescriptionId) && isValidPrescription(incoming());
+        allow update: if isAuthor(existing()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adherenceStatus', 'adherenceScore', 'discontinuationReason', 'discontinuedAt', 'discontinuedBy', 'updatedAt']);
+        allow delete: if isAdmin();
       }
 
       match /investigations/{investigationId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(investigationId) && isValidInvestigation(incoming());
-        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(investigationId) && isValidInvestigation(incoming()) &&
+        allow get, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
+        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(investigationId) && isValidInvestigation(incoming());
+        allow update: if isAuthor(existing()) && isValidId(investigationId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions', 'resultSummary', 'resultDate', 'updatedAt']);
       }
 
       match /procedures/{procedureId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(procedureId) && isValidProcedure(incoming());
-        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(procedureId) && isValidProcedure(incoming()) &&
+        allow get, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
+        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(procedureId) && isValidProcedure(incoming());
+        allow update: if isAuthor(existing()) && isValidId(procedureId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate', 'updatedAt']);
       }
 
-      match /referrals/{referralId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(referralId) && isValidReferral(incoming());
-        allow update: if (isSignedIn() || existing().authorId == 'anonymous-entry') && isValidId(referralId) && isValidReferral(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'updatedAt']);
-      }
-
       match /vitals/{vitalId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || (incoming().authorId == 'anonymous-entry' && isValidVitals(incoming())));
+        allow get, list: if isCareTeamMember(patientId);
+        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
       }
 
       match /interactions/{interactionId} {
-        allow get, list: if true;
-        allow create: if (isSignedIn() || incoming().authorId == 'anonymous-entry') && isValidId(interactionId) && isValidInteraction(incoming());
+        allow get, list: if isCareTeamMember(patientId);
+        allow create: if isCareTeamMember(patientId) && isValidId(interactionId) && isValidInteraction(incoming());
       }
     }
+
   }
 }

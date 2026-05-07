@@ -1,5 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
+import { UserRole } from '../types';
+
 // --- Domain Events ---
 type DomainEvent =
   | { type: 'PATIENT_REGISTERED'; payload: Patient }
@@ -14,7 +16,7 @@ interface Interaction {
   id: string;
   patientId: string;
   authorId: string;
-  authorRole: 'doctor' | 'nurse' | 'pt' | 'social_worker' | 'financial_counselor' | 'community_lead';
+  authorRole: UserRole;
   type: 'clinical' | 'nursing' | 'pt' | 'social_care' | 'financial' | 'support_group';
   content: string;
   category?: string;
@@ -168,7 +170,7 @@ const initialState: AppState = {
         id: 'i-1',
         patientId: 'p-1',
         authorId: 'sw-1',
-        authorRole: 'social_worker',
+        authorRole: 'allied_health',
         type: 'social_care',
         content: 'Counseled patient on community resources for alcohol reduction programs.',
         timestamp: Date.now() - 172800000
@@ -177,7 +179,7 @@ const initialState: AppState = {
         id: 'i-2',
         patientId: 'p-1',
         authorId: 'pt-1',
-        authorRole: 'pt',
+        authorRole: 'allied_health',
         type: 'pt',
         content: 'Routine mobility check. No major issues noted.',
         timestamp: Date.now() - 86400000

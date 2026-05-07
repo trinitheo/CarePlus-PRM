@@ -6,7 +6,7 @@ import {
   Activity, Heart, Thermometer, User, 
   FileText, Pill, Microscope, 
   Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle,
-  Network, LayoutDashboard
+  Network, LayoutDashboard, ShieldAlert, Lock, UserCheck
 } from 'lucide-react';
 import { HealthConnectManager } from './HealthConnectManager';
 import { KnowledgeGraph } from './KnowledgeGraph';
@@ -21,6 +21,8 @@ import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { VitalsCard } from './VitalsCard';
 import { InteractionEntryModal } from './InteractionEntryModal';
 import { ClinicalTimelineCard } from './ClinicalTimelineCard';
+import { CareTeamManager } from './CareTeamManager';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { 
   Dialog, 
   DialogContent, 
@@ -49,6 +51,8 @@ export function ClinicalRecords({
 }) {
   const { patients, vitals, clinicalIntakes } = useQueryModel();
   const clinicalData = usePatientClinicalData(patientId);
+  const { userProfile } = useCurrentUser();
+  
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
   const [isCareEcosystemModalOpen, setIsCareEcosystemModalOpen] = useState(false);
   const [isHealthConnectModalOpen, setIsHealthConnectModalOpen] = useState(false);
@@ -57,11 +61,26 @@ export function ClinicalRecords({
   const [activeTab, setActiveTab] = useState('overview');
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
 
+  // Authorization Check
+  const myAccess = useMemo(() => {
+    if (!userProfile) return null;
+    if (userProfile.role === 'admin') return { accessLevel: 'clinical_full' as const, role: 'admin' };
+    
+    const membership = clinicalData.care_teams.find(m => m.userId === userProfile.id);
+    if (!membership) return null;
+    
+    return { accessLevel: membership.accessLevel, role: membership.userRole };
+  }, [clinicalData.care_teams, userProfile]);
+
+  const canReadClinical = myAccess?.accessLevel === 'clinical_full' || myAccess?.accessLevel === 'clinical_limited';
+  const canWriteClinical = myAccess?.accessLevel === 'clinical_full';
+  const isAuthorized = !!myAccess || userProfile?.role === 'admin';
+
   useEffect(() => {
-    if (patientId) {
+    if (patientId && isAuthorized) {
       logAccess('VIEW_CLINICAL_PROFILE', 'Patient', patientId);
     }
-  }, [patientId]);
+  }, [patientId, isAuthorized]);
   
   const localPatient = patients ? patients[patientId] : undefined;
   
@@ -238,6 +257,38 @@ export function ClinicalRecords({
     }
   };
 
+  if (!isAuthorized && !clinicalData.loading) {
+    return (
+      <div className="h-full flex items-center justify-center p-8">
+        <Card className="max-w-md w-full border-dashed border-[#EDEBE9] bg-white shadow-xl rounded-[24px] p-8 text-center space-y-6">
+          <div className="h-20 w-20 bg-[#FDE7E9] rounded-full flex items-center justify-center mx-auto">
+            <ShieldAlert className="h-10 w-10 text-[#A4262C]" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-[#242424] uppercase tracking-tighter">Access Restricted</h2>
+            <p className="text-xs text-[#616161] font-medium leading-relaxed">
+              Your professional account ({userProfile?.role.toUpperCase()}) does not have an active assignment to this patient's care team. HIPAA compliance requires explicit relationship mapping for clinical data access.
+            </p>
+          </div>
+          
+          <div className="p-4 bg-[#FAFAFA] rounded-xl border border-[#F3F2F1] text-left space-y-3">
+             <div className="flex items-center gap-3">
+               <div className="h-6 w-6 rounded-md bg-[#DEECF9] flex items-center justify-center">
+                 <Lock className="h-3.5 w-3.5 text-[#0078D4]" />
+               </div>
+               <span className="text-[10px] font-black uppercase text-[#616161] tracking-widest">Encrypted Tier: PII/PHI-4</span>
+             </div>
+             <p className="text-[9px] text-[#A19F9D] font-bold italic uppercase">Contact the Chief Medical Officer or Clinical Admin to request care team assignment.</p>
+          </div>
+
+          <Button onClick={onBack} className="w-full h-11 bg-[#242424] hover:bg-black text-white rounded-xl font-black uppercase tracking-widest text-[11px]">
+            Return to Registry
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <motion.div 
       initial="hidden"
@@ -379,27 +430,33 @@ export function ClinicalRecords({
                     <LayoutDashboard className="h-4 w-4" />
                     Dashboard
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="clinical" 
-                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
-                  >
-                    <Activity className="h-4 w-4" />
-                    Clinical Focus
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="medications" 
-                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
-                  >
-                    <Pill className="h-4 w-4" />
-                    Medications
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="investigations" 
-                    className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
-                  >
-                    <Microscope className="h-4 w-4" />
-                    Investigations
-                  </TabsTrigger>
+                  
+                  {canReadClinical && (
+                    <>
+                      <TabsTrigger 
+                        value="clinical" 
+                        className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                      >
+                        <Activity className="h-4 w-4" />
+                        Clinical Focus
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="medications" 
+                        className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                      >
+                        <Pill className="h-4 w-4" />
+                        Medications
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="investigations" 
+                        className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                      >
+                        <Microscope className="h-4 w-4" />
+                        Investigations
+                      </TabsTrigger>
+                    </>
+                  )}
+                  
                   <TabsTrigger 
                     value="insights" 
                     className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
@@ -410,39 +467,41 @@ export function ClinicalRecords({
                 </TabsList>
               </div>
 
-              <div className="flex items-center bg-white border border-[#EDEBE9] rounded-2xl p-1 shadow-sm gap-1 w-fit">
-                <SOAPNoteModal patientId={patientId}>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="SOAP Note">
-                    <FileText style={{ color: '#0078D4' }} className="h-5 w-5" />
+              {canWriteClinical && (
+                <div className="flex items-center bg-white border border-[#EDEBE9] rounded-2xl p-1 shadow-sm gap-1 w-fit">
+                  <SOAPNoteModal patientId={patientId}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="SOAP Note">
+                      <FileText style={{ color: '#0078D4' }} className="h-5 w-5" />
+                    </Button>
+                  </SOAPNoteModal>
+                  <div className="w-[1px] h-5 bg-[#EDEBE9]" />
+                  <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
+                      title="Prescription Pad"
+                      onClick={() => setIsPrescriptionPadOpen(true)}
+                  >
+                      <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
                   </Button>
-                </SOAPNoteModal>
-                <div className="w-[1px] h-5 bg-[#EDEBE9]" />
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
-                    title="Prescription Pad"
-                    onClick={() => setIsPrescriptionPadOpen(true)}
-                >
-                    <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
-                </Button>
-                <div className="w-[1px] h-5 bg-[#EDEBE9]" />
-                <InvestigationOrderModal patientId={patientId}>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Investigation">
-                    <Microscope style={{ color: '#845701' }} className="h-5 w-5" />
-                  </Button>
-                </InvestigationOrderModal>
-                <NewProcedureModal patientId={patientId}>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Procedure">
-                    <Stethoscope style={{ color: '#5C2D91' }} className="h-5 w-5" />
-                  </Button>
-                </NewProcedureModal>
-                <NewReferralModal patientId={patientId}>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Referral">
-                    <UserPlus style={{ color: '#A4262C' }} className="h-5 w-5" />
-                  </Button>
-                </NewReferralModal>
-              </div>
+                  <div className="w-[1px] h-5 bg-[#EDEBE9]" />
+                  <InvestigationOrderModal patientId={patientId}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Investigation">
+                      <Microscope style={{ color: '#845701' }} className="h-5 w-5" />
+                    </Button>
+                  </InvestigationOrderModal>
+                  <NewProcedureModal patientId={patientId}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Procedure">
+                      <Stethoscope style={{ color: '#5C2D91' }} className="h-5 w-5" />
+                    </Button>
+                  </NewProcedureModal>
+                  <NewReferralModal patientId={patientId}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Referral">
+                      <UserPlus style={{ color: '#A4262C' }} className="h-5 w-5" />
+                    </Button>
+                  </NewReferralModal>
+                </div>
+              )}
             </div>
 
             <TabsContent value="overview" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
@@ -453,8 +512,7 @@ export function ClinicalRecords({
                       <VitalsCard vitals={patientVitals} patientId={patientId} />
                    </div>
                    <div 
-                      className="flex-1 min-h-0"
-                      style={{ height: '250px', width: '441.25px' }}
+                      className="flex-1 min-h-[300px]"
                    >
                       <UpcomingAppointments patientId={patientId} />
                    </div>
@@ -466,12 +524,7 @@ export function ClinicalRecords({
                       <CareEcosystem patientId={patientId} />
                    </div>
                    <div className="flex-1 min-h-0">
-                      <Card className="h-full flex flex-col border-[#EDEBE9] border-dashed shadow-none rounded-lg overflow-hidden bg-[#FAFAFA]/50 items-center justify-center p-8">
-                        <div className="flex flex-col items-center gap-2 text-[#616161] opacity-40">
-                          <LayoutDashboard className="h-8 w-8" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Additional Widget Placeholder</span>
-                        </div>
-                      </Card>
+                      <CareTeamManager patientId={patientId} />
                    </div>
                 </div>
               </div>

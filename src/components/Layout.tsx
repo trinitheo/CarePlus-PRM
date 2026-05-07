@@ -1,7 +1,14 @@
-import { Activity, Calendar, FileText, Settings, Users, CreditCard, ShieldCheck, User } from 'lucide-react';
+import { 
+  Activity, Calendar, FileText, Settings, 
+  Users, CreditCard, ShieldCheck, User,
+  RefreshCcw 
+} from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { HIPAAComplianceDashboard } from '../domains/compliance/HIPAAComplianceDashboard';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { db, auth } from '../lib/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 
 const NAV_ITEMS = [
   { id: 'patients', icon: Users, label: 'Patients' },
@@ -11,8 +18,19 @@ const NAV_ITEMS = [
 ];
 
 function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
+  const { userProfile } = useCurrentUser();
+
+  const handleSwitchProfile = async () => {
+    if (userProfile && auth.currentUser) {
+      // Clear professional profile to trigger DemoLogin gate
+      await deleteDoc(doc(db, 'users', auth.currentUser.uid));
+      // Force reload to reset all states
+      window.location.reload();
+    }
+  };
+
   return (
-    <aside className="hidden md:flex flex-col h-screen border-r border-[#EDEBE9] bg-[#FAFAFA] transition-all duration-300 w-16 lg:w-[200px] shrink-0 shadow-sm z-20">
+    <aside className="hidden md:flex flex-col h-screen border-r border-[#EDEBE9] bg-[#FAFAFA] transition-all duration-300 w-16 lg:w-[220px] shrink-0 shadow-sm z-20">
       <div className="p-6 flex items-center gap-3">
         <div className="h-9 w-9 rounded-xl bg-[#0078D4] flex items-center justify-center shrink-0 shadow-sm shadow-[#0078D4]/20">
           <Activity className="h-5 w-5 text-white" />
@@ -49,24 +67,34 @@ function Sidebar({ currentModule, onNavigate, onOpenHipaa }: { currentModule: st
         })}
       </nav>
 
-      <div className="p-3 border-t border-[#EDEBE9]/50 space-y-1">
+      <div className="p-3 border-t border-[#EDEBE9]/50 space-y-2">
+        {userProfile && (
+          <div className="p-3 bg-white border border-[#EDEBE9] rounded-xl shadow-sm mb-2">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-8 w-8 rounded-full bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9]">
+                <User className="h-4 w-4 text-[#0078D4]" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-black text-[#242424] truncate uppercase tracking-tight">{userProfile.displayName}</span>
+                <span className="text-[9px] font-bold text-[#0078D4] uppercase tracking-widest">{userProfile.role.replace('_', ' ')}</span>
+              </div>
+            </div>
+            <button 
+              onClick={handleSwitchProfile}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-[#FAFAFA] hover:bg-[#F3F2F1] text-[#616161] rounded-lg transition-colors border border-[#EDEBE9]"
+            >
+              <RefreshCcw className="h-3 w-3" />
+              <span className="text-[10px] font-black uppercase tracking-tight">Switch Persona</span>
+            </button>
+          </div>
+        )}
+
         <button 
           onClick={onOpenHipaa}
           className="w-full flex items-center gap-3 p-3 rounded-md text-emerald-600 hover:bg-emerald-50 transition-all duration-150"
         >
           <ShieldCheck className="h-5 w-5 shrink-0" />
           <span className="hidden lg:block text-[13px] font-semibold tracking-tight">HIPAA Agent</span>
-        </button>
-        <button 
-          className="w-full flex items-center gap-3 p-3 rounded-md text-[#616161] opacity-60 cursor-not-allowed group transition-all duration-150"
-        >
-          <div className="h-6 w-6 rounded-full bg-[#EDEBE9] flex items-center justify-center shrink-0 border border-[#EDEBE9]">
-            <User className="h-3.5 w-3.5 text-[#616161]" />
-          </div>
-          <div className="hidden lg:flex flex-col items-start min-w-0">
-            <span className="text-[13px] font-semibold tracking-tight">User Profile</span>
-            <span className="text-[8px] font-black uppercase text-[#0078D4] tracking-tighter">Coming Soon</span>
-          </div>
         </button>
         <button 
           onClick={() => console.log('Settings clicked')}

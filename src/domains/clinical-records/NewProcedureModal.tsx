@@ -9,7 +9,7 @@ import { Stethoscope, X, Search, ChevronDown, Clock, ShieldAlert } from 'lucide-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { saveProcedure } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Variants } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
 interface NewProcedureModalProps {
@@ -31,7 +31,7 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
   const [notes, setNotes] = React.useState('');
 
   // Fluent 2 Motion Variants
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -42,14 +42,14 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 10 },
     visible: { 
       opacity: 1, 
       y: 0,
       transition: {
         duration: 0.3,
-        ease: [0.33, 0, 0.1, 1]
+        ease: "easeInOut"
       }
     },
   };
