@@ -8,6 +8,7 @@ import { db, auth } from './lib/firebase';
 import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
+import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
 import { Activity, ChevronRight, User, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
@@ -24,9 +25,9 @@ export default function App() {
     async function testFirestoreConnection() {
       try {
         await getDocFromServer(doc(db, '_diagnostics', 'connection'));
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Firebase is offline. Check configuration.");
+      } catch (error: any) {
+        if (error?.message?.includes('offline')) {
+          console.error("Clinical Core is offline. Check Firebase configuration.");
         }
       }
     }
@@ -178,8 +179,14 @@ export default function App() {
           </div>
         )}
         
+        {currentModule === 'scheduling' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <UpcomingSchedule />
+          </div>
+        )}
+
         {/* Module Sandbox Placeholder */}
-        {['scheduling', 'billing'].includes(currentModule) && (
+        {['billing'].includes(currentModule) && (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-12">
             <div className="h-24 w-24 rounded-full bg-primary/5 flex items-center justify-center mb-8">
               <Activity className="h-12 w-12 text-primary/20" />

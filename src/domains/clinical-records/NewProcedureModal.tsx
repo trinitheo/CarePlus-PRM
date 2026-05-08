@@ -5,7 +5,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Stethoscope, X, Search, ChevronDown, Clock, ShieldAlert } from 'lucide-react';
+import { Stethoscope, X, Search, ChevronDown, Clock, ShieldAlert, AlertCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { saveProcedure } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -21,6 +21,7 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
   const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Form State
@@ -56,6 +57,7 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
 
   const handleClose = () => {
     setIsOpen(false);
+    setErrorMessage(null);
     // Short delay to allow exit animation before resetting form
     setTimeout(() => {
       setProcedureName('');
@@ -195,47 +197,64 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
           </motion.div>
         </ScrollArea>
 
-        <DialogFooter className="px-10 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9] flex justify-end items-center gap-4 shrink-0 z-10">
-          <DialogClose asChild>
-            <button 
-              type="button"
-              disabled={isSubmitting}
-              className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9]"
-              onClick={handleClose}
+        <DialogFooter className="px-10 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9] flex justify-between items-center gap-4 shrink-0 z-10">
+          <div className="flex-1 hidden sm:block">
+            {errorMessage ? (
+              <div className="flex items-center gap-2 text-[#A4262C]">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-[11px] font-bold uppercase tracking-tight">{errorMessage}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-[#616161]">
+                <ShieldAlert className="h-4 w-4" />
+                <span className="text-[11px] font-bold uppercase tracking-tight">Verified Digital Signature Ready</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <DialogClose asChild>
+              <button 
+                type="button"
+                disabled={isSubmitting}
+                className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9]"
+                onClick={handleClose}
+              >
+                Discard
+              </button>
+            </DialogClose>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              Discard
-            </button>
-          </DialogClose>
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Button 
-              disabled={isSubmitting || !procedureName}
-              onClick={async () => {
-                setIsSubmitting(true);
-                try {
-                  await saveProcedure(patientId, {
-                    procedureName,
-                    priority,
-                    targetDate,
-                    preparation,
-                    notes,
-                    authorName: userProfile?.displayName || 'Clinical Provider'
-                  });
-                  handleClose();
-                } catch (e) {
-                  // Error handled in service
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              className="bg-[#5C2D91] hover:bg-[#4B2475] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#5C2D91]/20 transition-all tracking-tight"
-            >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Sign & Schedule
-            </Button>
-          </motion.div>
+              <Button 
+                disabled={isSubmitting || !procedureName}
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  setErrorMessage(null);
+                  try {
+                    await saveProcedure(patientId, {
+                      procedureName,
+                      priority,
+                      targetDate,
+                      preparation,
+                      notes,
+                      authorName: userProfile?.displayName || 'Clinical Provider'
+                    });
+                    handleClose();
+                  } catch (e: any) {
+                    console.error('Procedure save failure:', e);
+                    setErrorMessage(e.message?.includes('permission') ? 'Security: Not Authorized' : 'Sync: Procedure not saved');
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                className="bg-[#5C2D91] hover:bg-[#4B2475] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#5C2D91]/20 transition-all tracking-tight"
+              >
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Sign & Schedule
+              </Button>
+            </motion.div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

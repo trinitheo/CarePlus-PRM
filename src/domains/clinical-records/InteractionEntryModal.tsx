@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from '../../components/ui/select';
 import { useCommandDispatcher } from '../../store/eventStore';
-import { HeartHandshake, DollarSign, Accessibility, MessagesSquare, Stethoscope, Users, Loader2 } from 'lucide-react';
+import { HeartHandshake, DollarSign, Accessibility, MessagesSquare, Stethoscope, Users, Loader2, AlertCircle } from 'lucide-react';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { saveInteraction } from '../../services/clinicalFirestoreService';
 
@@ -27,6 +27,7 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
   const [role, setRole] = useState<UserRole>('clinician');
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (userProfile) {
@@ -47,10 +48,12 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
     if (!content.trim() || !userProfile) return;
 
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
       const payload = {
         patientId,
         authorId: userProfile.id,
+        authorName: userProfile.displayName || 'Clinical Provider',
         authorRole: role,
         type,
         content,
@@ -71,8 +74,9 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
 
       setContent('');
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving interaction:', error);
+      setErrorMessage(error.message?.includes('permission') ? 'Security: Access Denied' : 'Sync error: Entry not saved');
     } finally {
       setIsSubmitting(false);
     }
@@ -140,18 +144,26 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
           </div>
         </div>
 
-        <DialogFooter className="bg-[#F8F8F8] p-4 flex gap-3 border-t border-[#EDEBE9]">
-          <Button variant="ghost" onClick={onClose} className="rounded-xl h-11 px-6 font-bold text-[#616161]" disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={isSubmitting || !content.trim() || userLoading}
-            className="rounded-xl h-11 px-8 font-bold bg-[#E3008C] hover:bg-[#C30078] text-white shadow-md shadow-pink-200"
-          >
-            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Post Interaction
-          </Button>
+        <DialogFooter className="bg-[#F8F8F8] p-4 flex flex-col gap-3 border-t border-[#EDEBE9]">
+          {errorMessage && (
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-4 py-2 rounded-xl">
+              <AlertCircle className="h-3 w-3" />
+              {errorMessage}
+            </div>
+          )}
+          <div className="flex gap-3 w-full">
+            <Button variant="ghost" onClick={onClose} className="rounded-xl h-11 px-6 font-bold text-[#616161]" disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting || !content.trim() || userLoading}
+              className="rounded-xl h-11 px-8 font-bold bg-[#E3008C] hover:bg-[#C30078] text-white shadow-md shadow-pink-200"
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Post Interaction
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

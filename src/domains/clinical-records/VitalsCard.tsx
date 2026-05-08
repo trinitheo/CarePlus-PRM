@@ -140,13 +140,7 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
     <Card className={`border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white flex flex-col transition-all duration-500 ${isVitalsExpanded ? 'h-[460px]' : 'h-[320px]'}`}>
       <CardHeader className="py-1.5 px-2 border-b border-[#F3F2F1] bg-white shrink-0 flex flex-row items-center justify-between" style={{ paddingBottom: '18px' }}>
         <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-[#0078D4]" />
           <CardTitle className="text-xl font-bold text-[#242424] tracking-tight">Vitals</CardTitle>
-          {alerts.length > 0 && (
-            <Badge variant="destructive" className="ml-2 bg-[#D13438] text-[8px] uppercase font-bold animate-pulse px-1.5 py-0">
-              {alerts.length} Alerts
-            </Badge>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <Button 

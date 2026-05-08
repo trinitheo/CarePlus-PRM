@@ -5,7 +5,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { UserPlus, X, Search, ChevronDown, Flag } from 'lucide-react';
+import { UserPlus, X, Search, ChevronDown, Flag, AlertCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { saveReferral } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -21,15 +21,23 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
   const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Form State
-  const [fromProvider, setFromProvider] = React.useState(userProfile?.displayName || 'Clinical Provider');
+  const [fromProvider, setFromProvider] = React.useState('');
   const [toProvider, setToProvider] = React.useState('');
   const [specialty, setSpecialty] = React.useState('');
   const [reason, setReason] = React.useState('');
   const [urgency, setUrgency] = React.useState('routine');
   const [notes, setNotes] = React.useState('');
+
+  // Sync from provider from profile
+  React.useEffect(() => {
+    if (userProfile?.displayName && !fromProvider) {
+      setFromProvider(userProfile.displayName);
+    }
+  }, [userProfile, fromProvider]);
 
   // Fluent 2 Motion Variants
   const containerVariants: Variants = {
@@ -57,6 +65,7 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
 
   const handleClose = () => {
     setIsOpen(false);
+    setErrorMessage(null);
     // Short delay to allow exit animation before resetting form
     setTimeout(() => {
       setFromProvider(userProfile?.displayName || 'Clinical Provider');
@@ -198,47 +207,60 @@ export function NewReferralModal({ patientId, children }: NewReferralModalProps)
           </motion.div>
         </ScrollArea>
 
-        <DialogFooter className="px-10 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9] flex justify-end items-center gap-4 shrink-0 z-10">
-          <DialogClose asChild>
-            <button 
-              type="button"
-              disabled={isSubmitting}
-              className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9]"
-              onClick={handleClose}
+        <DialogFooter className="px-10 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9] flex justify-between items-center gap-4 shrink-0 z-10">
+          <div className="flex-1 hidden sm:block">
+            {errorMessage && (
+              <div className="flex items-center gap-2 text-[#A4262C]">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-[11px] font-bold uppercase tracking-tight">{errorMessage}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <DialogClose asChild>
+              <button 
+                type="button"
+                disabled={isSubmitting}
+                className="text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424] font-semibold text-[14px] rounded-md px-8 h-11 transition-colors border-none bg-transparent outline-none cursor-pointer focus:ring-2 focus:ring-[#EDEBE9]"
+                onClick={handleClose}
+              >
+                Discard
+              </button>
+            </DialogClose>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              Discard
-            </button>
-          </DialogClose>
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Button 
-              disabled={isSubmitting || !specialty || !reason}
-              onClick={async () => {
-                setIsSubmitting(true);
-                try {
-                  await saveReferral(patientId, {
-                    fromProvider,
-                    toProvider,
-                    specialty,
-                    reason,
-                    urgency,
-                    notes
-                  });
-                  handleClose();
-                } catch (e) {
-                  // Error handled in service
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              className="bg-[#A4262C] hover:bg-[#8D2126] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#A4262C]/20 transition-all tracking-tight"
-            >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Issue Referral
-            </Button>
-          </motion.div>
+              <Button 
+                disabled={isSubmitting || !specialty || !reason}
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  setErrorMessage(null);
+                  try {
+                    await saveReferral(patientId, {
+                      fromProvider: fromProvider || 'Clinical Provider',
+                      authorName: fromProvider || userProfile?.displayName || 'Clinical Provider',
+                      toProvider,
+                      specialty,
+                      reason,
+                      urgency,
+                      notes
+                    });
+                    handleClose();
+                  } catch (e: any) {
+                    console.error('Referral save failure:', e);
+                    setErrorMessage(e.message?.includes('permission') ? 'Security: Not Authorized' : 'Sync: Referral not saved');
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                className="bg-[#A4262C] hover:bg-[#8D2126] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#A4262C]/20 transition-all tracking-tight"
+              >
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Issue Referral
+              </Button>
+            </motion.div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

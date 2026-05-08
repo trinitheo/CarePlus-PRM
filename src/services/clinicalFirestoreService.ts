@@ -66,14 +66,21 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
  * Utility to strip undefined values from data before writing to Firestore
  */
 function cleanData(data: any) {
-  if (data === null || typeof data !== 'object') return data;
+  if (data === null || typeof data !== 'object' || data instanceof Date) return data;
   
+  // Don't recurse into Firestore special objects (FieldValue, Timestamp, etc.)
+  // These usually have a constructor name other than 'Object' or 'Array'
+  const constructorName = data.constructor?.name;
+  if (constructorName && !['Object', 'Array'].includes(constructorName)) {
+    return data;
+  }
+
   const cleaned: any = Array.isArray(data) ? [] : {};
   
   Object.keys(data).forEach(key => {
     const value = data[key];
     if (value !== undefined) {
-      cleaned[key] = (typeof value === 'object' && value !== null && !(value instanceof Date)) 
+      cleaned[key] = (typeof value === 'object' && value !== null) 
         ? cleanData(value) 
         : value;
     }
@@ -207,6 +214,7 @@ export async function savePrescription(patientId: string, data: any) {
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
+      authorName: data.authorName || auth.currentUser?.displayName || 'Clinical Provider',
       createdAt: serverTimestamp(),
       status: 'active'
     }));
@@ -271,6 +279,7 @@ export async function saveInvestigation(patientId: string, data: any) {
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
+      authorName: data.authorName || auth.currentUser?.displayName || 'Clinical Provider',
       createdAt: serverTimestamp(),
       status: 'ordered'
     }));
@@ -301,6 +310,7 @@ export async function saveProcedure(patientId: string, data: any) {
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
+      authorName: data.authorName || auth.currentUser?.displayName || 'Clinical Provider',
       createdAt: serverTimestamp(),
       status: 'scheduled'
     }));
@@ -318,6 +328,7 @@ export async function saveReferral(patientId: string, data: any) {
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
+      authorName: data.authorName || auth.currentUser?.displayName || 'Clinical Provider',
       createdAt: serverTimestamp(),
       status: 'pending'
     }));
@@ -364,6 +375,7 @@ export async function updatePatientVitals(patientId: string, data: any) {
     const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
+      authorName: data.authorName || auth.currentUser?.displayName || 'Clinical Provider',
       createdAt: serverTimestamp(),
     }));
     return docRef.id;
@@ -397,5 +409,54 @@ export async function saveInteraction(patientId: string, data: any) {
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+// Appointments
+export async function saveAppointment(data: any) {
+  const path = `appointments`;
+  try {
+    const docRef = await addDoc(collection(db, path), cleanData({
+      ...data,
+      authorId: auth.currentUser?.uid || 'anonymous-entry',
+      status: data.status || 'scheduled',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateAppointmentStatus(appointmentId: string, status: string) {
+  const path = `appointments`;
+  try {
+    const docRef = doc(db, path, appointmentId);
+    await updateDoc(docRef, cleanData({
+      status,
+      updatedAt: serverTimestamp(),
+    }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function getUpcomingAppointments() {
+  const path = `appointments`;
+  try {
+    const now = new Date();
+    // Start of today
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // We fetch all from today onwards, but in a real app we might limit
+    const q = query(
+      collection(db, path),
+      orderBy('time', 'asc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
   }
 }

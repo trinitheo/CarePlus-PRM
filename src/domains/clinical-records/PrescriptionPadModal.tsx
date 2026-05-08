@@ -91,6 +91,7 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
     const [notes, setNotes] = useState('');
     const [isGeneratingSig, setIsGeneratingSig] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const [recommendedLab, setRecommendedLab] = useState<any>(null);
     const [pharmacyNetwork, setPharmacyNetwork] = useState<'surescripts' | 'print' | 'internal'>('surescripts');
@@ -180,6 +181,7 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
     const handleSave = async () => {
         if (!medicationName || !dose || !frequency) return;
         setIsSaving(true);
+        setErrorMessage(null);
         try {
             await savePrescription(patientId, {
                 medicationName,
@@ -194,6 +196,9 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
             });
             resetForm();
             onClose();
+        } catch (error: any) {
+            console.error('Prescription save failure:', error);
+            setErrorMessage(error.message?.includes('permission') ? 'Security: Access Denied' : 'Sync error: Rx not saved');
         } finally {
             setIsSaving(false);
         }
@@ -460,7 +465,13 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
                     </div>
                 </ScrollArea>
 
-                <DialogFooter className="px-8 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9]">
+                <DialogFooter className="px-8 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9] flex flex-col gap-4">
+                    {errorMessage && (
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-4 py-2 rounded-xl">
+                            <AlertCircle className="h-3 w-3" />
+                            {errorMessage}
+                        </div>
+                    )}
                     <div className="flex items-center justify-end gap-3 w-full">
                         <Button variant="outline" onClick={onClose} className="rounded-xl h-12 px-6 text-[13px] font-bold text-[#242424] border-[#EDEBE9] hover:bg-[#F3F2F1]">
                             Cancel

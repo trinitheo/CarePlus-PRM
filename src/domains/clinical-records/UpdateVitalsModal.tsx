@@ -26,6 +26,7 @@ import {
 } from '../../components/ui/select';
 import { updatePatientVitals } from '../../services/clinicalFirestoreService';
 import { useCommandDispatcher } from '../../store/eventStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 interface UpdateVitalsModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ interface UpdateVitalsModalProps {
 
 export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }: UpdateVitalsModalProps) {
   const dispatch = useCommandDispatcher();
+  const { userProfile } = useCurrentUser();
   const [vitals, setVitals] = useState({
     hr: '',
     bp: '',
@@ -88,9 +90,11 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
   }, [vitals.weight, vitals.height, vitals.bmi]);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSave = async () => {
     setIsSaving(true);
+    setErrorMessage(null);
     try {
       const gcsTotal = Number(vitals.gcs_e) + Number(vitals.gcs_v) + Number(vitals.gcs_m);
       
@@ -107,7 +111,8 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
         hba1c: vitals.hba1c ? Number(vitals.hba1c) : (currentVitals?.hba1c || 0),
         gcs: `${gcsTotal}/15`,
         timestamp: Date.now(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        authorName: userProfile?.displayName || 'Clinical Provider'
       };
 
       await updatePatientVitals(patientId, payload);
@@ -122,8 +127,9 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
       });
 
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating vitals:', error);
+      setErrorMessage(error.message?.includes('permission') ? 'Security: Authorization failed' : 'Sync error: Vitals not saved');
     } finally {
       setIsSaving(false);
     }
@@ -231,23 +237,31 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
           </div>
         </div>
 
-        <DialogFooter className="p-2.5 px-4 bg-white border-t border-[#F3F2F1] flex gap-3">
-          <DialogClose asChild>
+        <DialogFooter className="p-2.5 px-4 bg-white border-t border-[#F3F2F1] flex flex-col gap-2">
+          {errorMessage && (
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-3 py-1.5 rounded-lg mb-1">
+              <AlertCircle className="h-3 w-3" />
+              {errorMessage}
+            </div>
+          )}
+          <div className="flex gap-3 w-full">
+            <DialogClose asChild>
+              <Button 
+                variant="ghost" 
+                onClick={onClose} 
+                className="flex-1 h-9 rounded-xl bg-[#F3F2F1] text-[#616161] font-bold hover:bg-[#EDEBE9]"
+              >
+                Cancel
+              </Button>
+            </DialogClose>
             <Button 
-              variant="ghost" 
-              onClick={onClose} 
-              className="flex-1 h-9 rounded-xl bg-[#F3F2F1] text-[#616161] font-bold hover:bg-[#EDEBE9]"
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="flex-1 h-9 rounded-xl bg-[#0078D4] text-white font-bold hover:bg-[#005A9E] shadow-md shadow-[#0078D4]/20"
             >
-              Cancel
+              {isSaving ? 'Saving...' : 'Save Vitals'}
             </Button>
-          </DialogClose>
-          <Button 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="flex-1 h-9 rounded-xl bg-[#0078D4] text-white font-bold hover:bg-[#005A9E] shadow-md shadow-[#0078D4]/20"
-          >
-            {isSaving ? 'Saving...' : 'Save Vitals'}
-          </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
-import { X, ArrowLeft, Loader2, Send, ClipboardCheck } from 'lucide-react';
+import { X, ArrowLeft, Loader2, Send, ClipboardCheck, AlertCircle } from 'lucide-react';
 import { saveInvestigation } from '../../services/clinicalFirestoreService';
 import { OrderCategorySelection } from './components/OrderCategorySelection';
 import { InvestigationOrderForm, OrderCategory, validateInvestigationOrder, isFormValid } from './components/InvestigationOrderForm';
@@ -16,6 +16,7 @@ interface InvestigationOrderModalProps {
 export function InvestigationOrderModal({ patientId, children }: InvestigationOrderModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { patients } = useQueryModel();
   const patient = patients[patientId];
   
@@ -33,6 +34,7 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
 
   const handleClose = () => {
     setIsOpen(false);
+    setErrorMessage(null);
     setTimeout(() => {
       setCategory(null);
       setWorkflowStep('category');
@@ -198,30 +200,51 @@ export function InvestigationOrderModal({ patientId, children }: InvestigationOr
             )}
 
             {workflowStep === 'preview' && (
-              <Button 
-                disabled={isSubmitting}
-                onClick={async () => {
-                  setIsSubmitting(true);
-                  try {
-                    await saveInvestigation(patientId, {
-                      category,
-                      tests: parsedTests,
-                      priority,
-                      indication,
-                      instructions
-                    });
-                    handleClose();
-                  } catch (e) {
-                    console.error("Failed to save", e);
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                className="bg-[#107C10] hover:bg-[#0B590B] text-white font-bold text-[13px] rounded-lg px-8 h-10 shadow-sm transition-all disabled:opacity-50"
-              >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                Confirm & Send Requisition
-              </Button>
+              <div className="flex flex-col gap-3 w-full">
+                {errorMessage && (
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-4 py-2 rounded-lg">
+                    <AlertCircle className="h-3 w-3" />
+                    {errorMessage}
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 w-full">
+                  <DialogClose asChild>
+                    <Button 
+                      variant="ghost"
+                      onClick={handleClose}
+                      className="text-[#616161] hover:text-[#242424] hover:bg-[#F3F2F1] font-semibold text-[13px] px-4 h-9"
+                    >
+                      Cancel
+                    </Button>
+                  </DialogClose>
+                  <Button 
+                    disabled={isSubmitting}
+                    onClick={async () => {
+                      setIsSubmitting(true);
+                      setErrorMessage(null);
+                      try {
+                        await saveInvestigation(patientId, {
+                          category,
+                          tests: parsedTests,
+                          priority,
+                          indication,
+                          instructions
+                        });
+                        handleClose();
+                      } catch (e: any) {
+                        console.error("Failed to save", e);
+                        setErrorMessage(e.message?.includes('permission') ? 'Security: Access Denied' : 'Sync error: Order not sent');
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    className="bg-[#107C10] hover:bg-[#0B590B] text-white font-bold text-[13px] rounded-lg px-8 h-10 shadow-sm transition-all disabled:opacity-50"
+                  >
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                    Confirm & Send Requisition
+                  </Button>
+                </div>
+              </div>
             )}
           </DialogFooter>
         )}

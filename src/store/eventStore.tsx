@@ -1,4 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 import { UserRole } from '../types';
 
@@ -6,7 +8,7 @@ import { UserRole } from '../types';
 type DomainEvent =
   | { type: 'PATIENT_REGISTERED'; payload: Patient }
   | { type: 'VITALS_RECORDED'; payload: Vitals }
-  | { type: 'APPOINTMENT_SCHEDULED'; payload: { id: string; patientId: string; providerId: string; time: string; reason: string } }
+  | { type: 'APPOINTMENT_SCHEDULED'; payload: Appointment }
   | { type: 'HEALTH_DATA_INGESTED'; payload: { id: string; patientId: string; source: 'watch' | 'medication_log' | 'diet' | 'health_connect'; type: string; value: any; timestamp: number } }
   | { type: 'CLINICAL_INTAKE_RECORDED'; payload: ClinicalIntake }
   | { type: 'INTERACTION_RECORDED'; payload: Interaction };
@@ -91,7 +93,14 @@ export interface Appointment {
   patientId: string;
   providerId: string;
   time: string;
+  duration?: number;
   reason: string;
+  status: 'scheduled' | 'confirmed' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled';
+  visitType?: 'in_clinic' | 'telehealth';
+  priority?: 'immediate' | 'urgent' | 'routine';
+  priorityColor?: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 interface AppState {
@@ -162,7 +171,24 @@ const initialState: AppState = {
     }
   },
   appointments: {
-    'appt-1': { id: 'appt-1', patientId: 'p-1', providerId: 'prov-1', time: '2026-04-26T09:00:00Z', reason: 'Follow-up' },
+    'appt-1': { 
+      id: 'appt-1', 
+      patientId: 'p-1', 
+      providerId: 'prov-1', 
+      time: new Date().toISOString(), // Make it today for visibility
+      reason: 'Standard Follow-up for Hypertension',
+      status: 'scheduled',
+      visitType: 'telehealth'
+    },
+    'appt-2': { 
+      id: 'appt-2', 
+      patientId: 'p-2', 
+      providerId: 'prov-1', 
+      time: new Date(Date.now() + 3600000).toISOString(),
+      reason: 'Severe Abdominal Pain and fever',
+      status: 'scheduled',
+      visitType: 'in_clinic'
+    },
   },
   interactions: {
     'p-1': [
@@ -247,6 +273,30 @@ const EventContext = createContext<{
 
 export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(eventReducer, initialState);
+
+  // Firestore Listener for Appointments (Point 2)
+  useEffect(() => {
+    const q = query(
+      collection(db, 'appointments'),
+      orderBy('time', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const appt = { id: change.doc.id, ...change.doc.data() } as Appointment;
+          dispatch({
+            type: 'APPOINTMENT_SCHEDULED',
+            payload: appt
+          });
+        }
+      });
+    }, (error) => {
+      console.error("Schedule sync error:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Simulate SSE/WebSocket incoming events (Health Connect updates every 5 mins)
   useEffect(() => {

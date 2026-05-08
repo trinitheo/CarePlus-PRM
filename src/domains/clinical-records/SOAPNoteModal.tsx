@@ -162,6 +162,52 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
     },
   };
 
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const noteData = {
+        title,
+        priority,
+        subjective,
+        objective,
+        assessment,
+        plan,
+        icd10Codes: selectedCodes.map(c => c.code),
+        workingDiagnoses,
+        status: 'signed',
+        authorName: userProfile?.displayName || initialNote?.authorName || 'Clinical Provider',
+        specialty: userProfile?.specialty || specialty || 'General Practice'
+      };
+
+      if (initialNote?.id) {
+        await updateSOAPNote(patientId, initialNote.id, noteData);
+      } else {
+        await saveSOAPNote(patientId, noteData);
+      }
+
+      handleClose();
+    } catch (e: any) {
+      console.error('SOAP Note Save Failure:', e);
+      let displayError = 'Record synchronization failed';
+      
+      try {
+        const errorInfo = JSON.parse(e.message);
+        if (errorInfo.error.includes('permission')) {
+          displayError = 'Security: Care team authorization required';
+        }
+      } catch {
+        if (e.message?.toLowerCase().includes('permission')) {
+          displayError = 'Security: Insufficient clinical permissions';
+        }
+      }
+      
+      setErrorMessage(displayError);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleClose = () => {
     setIsOpen(false);
     setErrorMessage(null);
@@ -577,51 +623,7 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
             >
               <Button 
                 disabled={isSubmitting || !assessment || !plan}
-                onClick={async () => {
-                  setIsSubmitting(true);
-                  setErrorMessage(null);
-                  try {
-                    const noteData = {
-                      title,
-                      priority,
-                      subjective,
-                      objective,
-                      assessment,
-                      plan,
-                      icd10Codes: selectedCodes.map(c => c.code),
-                      workingDiagnoses,
-                      status: 'signed',
-                      authorName: userProfile?.displayName || initialNote?.authorName || 'Clinical Provider',
-                      specialty: userProfile?.specialty || specialty || specialty || 'General Practice'
-                    };
-
-                    if (initialNote?.id) {
-                      await updateSOAPNote(patientId, initialNote.id, noteData);
-                    } else {
-                      await saveSOAPNote(patientId, noteData);
-                    }
-
-                    handleClose();
-                  } catch (e: any) {
-                    console.error('SOAP Note Save Failure:', e);
-                    let displayError = 'Record synchronization failed';
-                    
-                    try {
-                      const errorInfo = JSON.parse(e.message);
-                      if (errorInfo.error.includes('permission')) {
-                        displayError = 'Security: Care team authorization required';
-                      }
-                    } catch {
-                      if (e.message?.toLowerCase().includes('permission')) {
-                        displayError = 'Security: Insufficient clinical permissions';
-                      }
-                    }
-                    
-                    setErrorMessage(displayError);
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
+                onClick={handleSave}
                 className="bg-[#0078D4] hover:bg-[#006ABD] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#0078D4]/20 transition-all tracking-tight"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

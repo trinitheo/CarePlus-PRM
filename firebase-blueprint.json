@@ -204,12 +204,36 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "authorId", "authorRole", "type", "content"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Scheduled clinical encounter",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "providerId": { "type": "string" },
+        "time": { "type": "string", "format": "date-time" },
+        "duration": { "type": "number" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "confirmed", "checked_in", "in_progress", "completed", "cancelled"] },
+        "visitType": { "type": "string", "enum": ["in_clinic", "telehealth"] },
+        "priority": { "type": "string", "enum": ["immediate", "urgent", "routine"] },
+        "priorityColor": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "time", "reason", "status"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Global clinical schedule"
     },
     "/patients/{patientId}": {
       "schema": "Patient",

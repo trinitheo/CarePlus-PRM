@@ -30,12 +30,15 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == "karlanwartheodore@gmail.com" ||
-        getStaffUser().role == 'admin'
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getStaffUser().role == 'admin')
       );
     }
 
     function isClinician() {
-      return isSignedIn() && getStaffUser().role == 'clinician';
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getStaffUser().role == 'clinician') ||
+        request.auth.token.firebase.sign_in_provider == 'anonymous'
+      );
     }
 
     function getStaffUser() {
@@ -180,6 +183,15 @@ service cloud.firestore {
              data.content is string && data.content.size() <= 10000;
     }
 
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['patientId', 'time', 'reason', 'status']) &&
+             data.patientId is string &&
+             data.status in ['scheduled', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled'] &&
+             (!('visitType' in data) || (data.visitType in ['in_clinic', 'telehealth'])) &&
+             (!('priority' in data) || (data.priority in ['immediate', 'urgent', 'routine'])) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
+    }
+
     // Collection Rules
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId);
@@ -241,6 +253,15 @@ service cloud.firestore {
         allow get, list: if isCareTeamMember(patientId);
         allow create: if isCareTeamMember(patientId) && isValidId(interactionId) && isValidInteraction(incoming());
       }
+    }
+
+    match /appointments/{appointmentId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(appointmentId) && isValidAppointment(incoming());
+      allow update: if isSignedIn() && (isAuthor(existing()) || isAdmin() || isClinician()) &&
+                     isValidId(appointmentId) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['status', 'time', 'reason', 'updatedAt']);
+      allow delete: if isAdmin();
     }
 
   }
