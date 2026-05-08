@@ -36,6 +36,7 @@ export function DemoLogin() {
   const [error, setError] = useState<string | null>(null);
 
   const performProvisioning = async (userId: string, role: UserRole, specialtyStr?: string) => {
+    // 1. Create User Profile
     await saveUserProfile(userId, {
       email: auth.currentUser?.email || `demo-${role}@precisionhealth.care`,
       displayName: auth.currentUser?.displayName || `${role.charAt(0).toUpperCase() + role.slice(1)} Demo`,
@@ -43,6 +44,15 @@ export function DemoLogin() {
       specialty: specialtyStr || undefined,
       organizationId: 'org-demo-001',
       createdAt: new Date().toISOString(),
+    });
+
+    // 2. Add to Demo Patient Care Team (p-1) to ensure permission to write records
+    // This is required for Day 1 "Make data real" functionality
+    const { addToCareTeam } = await import('../services/clinicalFirestoreService');
+    await addToCareTeam('p-1', userId, {
+      accessLevel: role === 'admin' || role === 'clinician' ? 'clinical_full' : 'clinical_limited',
+      userRole: role,
+      userSpecialty: specialtyStr || undefined
     });
   };
 

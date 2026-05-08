@@ -122,25 +122,39 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
             </div>
           </ScrollArea>
         </CardContent>
-      </Card>
-      
-      {!compact && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 shrink-0 px-1">
-          {[
-            { label: 'Total Patients', value: Object.keys(patients).length, icon: Users, color: '#0078D4' },
-            { label: 'Active Sessions', value: 2, icon: Activity, color: '#107C10' },
-            { label: 'System Uptime', value: '99.9%', icon: FileText, color: '#845701' },
-          ].map((stat, i) => (
-            <div key={i} className="flex flex-col gap-1 p-1">
-              <div className="text-[10px] font-bold text-[#616161] uppercase tracking-widest flex items-center gap-2">
-                <stat.icon style={{ color: stat.color }} className="h-3 w-3" />
-                {stat.label}
-              </div>
-              <div className="text-xl font-black text-[#242424] tracking-tighter tabular-nums">{stat.value}</div>
+        {!compact ? (
+          <div className="bg-[#FAFAFA] border-t border-[#EDEBE9] p-4 py-3 shrink-0">
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: 'Total Patients', value: Object.keys(patients).length, icon: Users, color: '#0078D4' },
+                { label: 'Active Sessions', value: 2, icon: Activity, color: '#107C10' },
+                { label: 'System Uptime', value: '99.9%', icon: FileText, color: '#845701' },
+              ].map((stat, i) => (
+                <div key={i} className="flex flex-col">
+                  <div className="text-[9px] font-bold text-[#616161] uppercase tracking-wider flex items-center gap-1.5 mb-0.5">
+                    <stat.icon style={{ color: stat.color }} className="h-3 w-3" />
+                    <span className="truncate">{stat.label}</span>
+                  </div>
+                  <div className="text-sm font-black text-[#242424] tabular-nums leading-none">{stat.value}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="px-2 pt-2 pb-1 border-t border-[#EDEBE9] bg-[#FAFAFA]/30 shrink-0">
+             <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1.5">
+                  <Activity className="h-3 w-3 text-[#107C10]" />
+                  <span className="text-[10px] font-black text-[#616161] uppercase tracking-tighter">2 Sessions</span>
+                </div>
+                <div className="flex items-center gap-1.5 opacity-50">
+                  <Users className="h-3 w-3 text-[#0078D4]" />
+                  <span className="text-[10px] font-black text-[#616161] uppercase tracking-tighter">{Object.keys(patients).length} Total</span>
+                </div>
+             </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

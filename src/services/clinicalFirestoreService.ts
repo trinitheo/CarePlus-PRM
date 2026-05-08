@@ -62,14 +62,34 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+/**
+ * Utility to strip undefined values from data before writing to Firestore
+ */
+function cleanData(data: any) {
+  if (data === null || typeof data !== 'object') return data;
+  
+  const cleaned: any = Array.isArray(data) ? [] : {};
+  
+  Object.keys(data).forEach(key => {
+    const value = data[key];
+    if (value !== undefined) {
+      cleaned[key] = (typeof value === 'object' && value !== null && !(value instanceof Date)) 
+        ? cleanData(value) 
+        : value;
+    }
+  });
+  
+  return cleaned;
+}
+
 // User Management
 export async function saveUserProfile(userId: string, data: any) {
   const path = `users`;
   try {
-    await setDoc(doc(db, path, userId), {
+    await setDoc(doc(db, path, userId), cleanData({
       ...data,
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -89,13 +109,13 @@ export async function getUserProfile(userId: string) {
 export async function addToCareTeam(patientId: string, userId: string, data: { accessLevel: string, userRole: string, userSpecialty?: string }) {
   const path = `patients/${patientId}/care_teams`;
   try {
-    await setDoc(doc(db, path, userId), {
+    await setDoc(doc(db, path, userId), cleanData({
       ...data,
       patientId,
       userId,
       status: 'active',
       assignedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -104,10 +124,10 @@ export async function addToCareTeam(patientId: string, userId: string, data: { a
 export async function removeFromCareTeam(patientId: string, userId: string) {
   const path = `patients/${patientId}/care_teams`;
   try {
-    await updateDoc(doc(db, path, userId), {
+    await updateDoc(doc(db, path, userId), cleanData({
       status: 'inactive',
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -117,13 +137,14 @@ export async function removeFromCareTeam(patientId: string, userId: string) {
 export async function saveSOAPNote(patientId: string, data: any) {
   const path = `patients/${patientId}/clinical_records`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
+      authorName: data.authorName || auth.currentUser?.displayName || 'Clinical Provider',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }));
 
     // 2. Automatically sync codes/diagnoses to Ongoing Conditions
     const conditionsToSync = [
@@ -146,10 +167,10 @@ export async function updatePatientConditions(patientId: string, conditions: str
   const path = `patients`;
   try {
     const patientRef = doc(db, path, patientId);
-    await updateDoc(patientRef, {
+    await updateDoc(patientRef, cleanData({
       conditions: arrayUnion(...conditions),
       updatedAt: serverTimestamp()
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -159,10 +180,10 @@ export async function updateSOAPNote(patientId: string, noteId: string, data: an
   const path = `patients/${patientId}/clinical_records`;
   try {
     const docRef = doc(db, path, noteId);
-    await updateDoc(docRef, {
+    await updateDoc(docRef, cleanData({
       ...data,
       updatedAt: serverTimestamp(),
-    });
+    }));
 
     // Automatically sync codes/diagnoses to Ongoing Conditions
     const conditionsToSync = [
@@ -182,13 +203,13 @@ export async function updateSOAPNote(patientId: string, noteId: string, data: an
 export async function savePrescription(patientId: string, data: any) {
   const path = `patients/${patientId}/prescriptions`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'active'
-    });
+    }));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -222,7 +243,7 @@ export async function updatePrescriptionStatus(patientId: string, prescriptionId
       updateData.discontinuedBy = auth.currentUser?.displayName || 'Clinical Provider';
     }
 
-    await updateDoc(docRef, updateData);
+    await updateDoc(docRef, cleanData(updateData));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -232,11 +253,11 @@ export async function updatePrescriptionAdherence(patientId: string, prescriptio
   const path = `patients/${patientId}/prescriptions`;
   try {
     const docRef = doc(db, path, prescriptionId);
-    await updateDoc(docRef, {
+    await updateDoc(docRef, cleanData({
       adherenceStatus: status,
       adherenceScore: score,
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -246,13 +267,13 @@ export async function updatePrescriptionAdherence(patientId: string, prescriptio
 export async function saveInvestigation(patientId: string, data: any) {
   const path = `patients/${patientId}/investigations`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'ordered'
-    });
+    }));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -263,10 +284,10 @@ export async function updateInvestigation(patientId: string, investigationId: st
   const path = `patients/${patientId}/investigations`;
   try {
     const docRef = doc(db, path, investigationId);
-    await updateDoc(docRef, {
+    await updateDoc(docRef, cleanData({
       ...data,
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -276,13 +297,13 @@ export async function updateInvestigation(patientId: string, investigationId: st
 export async function saveProcedure(patientId: string, data: any) {
   const path = `patients/${patientId}/procedures`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'scheduled'
-    });
+    }));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -293,13 +314,13 @@ export async function saveProcedure(patientId: string, data: any) {
 export async function saveReferral(patientId: string, data: any) {
   const path = `patients/${patientId}/referrals`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       status: 'pending'
-    });
+    }));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -310,12 +331,12 @@ export async function saveReferral(patientId: string, data: any) {
 export async function savePatient(patientId: string, data: any) {
   const path = `patients`;
   try {
-    await setDoc(doc(db, path, patientId), {
+    await setDoc(doc(db, path, patientId), cleanData({
       ...data,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -325,12 +346,12 @@ export async function savePatient(patientId: string, data: any) {
 export async function saveClinicalIntake(patientId: string, intakeId: string, data: any) {
   const path = `patients/${patientId}/clinical_intakes`;
   try {
-    await setDoc(doc(db, path, intakeId), {
+    await setDoc(doc(db, path, intakeId), cleanData({
       ...data,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -340,11 +361,11 @@ export async function saveClinicalIntake(patientId: string, intakeId: string, da
 export async function updatePatientVitals(patientId: string, data: any) {
   const path = `patients/${patientId}/vitals`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
-    });
+    }));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -354,10 +375,10 @@ export async function updatePatientVitals(patientId: string, data: any) {
 export async function updatePatientStatus(patientId: string, status: string) {
   const path = `patients/${patientId}`;
   try {
-    await updateDoc(doc(db, 'patients', patientId), {
+    await updateDoc(doc(db, 'patients', patientId), cleanData({
       status,
       updatedAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -367,12 +388,12 @@ export async function updatePatientStatus(patientId: string, status: string) {
 export async function saveInteraction(patientId: string, data: any) {
   const path = `patients/${patientId}/interactions`;
   try {
-    const docRef = await addDoc(collection(db, path), {
+    const docRef = await addDoc(collection(db, path), cleanData({
       ...data,
       patientId,
       authorId: auth.currentUser?.uid || 'anonymous-entry',
       createdAt: serverTimestamp(),
-    });
+    }));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);

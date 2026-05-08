@@ -6,13 +6,14 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { 
   Pill, Search, CheckCircle2, History, 
   FlaskConical, Info, TrendingUp,
-  Brain, FileWarning, RefreshCcw, Sparkles, Trash2, User, X, Loader2, ExternalLink
+  FileWarning, RefreshCcw, Trash2, User, X, Loader2, ExternalLink, Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { checkDrugInteractions, generateClinicalMedicationReview } from '../../services/aiService';
+import { checkDrugInteractions } from '../../services/aiService';
 import { deletePrescription, updatePrescriptionStatus, updatePrescriptionAdherence } from '../../services/clinicalFirestoreService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import Markdown from 'react-markdown';
+import { AdherenceHeatmap } from './AdherenceHeatmap';
 
 interface Medication {
   id?: string;
@@ -63,8 +64,6 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
   const [searchTerm, setSearchTerm] = useState('');
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
   const [interactionResult, setInteractionResult] = useState<string | null>(null);
-  const [clinicalReview, setClinicalReview] = useState<string | null>(null);
-  const [isGeneratingReview, setIsGeneratingReview] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDiscontinueId, setConfirmDiscontinueId] = useState<string | null>(null);
   const [selectedFdaMed, setSelectedFdaMed] = useState<Medication | null>(null);
@@ -105,20 +104,6 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
       setInteractionResult(result);
     } finally {
       setIsCheckingInteractions(false);
-    }
-  };
-
-  const handleClinicalReview = async () => {
-    setIsGeneratingReview(true);
-    setClinicalReview(null);
-    try {
-      const result = await generateClinicalMedicationReview(
-        activeMeds.map(m => m.name),
-        conditions
-      );
-      setClinicalReview(result);
-    } finally {
-      setIsGeneratingReview(false);
     }
   };
 
@@ -229,54 +214,50 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
   }, [activeMeds]);
 
   return (
-    <div className="flex flex-col h-full space-y-4">
-      {/* Header Controls */}
+    <div className="flex flex-col h-full space-y-6">
+      {/* Search Header - Fluent 2 Fluid Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="relative group flex-1 md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A19F9D] group-focus-within:text-[#0078D4] transition-colors" />
+        <div className="flex items-center gap-4 flex-1 md:max-w-md">
+          <div className="relative group flex-1">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-[#A19F9D] group-focus-within:text-[#0078D4] transition-colors" />
+            </div>
             <input 
               type="text"
-              placeholder="Search medications..."
+              placeholder="Search active regimen..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-[#EDEBE9] rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#0078D4]/20 focus:border-[#0078D4] transition-all"
+              className="w-full pl-12 pr-4 py-3 bg-white border border-[#EDEBE9] rounded-2xl text-[13px] font-medium placeholder:text-[#A19F9D] focus:outline-none focus:ring-4 focus:ring-[#0078D4]/5 focus:border-[#0078D4] transition-all fluent-shadow-shallow"
             />
           </div>
           <Button 
             variant="outline" 
-            className="rounded-xl border-[#EDEBE9] h-10 px-4 flex gap-2 font-bold text-xs"
+            className="rounded-2xl border-[#EDEBE9] h-[46px] px-6 flex gap-2.5 font-black text-[11px] uppercase tracking-wider bg-white hover:bg-[#F3F9FD] hover:text-[#0078D4] hover:border-[#0078D4]/30 active:scale-[0.98] transition-all"
             onClick={handleInteractionCheck}
             disabled={isCheckingInteractions || activeMeds.length < 2}
           >
-            {isCheckingInteractions ? <RefreshCcw className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3 text-[#5C2D91]" />}
+            {isCheckingInteractions ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
             Check Interactions
           </Button>
         </div>
-
-        <Button 
-          className="rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-xs h-10 px-6 shadow-sm"
-          onClick={handleClinicalReview}
-          disabled={isGeneratingReview || activeMeds.length === 0}
-        >
-          {isGeneratingReview ? <RefreshCcw className="h-3 w-3 animate-spin mr-2" /> : <Sparkles className="h-3 w-3 mr-2" />}
-          AI Clinical Review
-        </Button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 min-h-0">
         {/* Main List Section */}
-        <div className="xl:col-span-8 flex flex-col gap-4 min-h-0 overflow-hidden">
-          <Card className="flex-1 border-[#EDEBE9] shadow-sm rounded-2xl overflow-hidden bg-white flex flex-col min-h-[400px]">
-            <CardHeader className="bg-[#FAFAFA] border-b border-[#EDEBE9] py-3 px-6">
+        <div className="xl:col-span-8 flex flex-col gap-6 min-h-0 overflow-hidden">
+          <Card className="flex-1 border-[#EDEBE9] shadow-sm rounded-[32px] overflow-hidden bg-white flex flex-col min-h-[400px]">
+            <CardHeader className="bg-[#FAFAFA]/50 border-b border-[#EDEBE9] py-4 px-8">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-[11px] font-black uppercase tracking-widest text-[#616161] flex items-center gap-2">
-                  <Pill className="h-4 w-4 text-[#107C10]" />
-                  Active Regimen
+                <CardTitle className="text-[12px] font-black uppercase tracking-[0.1em] text-[#616161] flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-white border border-[#EDEBE9] shadow-sm">
+                    <Pill className="h-4 w-4 text-[#107C10]" />
+                  </div>
+                  Active Clinical Regimen
                 </CardTitle>
-                <Badge variant="outline" className="bg-white border-[#EDEBE9] text-[#107C10] font-black text-[9px] px-3">
-                  {activeMeds.length} COMPOUNDS
-                </Badge>
+                <div className="flex items-center gap-2 px-3 py-1 bg-white border border-[#EDEBE9] rounded-full shadow-sm">
+                   <div className="w-1.5 h-1.5 rounded-full bg-[#107C10] animate-pulse" />
+                   <span className="text-[10px] font-black text-[#616161] uppercase tracking-wider">{activeMeds.length} Active</span>
+                </div>
               </div>
             </CardHeader>
             <ScrollArea className="flex-1">
@@ -495,38 +476,8 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
             )}
           </AnimatePresence>
 
-          {/* Clinical Focus Review */}
-          <Card className="flex-1 border-[#DEECF9] bg-[#F3F9FD]/50 rounded-2xl shadow-sm border overflow-hidden flex flex-col pt-[13px] pb-[6px] ml-0 min-h-[400px]">
-            <CardHeader className="py-4 px-6 border-b border-[#DEECF9]/30 bg-white shrink-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-[11px] font-black uppercase tracking-widest text-[#0078D4] flex items-center gap-2">
-                  <Brain className="h-4 w-4" />
-                  Clinical Strategy
-                </CardTitle>
-                <Sparkles className="h-3.5 w-3.5 text-[#0078D4]" />
-              </div>
-            </CardHeader>
-            <ScrollArea className="flex-1 p-6">
-              {clinicalReview ? (
-                <div className="space-y-4">
-                  <div className="markdown-body text-xs font-bold leading-relaxed text-[#242424] opacity-80">
-                     <Markdown>{clinicalReview}</Markdown>
-                  </div>
-                  <div className="pt-4 border-t border-[#DEECF9] flex items-center gap-2">
-                    <CheckCircle2 className="h-3 w-3 text-[#107C10]" />
-                    <span className="text-[9px] font-black uppercase text-[#107C10] tracking-widest">Optimized Regimen</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center py-10 opacity-30">
-                  <Brain className="h-10 w-10 mb-3 text-[#0078D4]" />
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#616161]">Clinical Review Required</p>
-                  <p className="text-[9px] font-bold text-[#616161] mt-1 max-w-[180px]">Run AI Clinical Review to evaluate therapeutic alignment with patient conditions.</p>
-                </div>
-              )}
-            </ScrollArea>
-           
-          </Card>
+          {/* Compliance Insights - Heatmap */}
+          <AdherenceHeatmap patientId={patientId} medications={activeMeds} />
 
           {/* Adherence Overview */}
           <Card className="shrink-0 border-[#EDEBE9] rounded-2xl bg-white shadow-sm overflow-hidden">

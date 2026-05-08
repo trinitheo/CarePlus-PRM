@@ -5,7 +5,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope } from 'lucide-react';
+import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope, AlertCircle } from 'lucide-react';
 import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
@@ -41,6 +41,7 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
   const [workingDiagnoses, setWorkingDiagnoses] = React.useState<string[]>(initialNote?.workingDiagnoses || []);
   const [workingDiagnosisInput, setWorkingDiagnosisInput] = React.useState('');
   const [activeSection, setActiveSection] = React.useState<string>('metadata');
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -163,6 +164,7 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
 
   const handleClose = () => {
     setIsOpen(false);
+    setErrorMessage(null);
     // Short delay to allow exit animation before resetting form
     setTimeout(() => {
       if (!initialNote) {
@@ -545,6 +547,20 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
             </motion.div>
           </div>
           <div className="flex items-center gap-4">
+            <AnimatePresence>
+              {errorMessage && (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="bg-[#FFF4F4] border border-[#FDE7E9] px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <AlertCircle className="h-4 w-4 text-[#A4262C]" />
+                  <span className="text-[11px] font-bold text-[#A4262C] uppercase tracking-tight">{errorMessage}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <DialogClose asChild>
               <button 
                 type="button"
@@ -563,6 +579,7 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
                 disabled={isSubmitting || !assessment || !plan}
                 onClick={async () => {
                   setIsSubmitting(true);
+                  setErrorMessage(null);
                   try {
                     const noteData = {
                       title,
@@ -575,7 +592,7 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
                       workingDiagnoses,
                       status: 'signed',
                       authorName: userProfile?.displayName || initialNote?.authorName || 'Clinical Provider',
-                      specialty: userProfile?.specialty || specialty || 'General Practice'
+                      specialty: userProfile?.specialty || specialty || specialty || 'General Practice'
                     };
 
                     if (initialNote?.id) {
@@ -585,8 +602,22 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
                     }
 
                     handleClose();
-                  } catch (e) {
-                    // Error handled in service
+                  } catch (e: any) {
+                    console.error('SOAP Note Save Failure:', e);
+                    let displayError = 'Record synchronization failed';
+                    
+                    try {
+                      const errorInfo = JSON.parse(e.message);
+                      if (errorInfo.error.includes('permission')) {
+                        displayError = 'Security: Care team authorization required';
+                      }
+                    } catch {
+                      if (e.message?.toLowerCase().includes('permission')) {
+                        displayError = 'Security: Insufficient clinical permissions';
+                      }
+                    }
+                    
+                    setErrorMessage(displayError);
                   } finally {
                     setIsSubmitting(false);
                   }

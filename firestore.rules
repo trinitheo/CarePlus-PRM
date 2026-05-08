@@ -28,7 +28,14 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == "karlanwartheodore@gmail.com";
+      return isSignedIn() && (
+        request.auth.token.email == "karlanwartheodore@gmail.com" ||
+        getStaffUser().role == 'admin'
+      );
+    }
+
+    function isClinician() {
+      return isSignedIn() && getStaffUser().role == 'clinician';
     }
 
     function getStaffUser() {
@@ -38,7 +45,8 @@ service cloud.firestore {
     function isCareTeamMember(patientId) {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)) ||
-        isAdmin()
+        isAdmin() ||
+        isClinician()
       );
     }
 
@@ -179,6 +187,7 @@ service cloud.firestore {
       allow update: if (isSignedIn() && request.auth.uid == userId) && 
                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'specialty']) &&
                      isValidUser(incoming());
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     match /patients/{patientId} {
@@ -194,38 +203,38 @@ service cloud.firestore {
       }
 
       match /clinical_records/{recordId} {
-        allow get, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
-        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(recordId) && isValidClinicalRecord(incoming());
+        allow get, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(recordId) && isValidClinicalRecord(incoming());
         allow update: if isAuthor(existing()) && isValidId(recordId) && 
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'title', 'subjective', 'objective', 'assessment', 'plan', 'icd10Codes', 'workingDiagnoses', 'updatedAt']);
         allow delete: if isAdmin();
       }
 
       match /prescriptions/{prescriptionId} {
-        allow read, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
-        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(prescriptionId) && isValidPrescription(incoming());
+        allow read, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(prescriptionId) && isValidPrescription(incoming());
         allow update: if isAuthor(existing()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adherenceStatus', 'adherenceScore', 'discontinuationReason', 'discontinuedAt', 'discontinuedBy', 'updatedAt']);
         allow delete: if isAdmin();
       }
 
       match /investigations/{investigationId} {
-        allow get, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
-        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(investigationId) && isValidInvestigation(incoming());
+        allow get, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(investigationId) && isValidInvestigation(incoming());
         allow update: if isAuthor(existing()) && isValidId(investigationId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions', 'resultSummary', 'resultDate', 'updatedAt']);
       }
 
       match /procedures/{procedureId} {
-        allow get, list: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
-        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) == 'clinical_full' && isValidId(procedureId) && isValidProcedure(incoming());
+        allow get, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(procedureId) && isValidProcedure(incoming());
         allow update: if isAuthor(existing()) && isValidId(procedureId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate', 'updatedAt']);
       }
 
       match /vitals/{vitalId} {
         allow get, list: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId) && getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited'];
+        allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
       }
 
       match /interactions/{interactionId} {

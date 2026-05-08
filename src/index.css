@@ -6,9 +6,18 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
+    --font-heading: 'Geist Variable', sans-serif;
     --font-sans: 'Geist Variable', sans-serif;
-    --font-segoe: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+    --font-segoe: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+    
+    /* Fluent 2 Color Tokens */
+    --fluent-neutral-10: #fafafa;
+    --fluent-neutral-20: #f5f5f5;
+    --fluent-neutral-30: #edebe9;
+    --fluent-neutral-40: #e1dfdd;
+    --fluent-neutral-80: #605e5c;
+    --fluent-neutral-160: #323130;
+    
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -50,26 +59,26 @@
 }
 
 :root {
-    --background: oklch(0.99 0 0);
+    --background: #fdfdfd;
     --foreground: #242424;
-    --card: oklch(1 0 0);
+    --card: #ffffff;
     --card-foreground: #242424;
-    --popover: oklch(1 0 0);
+    --popover: #ffffff;
     --popover-foreground: #242424;
-    --primary: #0078d4; /* Microsoft Brand Blue */
-    --primary-foreground: oklch(0.98 0 0);
-    --secondary: #f0f0f0;
+    --primary: #0078d4;
+    --primary-foreground: #ffffff;
+    --secondary: #f3f2f1;
     --secondary-foreground: #242424;
-    --muted: #f5f5f5;
+    --muted: #f3f2f1;
     --muted-foreground: #616161;
-    --accent: #f0f0f0;
+    --accent: #f3f2f1;
     --accent-foreground: #242424;
     --destructive: #d13438;
-    --destructive-foreground: oklch(0.98 0 0);
-    --border: #e0e0e0;
-    --input: #e0e0e0;
+    --destructive-foreground: #ffffff;
+    --border: #edebe9;
+    --input: #edebe9;
     --ring: #0078d4;
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* Fluent 2 soft corners */
 }
 
 .dark {
@@ -100,12 +109,33 @@
     }
   body {
     @apply bg-background text-foreground;
-    font-size: 13px; /* Clinical density */
+    font-size: 13px;
     line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
     }
   html {
     @apply font-sans;
+    background-color: #fdfdfd;
     }
+
+  /* Fluent 2 Elevations */
+  .fluent-shadow-shallow {
+    shadow: 0px 1.2px 3.6px rgba(0, 0, 0, 0.1), 0px 0px 1.2px rgba(0, 0, 0, 0.12);
+  }
+  
+  .fluent-shadow-card {
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04), 0px 0px 1px rgba(0, 0, 0, 0.06);
+  }
+
+  .fluent-shadow-flyout {
+    box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.14), 0px 0px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Material Design / Android Adaptive Ripple (Partial emulation) */
+  .adaptive-nav-rail {
+    @apply flex flex-col items-center py-6 bg-white border-r border-[#EDEBE9] h-screen w-20 shrink-0 transition-all duration-300;
+  }
 
   ::-webkit-scrollbar {
     width: 6px;

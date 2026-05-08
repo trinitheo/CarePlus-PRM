@@ -72,7 +72,7 @@ export function usePatientClinicalData(patientId: string) {
         'care_teams',
       ];
 
-      unsubscribers = collections.map((colName) => {
+      const collectionUnsubs = collections.map((colName) => {
         const path = `patients/${patientId}/${colName}`;
         const q = query(
           collection(db, path),
@@ -93,11 +93,22 @@ export function usePatientClinicalData(patientId: string) {
             }));
           },
           (error) => {
-            handleFirestoreError(error, OperationType.GET, path);
-            setData(prev => ({ ...prev, loading: false }));
+            // Silently handle permission errors for restricted sub-collections
+            // The UI will handle the !isAuthorized state based on care_teams data
+            setData((prev) => ({
+              ...prev,
+              [colName]: [],
+              loading: false,
+            }));
+            
+            // Still log for debugging if it's not a permission error
+            if (!error.message.includes('permissions')) {
+              handleFirestoreError(error, OperationType.GET, path);
+            }
           }
         );
       });
+      unsubscribers.push(...collectionUnsubs);
     };
 
     // Initialize listeners immediately

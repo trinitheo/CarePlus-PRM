@@ -61,9 +61,11 @@ const Highlight: React.FC<{ text: string; highlight: string }> = ({ text, highli
         <span>
             {parts.map((part, i) =>
                 regex.test(part) ? (
-                    <strong key={i} className="font-bold bg-[#DEECF9] rounded px-0.5 text-[#0078D4]">{part}</strong>
+                    <span key={i} className="bg-[#DEECF9] text-[#0078D4] px-1 rounded-md font-black">
+                        {part}
+                    </span>
                 ) : (
-                    part
+                    <span key={i}>{part}</span>
                 )
             )}
         </span>
@@ -106,15 +108,20 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
         const timer = setTimeout(async () => {
             if (medicationName.length >= 3) {
                 setIsSearching(true);
-                const results = await searchMedications(medicationName);
-                setSuggestions(results);
-                setShowSuggestions(results.length > 0);
-                setIsSearching(false);
+                try {
+                   const results = await searchMedications(medicationName);
+                   setSuggestions(results);
+                   setShowSuggestions(results.length > 0);
+                } catch (error) {
+                   console.error("NormRX Search Error:", error);
+                } finally {
+                   setIsSearching(false);
+                }
             } else {
                 setSuggestions([]);
                 setShowSuggestions(false);
             }
-        }, 300);
+        }, 150);
         return () => clearTimeout(timer);
     }, [medicationName]);
 
@@ -122,6 +129,25 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
         setMedicationName(med);
         setShowSuggestions(false);
         setIsFetchingStrengths(true);
+        
+        // Auto-population logic for dosage and route
+        // Strength pattern: 81 MG, 10/325 MG, 500 MG
+        const strengthMatch = med.match(/(\d+(\/\d+)?\s*(mg|mcg|ml|g|units|iu|%))/i);
+        if (strengthMatch) {
+            setDose(strengthMatch[0]);
+        }
+
+        // Route detection
+        const medLower = med.toLowerCase();
+        if (medLower.includes('oral') || medLower.includes('capsule') || medLower.includes('tablet')) {
+            setRoute('oral');
+        } else if (medLower.includes('injection') || medLower.includes('injectable') || medLower.includes('iv')) {
+            setRoute('iv');
+        } else if (medLower.includes('topical') || medLower.includes('cream') || medLower.includes('ointment')) {
+            setRoute('topical');
+        } else if (medLower.includes('subcutaneous') || medLower.includes('pen injector')) {
+            setRoute('sc');
+        }
         
         try {
           const [strengths, labReq] = await Promise.all([
@@ -189,15 +215,15 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl p-0 overflow-hidden bg-white border-none rounded-3xl shadow-2xl">
+            <DialogContent className="max-w-[400px] w-full p-0 overflow-hidden bg-white border-none rounded-3xl shadow-2xl">
                 <DialogHeader className="px-8 py-6 bg-[#FAFAFA] border-b border-[#EDEBE9]">
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-[#DEECF9] flex items-center justify-center">
                             <Pill className="h-5 w-5 text-[#0078D4]" />
                         </div>
                         <div>
-                            <DialogTitle className="text-xl font-black text-[#242424]">Prescription Pad</DialogTitle>
-                            <p className="text-[11px] font-bold text-[#616161] uppercase tracking-widest mt-0.5">Patient: {patientName}</p>
+                            <DialogTitle className="text-xl font-black text-[#242424]">New Prescription for {patientName}</DialogTitle>
+                            <p className="text-[10px] font-bold text-[#A19F9D] uppercase tracking-widest mt-0.5">NormRX Clinical Drug Repository</p>
                         </div>
                     </div>
                 </DialogHeader>
@@ -206,37 +232,69 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
                     <div className="p-8 space-y-8">
                         {/* Medication Search */}
                         <div className="space-y-2 relative">
-                            <Label className="text-[13px] font-bold text-[#242424]">Medication Name</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[13px] font-bold text-[#242424]">
+                                    Medication Name <span className="text-red-500">*</span>
+                                </Label>
+                                <div className="flex items-center gap-1.5 opacity-60">
+                                    <Badge variant="outline" className="bg-[#F3F2F1] border-none text-[#616161] text-[7px] font-black uppercase tracking-widest px-1.5 py-0">
+                                        Powered by NormRX
+                                    </Badge>
+                                </div>
+                            </div>
                             <div className="relative">
                                 <Input 
-                                    placeholder="Search RxNorm repository..." 
-                                    className="h-12 bg-white border-[#8A8886] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 rounded-xl text-[15px] font-medium transition-all"
+                                    placeholder="Start typing medication name..." 
+                                    className="h-11 bg-white border-[#8A8886] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 rounded-xl text-[14px] font-medium transition-all"
                                     value={medicationName}
                                     onChange={(e) => setMedicationName(e.target.value)}
+                                    onFocus={() => medicationName.length >= 3 && suggestions.length > 0 && setShowSuggestions(true)}
                                     autoComplete="off"
                                 />
-                                {isSearching && <Loader2 className="absolute right-4 top-4 h-4 w-4 animate-spin text-[#0078D4]" />}
+                                {isSearching && <Loader2 className="absolute right-4 top-3.5 h-4 w-4 animate-spin text-[#0078D4]" />}
+                                {medicationName && !isSearching && (
+                                    <button 
+                                        onClick={() => { setMedicationName(''); setSuggestions([]); setShowSuggestions(false); }}
+                                        className="absolute right-4 top-3.5"
+                                    >
+                                        <ArrowRight className="h-4 w-4 text-[#A19F9D] rotate-45" />
+                                    </button>
+                                )}
                             </div>
 
                             <AnimatePresence>
-                                {showSuggestions && (
+                                {(showSuggestions || (isSearching && medicationName.length >= 3)) && (
                                     <motion.div 
                                         initial={{ opacity: 0, y: -5 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: -5 }}
-                                        className="absolute z-50 w-full bg-white border border-[#EDEBE9] rounded-xl shadow-xl mt-1 overflow-hidden"
+                                        className="absolute z-[100] w-full bg-white border border-[#EDEBE9] rounded-xl shadow-2xl mt-1 overflow-hidden fluent-shadow-deep"
                                     >
                                         <div className="max-h-60 overflow-y-auto">
-                                            {suggestions.map((s, idx) => (
-                                                <div 
-                                                    key={idx}
-                                                    onClick={() => handleSelectMedication(s.display)}
-                                                    className="px-4 py-3 text-[14px] text-[#242424] hover:bg-[#F3F2F1] cursor-pointer flex items-center justify-between group border-b border-[#F3F2F1] last:border-0"
-                                                >
-                                                    <Highlight text={s.display} highlight={medicationName} />
-                                                    <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-[#0078D4]" />
+                                            {isSearching ? (
+                                                <div className="px-4 py-8 text-center text-[#616161]">
+                                                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-[#0078D4] opacity-50" />
+                                                    <p className="text-[11px] font-black uppercase tracking-widest">Searching NormRX...</p>
                                                 </div>
-                                            ))}
+                                            ) : suggestions.length > 0 ? (
+                                                suggestions.map((s, idx) => (
+                                                    <div 
+                                                        key={idx}
+                                                        onClick={() => handleSelectMedication(s.display)}
+                                                        className="px-4 py-3 text-[12px] leading-relaxed text-[#323130] hover:bg-[#F3F9FD] cursor-pointer flex items-start justify-between group border-b border-[#F3F2F1] last:border-0 transition-colors"
+                                                    >
+                                                        <div className="flex-1 pr-6 font-medium">
+                                                            <Highlight text={s.display} highlight={medicationName} />
+                                                        </div>
+                                                        <ArrowRight className="h-3 w-3 mt-1 opacity-0 group-hover:opacity-40 transition-all shrink-0" />
+                                                    </div>
+                                                ))
+                                            ) : medicationName.length >= 3 ? (
+                                                <div className="px-4 py-8 text-center text-[#A19F9D]">
+                                                    <AlertCircle className="h-6 w-6 mx-auto mb-2 opacity-20" />
+                                                    <p className="text-[11px] font-black uppercase tracking-widest">No clinical matches found</p>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </motion.div>
                                 )}
@@ -403,17 +461,17 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
                 </ScrollArea>
 
                 <DialogFooter className="px-8 py-6 bg-[#FAFAFA] border-t border-[#EDEBE9]">
-                    <div className="flex items-center justify-between w-full">
-                        <Button variant="ghost" onClick={onClose} className="rounded-xl text-[11px] font-black uppercase tracking-widest text-[#A19F9D]">
-                            Discard
+                    <div className="flex items-center justify-end gap-3 w-full">
+                        <Button variant="outline" onClick={onClose} className="rounded-xl h-12 px-6 text-[13px] font-bold text-[#242424] border-[#EDEBE9] hover:bg-[#F3F2F1]">
+                            Cancel
                         </Button>
                         <Button 
-                            className="rounded-2xl h-12 px-8 bg-[#0078D4] hover:bg-[#005A9E] text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-[#0078D4]/20 gap-3"
+                            className="rounded-xl h-12 px-8 bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[13px] shadow-lg shadow-[#0078D4]/10 gap-3"
                             disabled={isSaving || !medicationName || !dose || !frequency}
                             onClick={handleSave}
                         >
                             {isSaving && <Loader2 className="h-4 w-4 animate-spin text-white" />}
-                            Commit Prescription
+                            Save Prescription
                         </Button>
                     </div>
                 </DialogFooter>

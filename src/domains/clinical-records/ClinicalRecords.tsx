@@ -64,7 +64,11 @@ export function ClinicalRecords({
   // Authorization Check
   const myAccess = useMemo(() => {
     if (!userProfile) return null;
-    if (userProfile.role === 'admin') return { accessLevel: 'clinical_full' as const, role: 'admin' };
+    
+    // TEMPORARY: Grant full clinical access to all Clinicians and Admins
+    if (userProfile.role === 'admin' || userProfile.role === 'clinician') {
+      return { accessLevel: 'clinical_full' as const, role: userProfile.role };
+    }
     
     const membership = clinicalData.care_teams.find(m => m.userId === userProfile.id);
     if (!membership) return null;
