@@ -9,30 +9,73 @@ import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
 import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
-import { Activity, ChevronRight, User, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
+import { Activity, ChevronRight, User as UserIcon, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
 import { DemoLogin } from './components/DemoLogin';
 import { useCurrentUser } from './hooks/useCurrentUser';
+import { savePatient } from './services/clinicalFirestoreService';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
   const { userProfile, loading } = useCurrentUser();
   const [currentModule, setCurrentModule] = useState('patients');
 
-  useEffect(() => {
-    async function testFirestoreConnection() {
-      try {
-        await getDocFromServer(doc(db, '_diagnostics', 'connection'));
-      } catch (error: any) {
-        if (error?.message?.includes('offline')) {
-          console.error("Clinical Core is offline. Check Firebase configuration.");
+    useEffect(() => {
+      async function seedPatients() {
+        if (!userProfile?.id) return;
+        
+        try {
+          const p1Ref = doc(db, 'patients', 'p-1');
+          const p2Ref = doc(db, 'patients', 'p-2');
+          
+          const p1Snap = await getDocFromServer(p1Ref);
+          if (!p1Snap.exists()) {
+            await savePatient('p-1', { 
+              firstName: 'Sarah', 
+              lastName: 'Mitchell', 
+              dob: '1988-06-12', 
+              mrn: 'MRN-880612', 
+              gender: 'female', 
+              status: 'active'
+            });
+            console.log("Seeded p-1");
+          }
+          
+          const p2Snap = await getDocFromServer(p2Ref);
+          if (!p2Snap.exists()) {
+            await savePatient('p-2', { 
+              firstName: 'James', 
+              lastName: 'Wilson', 
+              dob: '1975-03-24', 
+              mrn: 'MRN-750324', 
+              gender: 'male',
+              status: 'active'
+            });
+            console.log("Seeded p-2");
+          }
+        } catch (e) {
+          console.error("Seed failed", e);
         }
       }
-    }
-    testFirestoreConnection();
-  }, []);
+
+      seedPatients();
+    }, [userProfile?.id]);
+
+    useEffect(() => {
+      async function testFirestoreConnection() {
+        try {
+          // Diagnostic ping
+          await getDocFromServer(doc(db, '_diagnostics', 'connection'));
+        } catch (error: any) {
+          if (error?.message?.includes('offline')) {
+            console.error("Clinical Core is offline. Check Firebase configuration.");
+          }
+        }
+      }
+      testFirestoreConnection();
+    }, []);
 
   const [viewState, setViewState] = useState<{
     subView: 'explorer' | 'detail' | 'onboarding';

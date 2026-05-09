@@ -22,8 +22,13 @@ export function AdherenceHeatmap({ medications }: AdherenceHeatmapProps) {
       const date = new Date(now);
       date.setDate(now.getDate() - i);
       const baseScore = medications.reduce((acc, med) => acc + (med.adherenceScore ?? 100), 0) / (medications.length || 1);
-      const variance = Math.random() * 25 - 20;
-      const finalScore = Math.max(0, Math.min(100, baseScore + variance));
+      
+      // Compute a deterministic variance based on the date and medication average
+      const dateSeed = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+      const combinedSeed = dateSeed + Math.floor(baseScore * 10);
+      const pseudoRandom = (Math.sin(combinedSeed) * 10000) % 25;
+      const finalScore = Math.max(0, Math.min(100, baseScore + pseudoRandom - 10));
+
       data.push({
         date: date.toISOString().split('T')[0],
         score: finalScore,

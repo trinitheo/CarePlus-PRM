@@ -211,7 +211,8 @@ service cloud.firestore {
       // Sub-collections
       match /care_teams/{memberId} {
         allow get, list: if isSignedIn();
-        allow create, update, delete: if isAdmin() || (isSignedIn() && getStaffUser().role == 'admin');
+        allow create: if isAdmin() || (isSignedIn() && memberId == request.auth.uid && isClinician());
+        allow update, delete: if isAdmin() || (isSignedIn() && getStaffUser().role == 'admin');
       }
 
       match /clinical_records/{recordId} {

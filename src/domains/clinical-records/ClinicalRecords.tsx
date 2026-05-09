@@ -2,12 +2,7 @@ import { useQueryModel } from '../../store/eventStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { 
-  Activity, Heart, Thermometer, User, 
-  FileText, Pill, Microscope, 
-  Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle,
-  Network, LayoutDashboard, ShieldAlert, Lock, UserCheck
-} from 'lucide-react';
+import { LayoutDashboard, ShieldAlert, Lock, UserCheck, Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle, Network, HardDrive, Workflow, Pill, Microscope, Activity, FileText, User } from 'lucide-react';
 import { HealthConnectManager } from './HealthConnectManager';
 import { KnowledgeGraph } from './KnowledgeGraph';
 import { Button } from '../../components/ui/button';
@@ -17,6 +12,8 @@ import { InvestigationOrderModal } from '../investigations/InvestigationOrderMod
 import { NewProcedureModal } from './NewProcedureModal';
 import { NewReferralModal } from './NewReferralModal';
 import { InvestigationWorkflow } from '../investigations/InvestigationWorkflow';
+import { ProceduresList } from './ProceduresList';
+import { ReferralsList } from './ReferralsList';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { VitalsCard } from './VitalsCard';
 import { InteractionEntryModal } from './InteractionEntryModal';
@@ -162,14 +159,6 @@ export function ClinicalRecords({
       ePrescriptionStatus: px.ePrescriptionStatus
     }));
 
-    // Add some historical ones for demo/refactoring context if empty
-    if (list.length === 0) {
-      return [
-        { id: 'demo-1', name: 'Lisinopril 10 MG Oral Tablet [Zestril]', dosage: '10 MG', frequency: 'Once daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Hypertension', authorName: 'Dr. Sarah Chen', adherenceStatus: 'optimal' as const, adherenceScore: 100, ePrescriptionStatus: 'dispensed' as const },
-        { id: 'demo-2', name: 'Metformin 500 MG', dosage: '500 MG', frequency: 'Twice daily', status: 'active' as const, prescribedDate: '2023-11-12', indication: 'Type 2 Diabetes', authorName: 'Dr. Sarah Chen', adherenceStatus: 'partial' as const, adherenceScore: 60, ePrescriptionStatus: 'processing' as const },
-        { id: 'demo-3', name: 'Amoxicillin 250 MG', dosage: '250 MG', frequency: 'Complete course', status: 'discontinued' as const, prescribedDate: '2023-05-20', indication: 'Infection', authorName: 'Hospital System', adherenceStatus: 'optimal' as const, adherenceScore: 100 }
-      ];
-    }
     return list;
   }, [clinicalData.prescriptions]);
 
@@ -181,7 +170,7 @@ export function ClinicalRecords({
           Current Medications
         </CardTitle>
         <div className="text-[10px] font-bold text-[#A19F9D] uppercase tracking-widest bg-[#F3F2F1] px-2 py-0.5 rounded">
-          {clinicalData.prescriptions.length || 3} Active
+          {clinicalData.prescriptions.length} Active
         </div>
       </CardHeader>
       <ScrollArea className="flex-1">
@@ -207,35 +196,21 @@ export function ClinicalRecords({
               ))}
             </div>
           ) : (
-            <div className="divide-y divide-[#F3F2F1]">
-              {[
-                { name: 'Lisinopril 10 MG Oral Tablet [Zestril]', dose: '10 MG', freq: 'Once daily' },
-                { name: 'Linagliptin 2.5 MG / metformin hydrochloride 1000 MG Oral Tablet', dose: '2.5/1000 MG', freq: 'Twice daily with meals' },
-                { name: 'Methotrexate 15mg Oral Tablet', dose: '15mg', freq: 'Once weekly' }
-              ].map((med, i) => (
-                <div key={i} className="px-2 py-2 hover:bg-[#F3F9FD] transition-all group cursor-pointer">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-0.5">
-                      <h4 className="text-[11px] font-bold text-[#242424] group-hover:text-[#0078D4] transition-colors leading-tight">{med.name}</h4>
-                      <p className="text-[10px] text-[#616161] font-medium">{med.dose}, {med.freq}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <Badge className="bg-[#DFF6DD] text-[#107C10] border-none text-[8px] font-black uppercase px-1.5 py-0.5 rounded-sm">Active</Badge>
-                        <span className="text-[9px] text-[#A19F9D] font-medium tracking-tight">Refills: 2 remaining</span>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-[#BDBDBD] hover:text-[#0078D4]">
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <div className="flex flex-col items-center justify-center p-8 text-center opacity-40">
+              <Pill className="h-8 w-8 text-[#616161] mb-2" />
+              <p className="text-[10px] font-black text-[#242424] uppercase tracking-widest">No medications recorded</p>
+              <p className="text-[10px] text-[#616161] font-medium mt-1">Start a new prescription to track patient baseline.</p>
             </div>
           )}
         </div>
       </ScrollArea>
       <div className="p-4 bg-[#FAFAFA] border-t border-[#EDEBE9] text-center shrink-0">
-        <Button variant="link" className="text-[11px] font-bold text-[#107C10] h-auto p-0 uppercase tracking-widest">
-          View Full Medication List
+        <Button 
+          variant="link" 
+          onClick={() => setIsPrescriptionPadOpen(true)}
+          className="text-[11px] font-bold text-[#107C10] h-auto p-0 uppercase tracking-widest"
+        >
+          {clinicalData.prescriptions.length > 0 ? "View Full Medication List" : "Issue First Prescription"}
         </Button>
       </div>
     </Card>
@@ -328,6 +303,7 @@ export function ClinicalRecords({
         onClose={() => setIsPrescriptionPadOpen(false)}
         patientId={patientId}
         patientName={patient?.name || 'Patient'}
+        canWrite={canWriteClinical}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
@@ -458,6 +434,20 @@ export function ClinicalRecords({
                         <Microscope className="h-4 w-4" />
                         Investigations
                       </TabsTrigger>
+                      <TabsTrigger 
+                        value="procedures" 
+                        className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                      >
+                        <Stethoscope className="h-4 w-4" />
+                        Procedures
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="referrals" 
+                        className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Referrals
+                      </TabsTrigger>
                     </>
                   )}
                   
@@ -473,7 +463,7 @@ export function ClinicalRecords({
 
               {canWriteClinical && (
                 <div className="flex items-center bg-white border border-[#EDEBE9] rounded-2xl p-1 shadow-sm gap-1 w-fit">
-                  <SOAPNoteModal patientId={patientId}>
+                  <SOAPNoteModal patientId={patientId} canWrite={canWriteClinical}>
                     <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="SOAP Note">
                       <FileText style={{ color: '#0078D4' }} className="h-5 w-5" />
                     </Button>
@@ -489,17 +479,17 @@ export function ClinicalRecords({
                       <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
                   </Button>
                   <div className="w-[1px] h-5 bg-[#EDEBE9]" />
-                  <InvestigationOrderModal patientId={patientId}>
+                  <InvestigationOrderModal patientId={patientId} canWrite={canWriteClinical}>
                     <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Investigation">
                       <Microscope style={{ color: '#845701' }} className="h-5 w-5" />
                     </Button>
                   </InvestigationOrderModal>
-                  <NewProcedureModal patientId={patientId}>
+                  <NewProcedureModal patientId={patientId} canWrite={canWriteClinical}>
                     <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Procedure">
                       <Stethoscope style={{ color: '#5C2D91' }} className="h-5 w-5" />
                     </Button>
                   </NewProcedureModal>
-                  <NewReferralModal patientId={patientId}>
+                  <NewReferralModal patientId={patientId} canWrite={canWriteClinical}>
                     <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Referral">
                       <UserPlus style={{ color: '#A4262C' }} className="h-5 w-5" />
                     </Button>
@@ -557,6 +547,20 @@ export function ClinicalRecords({
                <InvestigationWorkflow 
                  patientId={patientId} 
                  investigations={clinicalData.investigations} 
+               />
+            </TabsContent>
+
+            <TabsContent value="procedures" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
+               <ProceduresList 
+                 patientId={patientId} 
+                 procedures={clinicalData.procedures} 
+               />
+            </TabsContent>
+
+            <TabsContent value="referrals" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
+               <ReferralsList 
+                 patientId={patientId} 
+                 referrals={clinicalData.referrals} 
                />
             </TabsContent>
 

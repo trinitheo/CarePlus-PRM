@@ -41,7 +41,8 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
   const dispatch = useCommandDispatcher();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<Partial<Patient>>({
-    name: '',
+    firstName: '',
+    lastName: '',
     dob: '',
     mrn: `${Math.floor(100000 + Math.random() * 900000)}`,
     gender: '',
@@ -228,7 +229,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
 
   // Block Next on step 5 (women's health) if there's a P&G error
   const isNextDisabled =
-    (step === 1 && !formData.name) ||
+    (step === 1 && (!formData.firstName || !formData.lastName)) ||
     (step === 5 && isFemale && !!pgError);
 
   const handleSubmit = async () => {
@@ -240,7 +241,12 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     // or just store it as is and fix PatientExplorer.
     // Let's keep it consistent: Mrn should be just the number.
     const cleanMrn = (formData.mrn || '').replace('MRN-', '');
-    const patientRecord = { ...formData, id: newId, mrn: cleanMrn } as Patient;
+    const patientRecord = { 
+      ...formData, 
+      id: newId, 
+      mrn: cleanMrn,
+      name: `${formData.firstName || ''} ${formData.lastName || ''}`.trim()
+    } as Patient;
     
     const womensHealthSummary = isFemale
       ? `LMP: ${womensHealth.lmp || 'N/A'} | Periods regular: ${womensHealth.periodsRegular || 'N/A'} | ${pgLabel || `G${womensHealth.gravidity || '?'}P${womensHealth.parity || '?'}`} | Pregnancy possible: ${womensHealth.possibilityOfPregnancy || 'N/A'} | Pap smear: ${womensHealth.lastPapSmearDate || 'N/A'} (${womensHealth.lastPapSmearResult || 'N/A'}) | Mammogram: ${womensHealth.lastMammogramDate || 'N/A'} (${womensHealth.lastMammogramResult || 'N/A'})`
@@ -397,13 +403,23 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                 <CardDescription>Core demographic data for the Master Patient Index.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Full Legal Name</Label>
-                  <Input 
-                    value={formData.name} 
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g. Johnathan Smith"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>First Name</Label>
+                    <Input 
+                      value={formData.firstName} 
+                      onChange={e => setFormData({ ...formData, firstName: e.target.value })}
+                      placeholder="e.g. Johnathan"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Last Name</Label>
+                    <Input 
+                      value={formData.lastName} 
+                      onChange={e => setFormData({ ...formData, lastName: e.target.value })}
+                      placeholder="e.g. Smith"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

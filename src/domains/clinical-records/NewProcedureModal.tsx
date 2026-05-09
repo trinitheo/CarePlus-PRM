@@ -5,7 +5,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Stethoscope, X, Search, ChevronDown, Clock, ShieldAlert, AlertCircle } from 'lucide-react';
+import { Stethoscope, X, Search, ChevronDown, Clock, ShieldAlert, AlertCircle, Lock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { saveProcedure } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -15,9 +15,10 @@ import { Loader2 } from 'lucide-react';
 interface NewProcedureModalProps {
   patientId: string;
   children: React.ReactNode;
+  canWrite?: boolean;
 }
 
-export function NewProcedureModal({ patientId, children }: NewProcedureModalProps) {
+export function NewProcedureModal({ patientId, children, canWrite = true }: NewProcedureModalProps) {
   const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -222,38 +223,45 @@ export function NewProcedureModal({ patientId, children }: NewProcedureModalProp
                 Discard
               </button>
             </DialogClose>
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Button 
-                disabled={isSubmitting || !procedureName}
-                onClick={async () => {
-                  setIsSubmitting(true);
-                  setErrorMessage(null);
-                  try {
-                    await saveProcedure(patientId, {
-                      procedureName,
-                      priority,
-                      targetDate,
-                      preparation,
-                      notes,
-                      authorName: userProfile?.displayName || 'Clinical Provider'
-                    });
-                    handleClose();
-                  } catch (e: any) {
-                    console.error('Procedure save failure:', e);
-                    setErrorMessage(e.message?.includes('permission') ? 'Security: Not Authorized' : 'Sync: Procedure not saved');
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                className="bg-[#5C2D91] hover:bg-[#4B2475] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#5C2D91]/20 transition-all tracking-tight"
+            {canWrite ? (
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Sign & Schedule
-              </Button>
-            </motion.div>
+                <Button 
+                  disabled={isSubmitting || !procedureName}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    setErrorMessage(null);
+                    try {
+                      await saveProcedure(patientId, {
+                        procedureName,
+                        priority,
+                        targetDate,
+                        preparation,
+                        notes,
+                        authorName: userProfile?.displayName || 'Clinical Provider'
+                      });
+                      handleClose();
+                    } catch (e: any) {
+                      console.error('Procedure save failure:', e);
+                      setErrorMessage(e.message?.includes('permission') ? 'Security: Not Authorized' : 'Sync: Procedure not saved');
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="bg-[#5C2D91] hover:bg-[#4B2475] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#5C2D91]/20 transition-all tracking-tight"
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Sign & Schedule
+                </Button>
+              </motion.div>
+            ) : (
+                <div className="flex items-center gap-2 bg-[#F3F2F1] px-6 py-2.5 rounded-lg border border-[#EDEBE9]">
+                    <Lock className="h-4 w-4 text-[#616161]" />
+                    <span className="text-[11px] font-black uppercase text-[#616161]">Read Only Access</span>
+                </div>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

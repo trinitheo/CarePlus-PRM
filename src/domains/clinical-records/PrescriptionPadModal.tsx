@@ -31,7 +31,8 @@ import {
   Printer,
   MapPin,
   CheckCircle2,
-  ChevronDown
+  ChevronDown,
+  Lock
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,6 +46,7 @@ interface PrescriptionPadModalProps {
     onClose: () => void;
     patientId: string;
     patientName: string;
+    canWrite?: boolean;
 }
 
 function escapeRegExp(string: string) {
@@ -72,7 +74,7 @@ const Highlight: React.FC<{ text: string; highlight: string }> = ({ text, highli
     );
 };
 
-export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }: PrescriptionPadModalProps) {
+export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, canWrite = true }: PrescriptionPadModalProps) {
     const { userProfile } = useCurrentUser();
     const [medicationName, setMedicationName] = useState('');
     const [suggestions, setSuggestions] = useState<ClinicalCode[]>([]);
@@ -476,14 +478,21 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName }
                         <Button variant="outline" onClick={onClose} className="rounded-xl h-12 px-6 text-[13px] font-bold text-[#242424] border-[#EDEBE9] hover:bg-[#F3F2F1]">
                             Cancel
                         </Button>
-                        <Button 
-                            className="rounded-xl h-12 px-8 bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[13px] shadow-lg shadow-[#0078D4]/10 gap-3"
-                            disabled={isSaving || !medicationName || !dose || !frequency}
-                            onClick={handleSave}
-                        >
-                            {isSaving && <Loader2 className="h-4 w-4 animate-spin text-white" />}
-                            Save Prescription
-                        </Button>
+                        {canWrite ? (
+                            <Button 
+                                className="rounded-xl h-12 px-8 bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[13px] shadow-lg shadow-[#0078D4]/10 gap-3"
+                                disabled={isSaving || !medicationName || !dose || !frequency}
+                                onClick={handleSave}
+                            >
+                                {isSaving && <Loader2 className="h-4 w-4 animate-spin text-white" />}
+                                Save Prescription
+                            </Button>
+                        ) : (
+                            <div className="flex items-center gap-2 bg-[#F3F2F1] px-6 py-3 rounded-xl border border-[#EDEBE9]">
+                                <Lock className="h-4 w-4 text-[#616161]" />
+                                <span className="text-[11px] font-black uppercase text-[#616161]">Read Only</span>
+                            </div>
+                        )}
                     </div>
                 </DialogFooter>
             </DialogContent>

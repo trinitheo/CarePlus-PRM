@@ -5,7 +5,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope, AlertCircle } from 'lucide-react';
+import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope, AlertCircle, Lock } from 'lucide-react';
 import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
@@ -17,9 +17,10 @@ interface SOAPNoteModalProps {
   patientId: string;
   children: React.ReactNode;
   initialNote?: any;
+  canWrite?: boolean;
 }
 
-export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModalProps) {
+export function SOAPNoteModal({ patientId, children, initialNote, canWrite = true }: SOAPNoteModalProps) {
   const { userProfile } = useCurrentUser();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -617,19 +618,27 @@ export function SOAPNoteModal({ patientId, children, initialNote }: SOAPNoteModa
                 Discard
               </button>
             </DialogClose>
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Button 
-                disabled={isSubmitting || !assessment || !plan}
-                onClick={handleSave}
-                className="bg-[#0078D4] hover:bg-[#006ABD] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#0078D4]/20 transition-all tracking-tight"
+            {canWrite && (
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                {initialNote ? 'Update & Finalize Record' : 'Finalize & Sign Note'}
-              </Button>
-            </motion.div>
+                <Button 
+                  disabled={isSubmitting || !assessment || !plan}
+                  onClick={handleSave}
+                  className="bg-[#0078D4] hover:bg-[#006ABD] text-white font-bold text-[14px] rounded-md px-12 h-11 shadow-lg shadow-[#0078D4]/20 transition-all tracking-tight"
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {initialNote ? 'Update & Finalize Record' : 'Finalize & Sign Note'}
+                </Button>
+              </motion.div>
+            )}
+            {!canWrite && (
+               <div className="flex items-center gap-2 bg-[#F3F2F1] px-6 py-2 rounded-lg border border-[#EDEBE9]">
+                 <Lock className="h-4 w-4 text-[#616161]" />
+                 <span className="text-[11px] font-black uppercase text-[#616161]">Read Only Access</span>
+               </div>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

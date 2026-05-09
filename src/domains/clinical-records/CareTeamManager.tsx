@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { addToCareTeam, removeFromCareTeam } from '../../services/clinicalFirestoreService';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { CareTeamMember, UserRole, AlliedHealthSpecialty } from '../../types';
 
@@ -48,13 +48,25 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
   }, [patientId]);
 
   const handleInvite = async () => {
+    if (!inviteEmail) {
+      setErrorMessage('Please enter a valid staff email address.');
+      return;
+    }
+
     setActionLoading('invite');
     setErrorMessage(null);
     try {
-      // In a real app, you'd lookup userId by email first. 
-      // For this implementation, we'll use a deterministic mock ID or placeholder logic
-      const mockUserId = `staff-${Math.random().toString(36).substring(7)}`;
-      await addToCareTeam(patientId, mockUserId, {
+      // Lookup userId by email first.
+      const q = query(collection(db, 'users'), where('email', '==', inviteEmail.trim().toLowerCase()));
+      const userSnap = await getDocs(q);
+      
+      if (userSnap.empty) {
+        throw new Error('Staff member not found. Please ensure they are registered in the Clinical Core.');
+      }
+      
+      const targetUserId = userSnap.docs[0].id;
+
+      await addToCareTeam(patientId, targetUserId, {
         accessLevel: inviteAccess,
         userRole: inviteRole,
         userSpecialty: inviteSpecialty || undefined
@@ -64,7 +76,7 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
       setInviteSpecialty('');
     } catch (e: any) {
       console.error(e);
-      setErrorMessage(e.message?.includes('permission') ? 'Security: Access Denied' : 'Sync error: Assignment failed');
+      setErrorMessage(e.message?.includes('permission') ? 'Security: Access Denied' : (e.message || 'Sync error: Assignment failed'));
     } finally {
       setActionLoading(null);
     }
@@ -127,6 +139,19 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-[#616161] uppercase">Staff Member Email</Label>
+                  <div className="relative">
+                    <Input 
+                      placeholder="provider@clinicalcore.com" 
+                      value={inviteEmail} 
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      className="h-10 bg-[#FAFAFA] border-[#EDEBE9] rounded-xl text-sm font-medium pl-10"
+                    />
+                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-[#A19F9D]" />
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-[#616161] uppercase">Professional Role</Label>
                   <Select value={inviteRole} onValueChange={(v: UserRole) => setInviteRole(v)}>

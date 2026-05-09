@@ -44,7 +44,9 @@ export interface ClinicalIntake {
 
 export interface Patient {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  name: string; // Combined name for UI
   dob: string;
   mrn: string;
   gender?: string;
@@ -113,36 +115,7 @@ interface AppState {
 }
 
 const initialState: AppState = {
-  patients: {
-    'p-1': { 
-      id: 'p-1', 
-      name: 'Eleanor Vance', 
-      dob: '1982-04-12', 
-      mrn: '78234-A', 
-      status: 'active', 
-      email: 'e.vance@example.com',
-      sex: 'Female',
-      age: 42,
-      bloodType: 'A+',
-      gender: 'Woman',
-      conditions: ['Hypertension', 'Diabetes Mellitus', 'Heavy Drinker'],
-      lastVisit: '2024-06-12'
-    },
-    'p-2': { 
-      id: 'p-2', 
-      name: 'Marcus Brody', 
-      dob: '1975-11-03', 
-      mrn: '19230-B', 
-      status: 'active', 
-      email: 'm.brody@museum.org',
-      sex: 'Male',
-      age: 50,
-      bloodType: 'O-',
-      gender: 'Man',
-      conditions: ['Arthritis', 'Hyperlipidemia'],
-      lastVisit: '2024-05-10'
-    },
-  },
+  patients: {}, // Will be populated by Firestore
   vitals: {
     'p-1': [{ patientId: 'p-1', hr: 87, bp: '145/92', temp: 98.6, timestamp: Date.now() - 3600000 }],
   },
@@ -273,6 +246,35 @@ const EventContext = createContext<{
 
 export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(eventReducer, initialState);
+
+  // Firestore Listener for Patients
+  useEffect(() => {
+    const q = query(
+      collection(db, 'patients')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const data = change.doc.data();
+          const patient = { 
+            id: change.doc.id, 
+            ...data,
+            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+          } as Patient;
+          
+          dispatch({
+            type: 'PATIENT_REGISTERED',
+            payload: patient
+          });
+        }
+      });
+    }, (error) => {
+      console.error("Patient sync error:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Firestore Listener for Appointments (Point 2)
   useEffect(() => {
