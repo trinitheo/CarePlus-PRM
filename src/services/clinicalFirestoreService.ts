@@ -519,3 +519,16 @@ export async function completeReminder(reminderId: string) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
+
+export async function updateUserDashboardSettings(userId: string, settings: any) {
+  const path = `users/${userId}`;
+  try {
+    const docRef = doc(db, path);
+    await updateDoc(docRef, {
+      dashboardSettings: settings,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}

@@ -14,12 +14,36 @@ import {
   PhoneCall, MessageSquare, ClipboardList, Pill, FlaskConical,
   Calendar, ChevronRight, Check, X, Thermometer, Heart, Activity,
   Users, Building2, Shield, CreditCard, TrendingUp, AlertTriangle,
-  Zap, Phone, ArrowRight, Clock, User, MoreHorizontal, Bell, Plus
+  Zap, Phone, ArrowRight, Clock, User, MoreHorizontal, Bell, Plus,
+  GripVertical, Settings2, Save, Eye, EyeOff, Maximize2, Minimize2
 } from 'lucide-react';
-import { completeCourtesyCall, markMessageRead, createReminder, completeReminder } from '../../services/clinicalFirestoreService';
+import { 
+  completeCourtesyCall, 
+  markMessageRead, 
+  createReminder, 
+  completeReminder,
+  updateUserDashboardSettings 
+} from '../../services/clinicalFirestoreService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts: any): string {
@@ -88,10 +112,101 @@ function ListItem({ leading, headline, supporting, trailing, onClick, urgent }: 
 }
 
 // ─── M3 Card shell ───────────────────────────────────────────────────────────
-function DashCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function DashCard({ children, className = '', isEditing, onToggleVisibility, onToggleSize, visible = true, size = 'small' }: { 
+  children: React.ReactNode; 
+  className?: string;
+  isEditing?: boolean;
+  onToggleVisibility?: () => void;
+  onToggleSize?: () => void;
+  visible?: boolean;
+  size?: 'small' | 'large';
+}) {
   return (
-    <div className={`bg-white rounded-3xl border border-[#EDEBE9] overflow-hidden flex flex-col shadow-sm ${className}`}>
+    <div className={`
+      relative bg-white rounded-3xl border transition-all h-full
+      ${visible ? 'border-[#EDEBE9]' : 'border-[#EDEBE9] opacity-40'} 
+      overflow-hidden flex flex-col shadow-sm ${className}
+      ${isEditing ? 'ring-2 ring-offset-2 ring-[#0078D4]/20' : ''}
+    `}>
+      {isEditing && (
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={(e) => { e.stopPropagation(); onToggleSize?.(); }}
+            className="h-8 w-8 p-0 rounded-full bg-white/80 backdrop-blur hover:bg-white"
+          >
+            {size === 'large' ? <Minimize2 className="h-4 w-4 text-[#0078D4]" /> : <Maximize2 className="h-4 w-4 text-[#0078D4]" />}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={(e) => { e.stopPropagation(); onToggleVisibility?.(); }}
+            className="h-8 w-8 p-0 rounded-full bg-white/80 backdrop-blur hover:bg-white"
+          >
+            {visible ? <Eye className="h-4 w-4 text-[#0078D4]" /> : <EyeOff className="h-4 w-4 text-[#A19F9D]" />}
+          </Button>
+        </div>
+      )}
       {children}
+    </div>
+  );
+}
+
+// ─── Sortable Wrapper ────────────────────────────────────────────────────────
+function SortableWidget({ id, children, isEditing, onToggleVisibility, onToggleSize, visible, size }: { 
+  id: string; 
+  children: React.ReactNode;
+  isEditing: boolean;
+  onToggleVisibility: () => void;
+  onToggleSize: () => void;
+  visible: boolean;
+  size: 'small' | 'large';
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 20 : 0,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={`h-full ${isDragging ? 'rotate-1 scale-[1.02]' : ''}`}>
+      {isEditing ? (
+        <div className="h-full relative group">
+          <DashCard 
+            isEditing={isEditing} 
+            onToggleVisibility={onToggleVisibility} 
+            onToggleSize={onToggleSize}
+            visible={visible}
+            size={size}
+          >
+            <div 
+              {...attributes} 
+              {...listeners} 
+              className="absolute left-1/2 -top-1 -translate-x-1/2 h-6 w-12 bg-[#F5F4F3] rounded-b-xl flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-[#EDEBE9] transition-colors z-20"
+            >
+              <GripVertical className="h-3 w-3 text-[#A19F9D]" />
+            </div>
+            <div className="h-full pointer-events-none select-none">
+              {children}
+            </div>
+          </DashCard>
+        </div>
+      ) : (
+        <div className="h-full">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -285,7 +400,10 @@ function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: st
       <SectionHeader icon={MessageSquare} label="Messages" count={unreadCount} color="bg-[#DEECF9] text-[#0078D4]" />
       <div className="flex flex-1 min-h-0">
         {/* List pane */}
-        <ScrollArea className={`${selected ? 'hidden md:flex md:w-2/5 md:border-r md:border-[#EDEBE9]' : 'flex-1'} flex-col`}>
+        <ScrollArea 
+          className={`${selected ? 'hidden md:flex md:w-2/5 md:border-r md:border-[#EDEBE9]' : 'flex-1'} flex-col h-[236px]`}
+          viewportClassName="h-[256px]"
+        >
           <div className="divide-y divide-[#F5F4F3]">
             {messages.length === 0 && <Empty message="No messages yet" />}
             {messages.map(msg => (
@@ -985,22 +1103,49 @@ const ROLE_META: Record<string, { headline: string; sub: string; accentColor: st
   patient: { headline: 'My Health', sub: "Vitals, medications, and appointments", accentColor: '#0078D4' },
 };
 
-function WidgetGrid({ children }: { children: React.ReactNode[] }) {
+function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSize, visibility, sizes }: { 
+  children: Record<string, React.ReactNode>;
+  isEditing: boolean;
+  order: string[];
+  onToggleVisibility: (id: string) => void;
+  onToggleSize: (id: string) => void;
+  visibility: Record<string, boolean>;
+  sizes: Record<string, 'small' | 'large'>;
+}) {
+  const displayOrder = isEditing ? order : order.filter(id => visibility[id]);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0"
-      style={{ gridAutoRows: 'minmax(320px, auto)' }}>
-      {children.map((child, i) => (
-        <motion.div
-          key={i}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: i * 0.07, ease: [0.33, 1, 0.68, 1] }}
-          className={`flex flex-col min-h-0 ${i === 0 ? 'md:col-span-2' : ''}`}
-        >
-          {child}
-        </motion.div>
-      ))}
-    </div>
+    <SortableContext
+      items={displayOrder}
+      strategy={verticalListSortingStrategy}
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0"
+        style={{ gridAutoRows: 'minmax(320px, auto)' }}>
+        {displayOrder.map((id, i) => {
+          const isLarge = sizes[id] === 'large' || (i === 0 && !sizes[id]); // default first one to large if no size set
+          return (
+            <motion.div
+              key={id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: i * 0.05, ease: [0.33, 1, 0.68, 1] }}
+              className={`flex flex-col min-h-0 ${isLarge ? 'md:col-span-2' : ''}`}
+            >
+              <SortableWidget 
+                id={id} 
+                isEditing={isEditing} 
+                onToggleVisibility={() => onToggleVisibility(id)}
+                onToggleSize={() => onToggleSize(id)}
+                visible={visibility[id]}
+                size={sizes[id] || (i === 0 ? 'large' : 'small')}
+              >
+                {children[id]}
+              </SortableWidget>
+            </motion.div>
+          );
+        })}
+      </div>
+    </SortableContext>
   );
 }
 
@@ -1014,6 +1159,12 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = userProfile?.displayName?.split(' ')[0] || 'there';
 
+  // --- Dashboard Customization State ---
+  const [isEditing, setIsEditing] = useState(false);
+  const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
+  const [widgetVisibility, setWidgetVisibility] = useState<Record<string, boolean>>({});
+  const [widgetSizes, setWidgetSizes] = useState<Record<string, 'small' | 'large'>>({});
+
   const handleRead = async (id: string) => { await markMessageRead(id); };
   const handleComplete = async (id: string, notes: string) => { await completeCourtesyCall(id, notes); };
   
@@ -1026,58 +1177,115 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
     });
   };
 
-  const widgets: Record<string, React.ReactNode[]> = {
-    clinician: [
-      <MessagesWidget messages={messages} onRead={handleRead} />,
-      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
-      <PendingResultsWidget />,
-      <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
-      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
-    ],
-    nurse: [
-      <MessagesWidget messages={messages} onRead={handleRead} />,
-      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
-      <MedicationFlagsWidget onNavigate={onNavigateToPatient} />,
-      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
-      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
-    ],
-    allied_health: [
-      <MessagesWidget messages={messages} onRead={handleRead} />,
-      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
-      <ReferralsWidget specialty={userProfile?.specialty as string} onNavigate={onNavigateToPatient} />,
-      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
-      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
-    ],
-    admin: [
-      <MessagesWidget messages={messages} onRead={handleRead} />,
-      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      <SystemOverviewWidget />,
-      <StaffDirectoryWidget />,
-      <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
-      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
-    ],
-    financial: [
-      <MessagesWidget messages={messages} onRead={handleRead} />,
-      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      <BillingWidget />,
-      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
-      <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
-      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
-    ],
-    patient: [
-      <MessagesWidget messages={messages} onRead={handleRead} />,
-      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      <MyVitalsWidget />,
-      <MyMedicationsWidget />,
-      <TodayScheduleWidget />,
-      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
-    ],
+  const widgetDefinitions: Record<string, Record<string, React.ReactNode>> = {
+    clinician: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      results: <PendingResultsWidget />,
+      patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
+      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
+    nurse: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      queue: <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
+      med_flags: <MedicationFlagsWidget onNavigate={onNavigateToPatient} />,
+      schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
+    allied_health: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
+      referrals: <ReferralsWidget specialty={userProfile?.specialty as string} onNavigate={onNavigateToPatient} />,
+      schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
+    admin: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      overview: <SystemOverviewWidget />,
+      directory: <StaffDirectoryWidget />,
+      queue: <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
+      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
+    financial: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      billing: <BillingWidget />,
+      schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
+      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
+    patient: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      vitals: <MyVitalsWidget />,
+      medications: <MyMedicationsWidget />,
+      schedule: <TodayScheduleWidget />,
+      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
   };
 
-  const roleWidgets = widgets[role] || widgets.clinician;
+  const availableWidgets = widgetDefinitions[role] || widgetDefinitions.clinician;
+
+  // Sync state with user profile
+  useEffect(() => {
+    if (userProfile?.dashboardSettings) {
+      const { order, visibility, sizes } = userProfile.dashboardSettings;
+      // Ensure we have all current widgets in the order, in case new ones were added to code
+      const currentIds = Object.keys(availableWidgets);
+      const cleanedOrder = (order || []).filter((id: string) => currentIds.includes(id));
+      const missingIds = currentIds.filter(id => !cleanedOrder.includes(id));
+      
+      setWidgetOrder([...cleanedOrder, ...missingIds]);
+      setWidgetVisibility(visibility || currentIds.reduce((acc, id) => ({ ...acc, [id]: true }), {}));
+      setWidgetSizes(sizes || {});
+    } else {
+      const defaultOrder = Object.keys(availableWidgets);
+      setWidgetOrder(defaultOrder);
+      setWidgetVisibility(defaultOrder.reduce((acc, id) => ({ ...acc, [id]: true }), {}));
+      setWidgetSizes({});
+    }
+  }, [userProfile?.id, role]);
+
+  const handleToggleVisibility = (id: string) => {
+    setWidgetVisibility(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleToggleSize = (id: string) => {
+    setWidgetSizes(prev => ({ 
+      ...prev, 
+      [id]: prev[id] === 'large' ? 'small' : 'large' 
+    }));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setWidgetOrder((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!userProfile?.id) return;
+    await updateUserDashboardSettings(userProfile.id, {
+      order: widgetOrder,
+      visibility: widgetVisibility,
+      sizes: widgetSizes
+    });
+    setIsEditing(false);
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   return (
     <div className="h-full flex flex-col gap-5 min-w-0 overflow-y-auto pb-6">
@@ -1092,10 +1300,32 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
           <p className="text-[10px] font-black text-[#A19F9D] uppercase tracking-widest mb-1.5">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
-          <h1 className="text-[26px] font-black text-[#1A1A1A] tracking-tight leading-none">
-            {greeting}, <span style={{ color: meta.accentColor }}>{firstName}</span>
-          </h1>
-          <p className="text-[13px] text-[#757370] font-medium mt-1.5">{meta.sub}</p>
+          <div className="flex items-center gap-4">
+             <h1 className="text-[26px] font-black text-[#1A1A1A] tracking-tight leading-none">
+              {greeting}, <span style={{ color: meta.accentColor }}>{firstName}</span>
+            </h1>
+            <Button 
+               size="sm" 
+               variant="ghost" 
+               onClick={() => isEditing ? saveSettings() : setIsEditing(true)}
+               className={`h-9 px-4 rounded-full font-black text-[11px] uppercase tracking-widest gap-2 ${isEditing ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' : 'bg-[#FAFAFA] border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1]'}`}
+            >
+              {isEditing ? <><Save className="h-3.5 w-3.5" /> Save Layout</> : <><Settings2 className="h-3.5 w-3.5" /> Customize</>}
+            </Button>
+            {isEditing && (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={() => setIsEditing(false)}
+                className="h-9 px-4 rounded-full font-black text-[11px] uppercase tracking-widest text-[#D13438] hover:bg-red-50"
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+          <p className="text-[13px] text-[#757370] font-medium mt-1.5">
+            {isEditing ? 'Drag handles to reorder, use eye icon to toggle visibility' : meta.sub}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <div
@@ -1113,7 +1343,22 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
       </motion.div>
 
       {/* Widget grid */}
-      <WidgetGrid>{roleWidgets as React.ReactNode[]}</WidgetGrid>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <WidgetGrid 
+          isEditing={isEditing} 
+          order={widgetOrder} 
+          onToggleVisibility={handleToggleVisibility}
+          onToggleSize={handleToggleSize}
+          visibility={widgetVisibility}
+          sizes={widgetSizes}
+        >
+          {availableWidgets}
+        </WidgetGrid>
+      </DndContext>
     </div>
   );
 }

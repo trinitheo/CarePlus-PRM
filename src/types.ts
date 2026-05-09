@@ -18,6 +18,11 @@ export interface User {
   role: UserRole;
   specialty?: string | AlliedHealthSpecialty;
   organizationId?: string;
+  dashboardSettings?: {
+    order: string[];
+    visibility: Record<string, boolean>;
+    sizes: Record<string, 'small' | 'large'>;
+  };
   createdAt: any;
 }
 
