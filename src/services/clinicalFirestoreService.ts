@@ -460,3 +460,62 @@ export async function getUpcomingAppointments() {
     handleFirestoreError(error, OperationType.LIST, path);
   }
 }
+
+// Dashboards & Operations
+export async function completeCourtesyCall(taskId: string, notes: string) {
+  const path = `courtesy_calls`;
+  try {
+    const docRef = doc(db, path, taskId);
+    await updateDoc(docRef, cleanData({
+      status: 'completed',
+      completionNotes: notes,
+      completedAt: serverTimestamp(),
+      completedBy: auth.currentUser?.uid
+    }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function markMessageRead(messageId: string) {
+  const path = `messages`;
+  try {
+    const docRef = doc(db, path, messageId);
+    await updateDoc(docRef, cleanData({
+      read: true,
+      readAt: serverTimestamp()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function createReminder(data: any) {
+  const path = `reminders`;
+  try {
+    const docRef = await addDoc(collection(db, path), cleanData({
+      ...data,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }));
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function completeReminder(reminderId: string) {
+  const path = `reminders`;
+  try {
+    const docRef = doc(db, path, reminderId);
+    await updateDoc(docRef, cleanData({
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      completedBy: auth.currentUser?.uid,
+      updatedAt: serverTimestamp()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}

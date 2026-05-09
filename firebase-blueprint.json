@@ -224,6 +224,28 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "time", "reason", "status"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "Periodic or one-time reminder for care team or patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "assignedToUserId": { "type": "string", "description": "The user who needs to take action" },
+        "assignedToRole": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string", "enum": ["routine", "urgent", "immediate"] },
+        "status": { "type": "string", "enum": ["pending", "completed", "dismissed"] },
+        "frequency": { "type": "string", "enum": ["once", "weekly", "monthly", "yearly"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "completedBy": { "type": "string" }
+      },
+      "required": ["title", "dueDate", "status"]
     }
   },
   "firestore": {
@@ -234,6 +256,10 @@
     "/appointments/{appointmentId}": {
       "schema": "Appointment",
       "description": "Global clinical schedule"
+    },
+    "/reminders/{reminderId}": {
+      "schema": "Reminder",
+      "description": "Reminders for check-ins or tasks"
     },
     "/patients/{patientId}": {
       "schema": "Patient",

@@ -18,6 +18,7 @@ import { addToCareTeam, removeFromCareTeam } from '../../services/clinicalFirest
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { CareTeamMember, UserRole, AlliedHealthSpecialty } from '../../types';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 const SPECIALTIES: AlliedHealthSpecialty[] = [
   'Physiotherapist', 'Psychologist', 'Physical Therapist', 
@@ -26,6 +27,9 @@ const SPECIALTIES: AlliedHealthSpecialty[] = [
 ];
 
 export function CareTeamManager({ patientId }: { patientId: string }) {
+  const { userProfile } = useCurrentUser();
+  const isAdminUser = userProfile?.role === 'admin';
+  
   const [members, setMembers] = useState<CareTeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -124,107 +128,109 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
             <p className="text-[9px] text-[#616161] font-medium leading-none mt-1">Tiered access control for clinical team</p>
           </div>
 
-          <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-8 bg-[#0078D4] hover:bg-[#005A9E] text-white text-[10px] font-bold rounded-lg px-3 gap-2">
-                <UserPlus className="h-3.5 w-3.5" />
-                Assign Staff
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-white rounded-2xl shadow-2xl border-[#EDEBE9]">
-              <DialogHeader>
-                <DialogTitle className="text-lg font-black text-[#242424] flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-[#0078D4]" />
-                  Assign Care Team Access
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-[#616161] uppercase">Staff Member Email</Label>
-                  <div className="relative">
-                    <Input 
-                      placeholder="provider@clinicalcore.com" 
-                      value={inviteEmail} 
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      className="h-10 bg-[#FAFAFA] border-[#EDEBE9] rounded-xl text-sm font-medium pl-10"
-                    />
-                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-[#A19F9D]" />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-[#616161] uppercase">Professional Role</Label>
-                  <Select value={inviteRole} onValueChange={(v: UserRole) => setInviteRole(v)}>
-                    <SelectTrigger className="h-10 bg-[#FAFAFA] border-[#EDEBE9] rounded-xl text-sm font-medium">
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#EDEBE9] rounded-xl">
-                      <SelectItem value="clinician">Clinician / Physician</SelectItem>
-                      <SelectItem value="nurse">Nurse / Assistant</SelectItem>
-                      <SelectItem value="allied_health">Allied Healthcare</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {inviteRole === 'allied_health' && (
+          {isAdminUser && (
+            <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 bg-[#0078D4] hover:bg-[#005A9E] text-white text-[10px] font-bold rounded-lg px-3 gap-2">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Assign Staff
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px] bg-white rounded-2xl shadow-2xl border-[#EDEBE9]">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-black text-[#242424] flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-[#0078D4]" />
+                    Assign Care Team Access
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-[#616161] uppercase">Specialty</Label>
-                    <Select value={inviteSpecialty} onValueChange={setInviteSpecialty}>
+                    <Label className="text-xs font-bold text-[#616161] uppercase">Staff Member Email</Label>
+                    <div className="relative">
+                      <Input 
+                        placeholder="provider@clinicalcore.com" 
+                        value={inviteEmail} 
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        className="h-10 bg-[#FAFAFA] border-[#EDEBE9] rounded-xl text-sm font-medium pl-10"
+                      />
+                      <Search className="absolute left-3.5 top-3 h-4 w-4 text-[#A19F9D]" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-[#616161] uppercase">Professional Role</Label>
+                    <Select value={inviteRole} onValueChange={(v: UserRole) => setInviteRole(v)}>
                       <SelectTrigger className="h-10 bg-[#FAFAFA] border-[#EDEBE9] rounded-xl text-sm font-medium">
-                        <SelectValue placeholder="Select specialty" />
+                        <SelectValue placeholder="Select role" />
                       </SelectTrigger>
                       <SelectContent className="bg-white border-[#EDEBE9] rounded-xl">
-                        {SPECIALTIES.map(s => (
-                          <SelectItem key={s} value={s}>{s}</SelectItem>
-                        ))}
+                        <SelectItem value="clinician">Clinician / Physician</SelectItem>
+                        <SelectItem value="nurse">Nurse / Assistant</SelectItem>
+                        <SelectItem value="allied_health">Allied Healthcare</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                )}
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-[#616161] uppercase">Data Access Level</Label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {[
-                      { id: 'clinical_full', label: 'Full Clinical', desc: 'Can read/write SOAP notes, prescriptions, investigations.' },
-                      { id: 'clinical_limited', label: 'Limited Access', desc: 'Can read vitals and interaction logs. Restricted records.' },
-                      { id: 'administrative', label: 'Administrative', desc: 'Demographics and scheduling only.' },
-                    ].map((lvl) => (
-                      <button
-                        key={lvl.id}
-                        onClick={() => setInviteAccess(lvl.id as any)}
-                        className={`text-left p-3 rounded-xl border transition-all ${inviteAccess === lvl.id ? 'border-[#0078D4] bg-[#F3F9FD] ring-2 ring-[#0078D4]/10' : 'border-[#EDEBE9] hover:bg-[#FAFAFA]'}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[13px] font-bold text-[#242424]">{lvl.label}</span>
-                          {inviteAccess === lvl.id && <Check className="h-4 w-4 text-[#0078D4]" />}
-                        </div>
-                        <p className="text-[11px] text-[#616161] mt-0.5">{lvl.desc}</p>
-                      </button>
-                    ))}
+                  {inviteRole === 'allied_health' && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-[#616161] uppercase">Specialty</Label>
+                      <Select value={inviteSpecialty} onValueChange={setInviteSpecialty}>
+                        <SelectTrigger className="h-10 bg-[#FAFAFA] border-[#EDEBE9] rounded-xl text-sm font-medium">
+                          <SelectValue placeholder="Select specialty" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-[#EDEBE9] rounded-xl">
+                          {SPECIALTIES.map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-[#616161] uppercase">Data Access Level</Label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {[
+                        { id: 'clinical_full', label: 'Full Clinical', desc: 'Can read/write SOAP notes, prescriptions, investigations.' },
+                        { id: 'clinical_limited', label: 'Limited Access', desc: 'Can read vitals and interaction logs. Restricted records.' },
+                        { id: 'administrative', label: 'Administrative', desc: 'Demographics and scheduling only.' },
+                      ].map((lvl) => (
+                        <button
+                          key={lvl.id}
+                          onClick={() => setInviteAccess(lvl.id as any)}
+                          className={`text-left p-3 rounded-xl border transition-all ${inviteAccess === lvl.id ? 'border-[#0078D4] bg-[#F3F9FD] ring-2 ring-[#0078D4]/10' : 'border-[#EDEBE9] hover:bg-[#FAFAFA]'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[13px] font-bold text-[#242424]">{lvl.label}</span>
+                            {inviteAccess === lvl.id && <Check className="h-4 w-4 text-[#0078D4]" />}
+                          </div>
+                          <p className="text-[11px] text-[#616161] mt-0.5">{lvl.desc}</p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex flex-col gap-3 pt-2 w-full">
-                {errorMessage && (
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-4 py-2 rounded-xl">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    {errorMessage}
+                <div className="flex flex-col gap-3 pt-2 w-full">
+                  {errorMessage && (
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-4 py-2 rounded-xl">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      {errorMessage}
+                    </div>
+                  )}
+                  <div className="flex justify-end gap-2 w-full">
+                    <Button variant="ghost" onClick={() => setIsInviteOpen(false)} className="text-[12px] font-bold">Cancel</Button>
+                    <Button 
+                      onClick={handleInvite} 
+                      disabled={actionLoading === 'invite'}
+                      className="bg-[#107C10] hover:bg-[#0E6D0E] text-white text-[12px] font-bold rounded-xl h-10 px-6 shadow-md shadow-[#107C10]/10"
+                    >
+                      {actionLoading === 'invite' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Assignment'}
+                    </Button>
                   </div>
-                )}
-                <div className="flex justify-end gap-2 w-full">
-                  <Button variant="ghost" onClick={() => setIsInviteOpen(false)} className="text-[12px] font-bold">Cancel</Button>
-                  <Button 
-                    onClick={handleInvite} 
-                    disabled={actionLoading === 'invite'}
-                    className="bg-[#107C10] hover:bg-[#0E6D0E] text-white text-[12px] font-bold rounded-xl h-10 px-6 shadow-md shadow-[#107C10]/10"
-                  >
-                    {actionLoading === 'invite' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Assignment'}
-                  </Button>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
         {errorMessage && actionLoading !== 'invite' && (
           <div className="flex items-center gap-2 text-[8px] font-black uppercase text-[#A4262C] bg-[#FDE7E9] px-2 py-1 rounded w-full">
@@ -259,15 +265,17 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
                         </div>
                         <div className="flex items-center gap-1">
                           {getAccessBadge(member.accessLevel)}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 rounded-md text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9] opacity-0 group-hover:opacity-100 transition-all"
-                            onClick={() => handleRemove(member.id)}
-                            disabled={actionLoading === member.id}
-                          >
-                            {actionLoading === member.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                          </Button>
+                          {isAdminUser && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-md text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9] opacity-0 group-hover:opacity-100 transition-all"
+                              onClick={() => handleRemove(member.id)}
+                              disabled={actionLoading === member.id}
+                            >
+                              {actionLoading === member.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            </Button>
+                          )}
                         </div>
                       </div>
                       
@@ -301,14 +309,16 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#616161]">No Staff Assigned</p>
                   <p className="text-[9px] font-bold text-[#A19F9D] mt-2 max-w-[180px]">All patient data currently locked to default admin access levels.</p>
                 </div>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setIsInviteOpen(true)}
-                  className="h-8 border-[#EDEBE9] text-[10px] font-black uppercase tracking-tight hover:bg-white rounded-lg px-4"
-                >
-                  Assign Provider
-                </Button>
+                {isAdminUser && (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setIsInviteOpen(true)}
+                    className="h-8 border-[#EDEBE9] text-[10px] font-black uppercase tracking-tight hover:bg-white rounded-lg px-4"
+                  >
+                    Assign Provider
+                  </Button>
+                )}
               </div>
             )}
           </div>

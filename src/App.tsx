@@ -9,7 +9,8 @@ import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
 import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
-import { Activity, ChevronRight, User as UserIcon, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
+import { RoleDashboard } from './domains/dashboard/RoleDashboard';
+import { Activity, ChevronRight, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
@@ -20,7 +21,7 @@ import { savePatient } from './services/clinicalFirestoreService';
 export default function App() {
   const sizeClass = useWindowSizeClass();
   const { userProfile, loading } = useCurrentUser();
-  const [currentModule, setCurrentModule] = useState('patients');
+  const [currentModule, setCurrentModule] = useState('dashboard');
 
     useEffect(() => {
       async function seedPatients() {
@@ -129,6 +130,15 @@ export default function App() {
     <EventStoreProvider>
       <HIPAAMonitorProvider>
       <Shell currentModule={currentModule} onNavigate={handleNavigate}>
+        {currentModule === 'dashboard' && (
+          <div className="h-full flex flex-col min-w-0">
+            <RoleDashboard onNavigateToPatient={(id) => {
+              selectPatient(id);
+              handleNavigate('patients');
+            }} />
+          </div>
+        )}
+
         {currentModule === 'patients' && (
           <div className="h-full flex flex-col min-w-0">
             {/* Context Breadcrumb - Adaptive Visibility */}

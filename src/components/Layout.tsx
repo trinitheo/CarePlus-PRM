@@ -1,5 +1,5 @@
 import { 
-  Activity, Calendar, FileText, Settings, 
+  Activity, Calendar, FileText, Settings, LayoutDashboard,
   Users, CreditCard, ShieldCheck, User,
   RefreshCcw 
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { db, auth } from '../lib/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 
 const NAV_ITEMS = [
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Home' },
   { id: 'patients', icon: Users, label: 'Patients' },
   { id: 'scheduling', icon: Calendar, label: 'Schedule' },
   { id: 'billing', icon: CreditCard, label: 'Billing' },

@@ -1,0 +1,1119 @@
+import React from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useQueryModel } from '../../store/eventStore';
+import { useDashboard } from '../../hooks/useDashboard';
+import { ScrollArea } from '../../components/ui/scroll-area';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Textarea } from '../../components/ui/textarea';
+import { collection, query, onSnapshot, orderBy, limit, where } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import {
+  PhoneCall, MessageSquare, ClipboardList, Pill, FlaskConical,
+  Calendar, ChevronRight, Check, X, Thermometer, Heart, Activity,
+  Users, Building2, Shield, CreditCard, TrendingUp, AlertTriangle,
+  Zap, Phone, ArrowRight, Clock, User, MoreHorizontal, Bell, Plus
+} from 'lucide-react';
+import { completeCourtesyCall, markMessageRead, createReminder, completeReminder } from '../../services/clinicalFirestoreService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function timeAgo(ts: any): string {
+  if (!ts) return '';
+  const ms = ts?.seconds ? ts.seconds * 1000 : Number(ts);
+  const diff = (Date.now() - ms) / 1000;
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function urgencyPill(p: string) {
+  if (p === 'urgent' || p === 'immediate') return 'bg-red-50 text-red-700 border border-red-200';
+  if (p === 'soon') return 'bg-amber-50 text-amber-700 border border-amber-200';
+  return 'bg-slate-100 text-slate-600 border border-slate-200';
+}
+
+// ─── M3-style Section Header ─────────────────────────────────────────────────
+function SectionHeader({ icon: Icon, label, count, color }: {
+  icon: React.ElementType; label: string; count?: number; color: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-4 pt-4 pb-2">
+      <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <span className="text-[11px] font-black uppercase tracking-[0.1em] text-[#444441] flex-1">{label}</span>
+      {count !== undefined && count > 0 && (
+        <span className="h-5 min-w-5 px-1.5 rounded-full bg-[#0078D4] text-white text-[9px] font-black flex items-center justify-center">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+function Empty({ message }: { message: string }) {
+  return (
+    <div className="flex items-center justify-center py-8 px-4">
+      <p className="text-[11px] text-[#A19F9D] font-medium text-center">{message}</p>
+    </div>
+  );
+}
+
+// ─── M3 List Item — base ─────────────────────────────────────────────────────
+function ListItem({ leading, headline, supporting, trailing, onClick, urgent }: {
+  leading?: React.ReactNode; headline: string; supporting?: React.ReactNode;
+  trailing?: React.ReactNode; onClick?: () => void; urgent?: boolean;
+  [k: string]: unknown;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-[#F5F4F3] transition-colors group ${urgent ? 'bg-red-50/50' : ''}`}
+    >
+      {leading && <div className="shrink-0">{leading}</div>}
+      <div className="flex-1 min-w-0">
+        <p className={`text-[12.5px] font-semibold truncate ${urgent ? 'text-red-800' : 'text-[#242424]'}`}>{headline}</p>
+        {supporting && <p className="text-[11px] text-[#757370] mt-0.5 truncate">{supporting}</p>}
+      </div>
+      {trailing && <div className="shrink-0">{trailing}</div>}
+    </button>
+  );
+}
+
+// ─── M3 Card shell ───────────────────────────────────────────────────────────
+function DashCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-3xl border border-[#EDEBE9] overflow-hidden flex flex-col shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Avatar chip ─────────────────────────────────────────────────────────────
+function Avatar({ name, color = '#0078D4', size = 'sm' }: { name: string; color?: string; size?: 'sm' | 'md' }) {
+  const s = size === 'sm' ? 'h-8 w-8 text-[11px]' : 'h-10 w-10 text-[13px]';
+  return (
+    <div className={`${s} rounded-full flex items-center justify-center font-black text-white shrink-0`} style={{ background: color }}>
+      {name?.[0]?.toUpperCase() || '?'}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 0 — Reminders (all roles)
+// M3 pattern: Action list with completion and "due soon" indicators
+// ═══════════════════════════════════════════════════════════════════════════════
+function RemindersWidget({ reminders, onComplete, onCreate }: { 
+  reminders: any[]; 
+  onComplete: (id: string) => void;
+  onCreate: (data: any) => Promise<void>;
+}) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
+  const [newPriority, setNewPriority] = useState<'routine' | 'urgent' | 'immediate'>('routine');
+
+  const handleCreate = async () => {
+    if (!newTitle || !newDueDate) return;
+    await onCreate({
+      title: newTitle,
+      description: newDesc,
+      dueDate: new Date(newDueDate).toISOString(),
+      priority: newPriority,
+      status: 'pending'
+    });
+    setIsAdding(false);
+    setNewTitle('');
+    setNewDesc('');
+    setNewDueDate('');
+  };
+
+  const isDueSoon = (dateStr: string) => {
+    const due = new Date(dateStr);
+    const now = new Date();
+    const diff = due.getTime() - now.getTime();
+    return diff > 0 && diff < 86400000; // < 24h
+  };
+
+  const isOverdue = (dateStr: string) => {
+    const due = new Date(dateStr);
+    const now = new Date();
+    return due.getTime() < now.getTime();
+  };
+
+  return (
+    <DashCard>
+      <div className="flex items-center justify-between pr-4">
+        <SectionHeader icon={Bell} label="Reminders" count={reminders.length} color="bg-amber-50 text-amber-600" />
+        <Dialog open={isAdding} onOpenChange={setIsAdding}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-full hover:bg-amber-50 text-amber-600">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none shadow-2xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-[20px] font-black text-[#1A1A1A] tracking-tight">Set New Reminder</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-[#757370] uppercase tracking-widest pl-1">What to remember?</label>
+                <Input 
+                  placeholder="e.g. Monthly Diabetic Check-in" 
+                  value={newTitle} 
+                  onChange={e => setNewTitle(e.target.value)}
+                  className="rounded-2xl border-[#EDEBE9] bg-[#FAFAFA] focus-visible:ring-[#0078D4]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-[#757370] uppercase tracking-widest pl-1">Due Date & Time</label>
+                <Input 
+                  type="datetime-local" 
+                  value={newDueDate}
+                  onChange={e => setNewDueDate(e.target.value)}
+                  className="rounded-2xl border-[#EDEBE9] bg-[#FAFAFA] focus-visible:ring-[#0078D4]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-[#757370] uppercase tracking-widest pl-1">Priority</label>
+                <Select value={newPriority} onValueChange={(v: any) => setNewPriority(v)}>
+                  <SelectTrigger className="rounded-2xl border-[#EDEBE9] bg-[#FAFAFA]">
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl border-none shadow-xl">
+                    <SelectItem value="routine">Routine</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="immediate">Immediate</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-[#757370] uppercase tracking-widest pl-1">Optional Notes</label>
+                <Textarea 
+                  placeholder="Additional context..." 
+                  value={newDesc}
+                  onChange={e => setNewDesc(e.target.value)}
+                  className="rounded-2xl border-[#EDEBE9] bg-[#FAFAFA] focus-visible:ring-[#0078D4] min-h-[80px]"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={handleCreate} className="flex-1 rounded-full bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-[13px] h-12 shadow-md">
+                Create Reminder
+              </Button>
+              <Button variant="outline" onClick={() => setIsAdding(false)} className="rounded-full border-[#EDEBE9] text-[#444441] font-black text-[13px] h-12 px-6">
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {reminders.length === 0 && <Empty message="No active reminders" />}
+          {reminders.map(rem => {
+            const overdue = isOverdue(rem.dueDate);
+            const soon = isDueSoon(rem.dueDate);
+            return (
+              <div key={rem.id} className={`group relative transition-all ${overdue ? 'bg-red-50/30' : soon ? 'bg-amber-50/30' : ''}`}>
+                <div className="px-4 py-3 flex gap-3 items-start">
+                  <button 
+                    onClick={() => onComplete(rem.id)}
+                    className="mt-1 h-5 w-5 rounded-full border-2 border-[#EDEBE9] hover:border-[#107C10] hover:bg-[#DFF6DD] flex items-center justify-center transition-all group/check shrink-0">
+                    <Check className="h-3 w-3 text-[#107C10] opacity-0 group-hover/check:opacity-100" />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={`text-[12px] font-bold ${overdue ? 'text-red-700' : 'text-[#242424]'} truncate`}>{rem.title}</p>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${overdue ? 'bg-red-100 text-red-700 border-red-200' : soon ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                        {overdue ? 'Overdue' : soon ? 'Soon' : 'Upcoming'}
+                      </span>
+                    </div>
+                    {rem.description && <p className="text-[11px] text-[#757370] mt-0.5 line-clamp-1">{rem.description}</p>}
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-[#A19F9D]" />
+                        <span className="text-[10px] text-[#A19F9D]">{new Date(rem.dueDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {rem.patientName && (
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3 text-[#0078D4]" />
+                          <span className="text-[10px] text-[#0078D4] font-semibold">{rem.patientName}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 1 — Messages (all roles)
+// M3 pattern: Messages feed with unread indicator dot + supporting pane on click
+// ═══════════════════════════════════════════════════════════════════════════════
+function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: string) => void }) {
+  const [selected, setSelected] = useState<any | null>(null);
+  const unreadCount = messages.filter(m => !m.read).length;
+
+  const handleSelect = (msg: any) => {
+    setSelected(msg);
+    if (!msg.read) onRead(msg.id);
+  };
+
+  const roleColors: Record<string, string> = {
+    clinician: '#107C10', nurse: '#0078D4', allied_health: '#5C2D91',
+    admin: '#D13438', financial: '#8764B8', patient: '#CA5010',
+  };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={MessageSquare} label="Messages" count={unreadCount} color="bg-[#DEECF9] text-[#0078D4]" />
+      <div className="flex flex-1 min-h-0">
+        {/* List pane */}
+        <ScrollArea className={`${selected ? 'hidden md:flex md:w-2/5 md:border-r md:border-[#EDEBE9]' : 'flex-1'} flex-col`}>
+          <div className="divide-y divide-[#F5F4F3]">
+            {messages.length === 0 && <Empty message="No messages yet" />}
+            {messages.map(msg => (
+              <button
+                key={msg.id}
+                onClick={() => handleSelect(msg)}
+                className={`w-full text-left px-4 py-3 hover:bg-[#F5F4F3] transition-colors flex gap-3 items-start ${selected?.id === msg.id ? 'bg-[#F0F7FF]' : ''}`}
+              >
+                <div className="relative shrink-0 mt-0.5">
+                  <Avatar name={msg.fromUserName || '?'} color={roleColors[msg.fromRole] || '#616161'} size="sm" />
+                  {!msg.read && (
+                    <div className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#0078D4] border-2 border-white" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className={`text-[12px] truncate ${!msg.read ? 'font-black text-[#242424]' : 'font-semibold text-[#616161]'}`}>
+                      {msg.fromUserName || 'Unknown'}
+                    </p>
+                    <span className="text-[9px] text-[#A19F9D] shrink-0">{timeAgo(msg.createdAt)}</span>
+                  </div>
+                  <p className="text-[11px] text-[#444441] font-medium truncate mt-0.5">{msg.subject}</p>
+                  {msg.patientName && (
+                    <p className="text-[10px] text-[#0078D4] font-semibold mt-0.5 truncate">Re: {msg.patientName}</p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Supporting detail pane — M3 Supporting Pane pattern */}
+        <AnimatePresence>
+          {selected && (
+            <motion.div
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 flex flex-col min-h-0 bg-[#FAFAFA]"
+            >
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[#EDEBE9] bg-white">
+                <button onClick={() => setSelected(null)} className="md:hidden p-1 rounded-lg hover:bg-[#F3F2F1]">
+                  <X className="h-4 w-4 text-[#616161]" />
+                </button>
+                <Avatar name={selected.fromUserName || '?'} color={roleColors[selected.fromRole] || '#616161'} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-black text-[#242424] truncate">{selected.fromUserName}</p>
+                  <p className="text-[10px] text-[#A19F9D] capitalize">{selected.fromRole?.replace('_', ' ')}</p>
+                </div>
+                <span className="text-[10px] text-[#A19F9D]">{timeAgo(selected.createdAt)}</span>
+              </div>
+              <ScrollArea className="flex-1 p-4">
+                <p className="text-[13px] font-black text-[#242424] mb-1">{selected.subject}</p>
+                {selected.patientName && (
+                  <Badge className="mb-3 bg-[#DEECF9] text-[#0078D4] border-none text-[10px] font-bold">
+                    Re: {selected.patientName}
+                  </Badge>
+                )}
+                <p className="text-[13px] text-[#444441] leading-relaxed">{selected.body}</p>
+              </ScrollArea>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 2 — Courtesy Calls
+// M3 pattern: Action list with inline task completion flow
+// ═══════════════════════════════════════════════════════════════════════════════
+function CourtesyCallsWidget({ tasks, onComplete }: { tasks: any[]; onComplete: (id: string, notes: string) => void }) {
+  const [logging, setLogging] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+
+  const submit = (id: string) => { onComplete(id, notes); setLogging(null); setNotes(''); };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={PhoneCall} label="Courtesy Calls" count={tasks.length} color="bg-[#DFF6DD] text-[#107C10]" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {tasks.length === 0 && <Empty message="No pending courtesy calls" />}
+          {tasks.map(task => (
+            <div key={task.id} className="px-4 py-3">
+              <div className="flex items-start gap-3">
+                {/* Priority indicator — M3 tonal icon button */}
+                <div className={`h-9 w-9 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${urgencyPill(task.priority).split(' ').slice(0,1).join(' ')} ${task.priority === 'urgent' ? 'bg-red-100' : task.priority === 'soon' ? 'bg-amber-100' : 'bg-slate-100'}`}>
+                  <Phone className={`h-4 w-4 ${task.priority === 'urgent' ? 'text-red-600' : task.priority === 'soon' ? 'text-amber-600' : 'text-slate-500'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[12.5px] font-bold text-[#242424] truncate">{task.patientName}</p>
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${urgencyPill(task.priority)}`}>
+                      {task.priority}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#757370] mt-0.5 line-clamp-2">{task.reason}</p>
+                  {task.dueDate && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Clock className="h-3 w-3 text-[#A19F9D]" />
+                      <span className="text-[10px] text-[#A19F9D]">Due {task.dueDate}</span>
+                    </div>
+                  )}
+                  {logging === task.id ? (
+                    <div className="mt-2 space-y-2">
+                      <Textarea
+                        placeholder="Brief call notes..."
+                        className="text-[12px] min-h-[64px] resize-none rounded-xl border-[#EDEBE9] bg-white"
+                        value={notes}
+                        autoFocus
+                        onChange={e => setNotes(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => submit(task.id)}
+                          className="h-8 flex-1 text-[11px] font-bold bg-[#107C10] hover:bg-[#0b5e0b] text-white rounded-xl gap-1.5">
+                          <Check className="h-3.5 w-3.5" /> Log & Complete
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setLogging(null); setNotes(''); }}
+                          className="h-8 w-8 p-0 rounded-xl border-[#EDEBE9]">
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setLogging(task.id)}
+                      className="mt-2 h-7 text-[10px] font-bold border-[#107C10]/30 text-[#107C10] hover:bg-[#DFF6DD] rounded-xl gap-1.5">
+                      <Phone className="h-3 w-3" /> Log Call
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 3 — Check-in Queue (Nurse)
+// M3 pattern: Feed with status chips and vitals summary
+// ═══════════════════════════════════════════════════════════════════════════════
+function CheckInQueueWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
+  const { patients, vitals } = useQueryModel();
+
+  const queue = useMemo(() => {
+    return Object.values(patients as Record<string, any>)
+      .filter((p: any) => ['active', 'triage', 'pending'].includes(p.status || ''))
+      .map((p: any) => {
+        const pVitals = (vitals[p.id] || []);
+        const last = pVitals[pVitals.length - 1];
+        const hoursAgo = last ? (Date.now() - last.timestamp) / 3600000 : Infinity;
+        const vitalsStale = hoursAgo > 4;
+        const isTriage = p.status === 'triage';
+        return { ...p, last, hoursAgo, vitalsStale, isTriage };
+      })
+      .sort((a, b) => (b.isTriage ? 2 : b.vitalsStale ? 1 : 0) - (a.isTriage ? 2 : a.vitalsStale ? 1 : 0));
+  }, [patients, vitals]);
+
+  const statusBadge = (p: any) => {
+    if (p.isTriage) return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">Triage</span>;
+    if (p.vitalsStale) return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Vitals Due</span>;
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">Current</span>;
+  };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={ClipboardList} label="Check-in Queue" count={queue.length} color="bg-[#FFF4CE] text-[#845701]" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {queue.length === 0 && <Empty message="Queue is clear" />}
+          {queue.map(p => (
+            <ListItem
+              key={p.id}
+              onClick={() => onNavigate?.(p.id)}
+              urgent={p.isTriage}
+              leading={
+                <div className={`h-9 w-9 rounded-2xl flex items-center justify-center font-black text-[12px] ${p.isTriage ? 'bg-red-100 text-red-700' : 'bg-[#F3F2F1] text-[#444441]'}`}>
+                  {p.name?.[0]}
+                </div>
+              }
+              headline={p.name}
+              supporting={
+                p.last
+                  ? `HR ${p.last.hr} · BP ${p.last.bp} · ${Math.round(p.hoursAgo)}h ago`
+                  : 'No vitals on record'
+              }
+              trailing={
+                <div className="flex flex-col items-end gap-1.5">
+                  {statusBadge(p)}
+                  <ChevronRight className="h-3.5 w-3.5 text-[#A19F9D] group-hover:text-[#0078D4] transition-colors" />
+                </div>
+              }
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 4 — Medication Flags (Nurse)
+// M3 pattern: Cards with tonal containers for adherence status
+// ═══════════════════════════════════════════════════════════════════════════════
+function MedicationFlagsWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
+  const { patients } = useQueryModel();
+  const [flagged, setFlagged] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    Object.keys(patients).forEach(pid => {
+      const q = query(
+        collection(db, `patients/${pid}/prescriptions`),
+        where('status', '==', 'active')
+      );
+      unsubs.push(onSnapshot(q, snap => {
+        const meds = snap.docs
+          .map(d => ({ id: d.id, patientId: pid, patientName: (patients as any)[pid]?.name, ...d.data() }))
+          .filter((m: any) => m.adherenceStatus && m.adherenceStatus !== 'optimal');
+        setFlagged(prev => [...prev.filter(m => m.patientId !== pid), ...meds]);
+      }, () => {}));
+    });
+    return () => unsubs.forEach(u => u());
+  }, []);
+
+  const adherenceBg: Record<string, string> = {
+    poor: 'bg-red-50 border-red-200 text-red-800',
+    partial: 'bg-amber-50 border-amber-200 text-amber-800',
+    uncertain: 'bg-slate-50 border-slate-200 text-slate-700',
+  };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Pill} label="Medication Flags" count={flagged.length} color="bg-red-50 text-red-600" />
+      <ScrollArea className="flex-1">
+        <div className="px-3 py-2 space-y-2 pb-3">
+          {flagged.length === 0 && <Empty message="All medications on track" />}
+          {flagged.map(med => (
+            <button
+              key={med.id}
+              onClick={() => onNavigate?.(med.patientId)}
+              className={`w-full text-left p-3 rounded-2xl border transition-all hover:shadow-sm ${adherenceBg[med.adherenceStatus] || 'bg-slate-50 border-slate-200 text-slate-700'}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[12px] font-bold truncate">{med.patientName}</p>
+                  <p className="text-[11px] opacity-80 mt-0.5 truncate">{med.medicationName}</p>
+                  <p className="text-[11px] opacity-70 mt-0.5">{med.dosage} · {med.frequency}</p>
+                </div>
+                <span className="text-[9px] font-black uppercase shrink-0 mt-0.5 opacity-80 tracking-wide">
+                  {med.adherenceStatus}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 5 — Today's Appointments (Clinician + Allied + Nurse)
+// M3 pattern: Cards with time chips and visit-type indicators
+// ═══════════════════════════════════════════════════════════════════════════════
+function TodayScheduleWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
+  const { appointments, patients } = useQueryModel();
+  const today = new Date().toDateString();
+
+  const todayAppts = useMemo(() =>
+    Object.values(appointments as any)
+      .filter((a: any) => new Date(a.time).toDateString() === today)
+      .map((a: any) => ({ ...a, patientName: (patients as any)[a.patientId]?.name || 'Unknown Patient' }))
+      .sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()),
+    [appointments, patients]
+  );
+
+  const now = new Date();
+  const statusOf = (appt: any) => {
+    const t = new Date(appt.time);
+    if (appt.status === 'completed') return 'done';
+    if (appt.status === 'in_progress' || appt.status === 'checked_in') return 'active';
+    const diff = (t.getTime() - now.getTime()) / 60000;
+    if (diff < 0) return 'overdue';
+    if (diff < 15) return 'imminent';
+    return 'upcoming';
+  };
+
+  const statusStyle: Record<string, string> = {
+    done: 'bg-slate-100 text-slate-500 border-slate-200',
+    active: 'bg-[#0078D4] text-white border-[#0078D4]',
+    overdue: 'bg-red-100 text-red-700 border-red-200',
+    imminent: 'bg-amber-100 text-amber-700 border-amber-200',
+    upcoming: 'bg-green-50 text-green-700 border-green-200',
+  };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Calendar} label="Today's Schedule" count={todayAppts.length} color="bg-[#DEECF9] text-[#0078D4]" />
+      <ScrollArea className="flex-1">
+        <div className="px-3 py-2 space-y-2 pb-3">
+          {todayAppts.length === 0 && <Empty message="No appointments today" />}
+          {todayAppts.map((appt: any) => {
+            const st = statusOf(appt);
+            return (
+              <button
+                key={appt.id}
+                onClick={() => onNavigate?.(appt.patientId)}
+                className="w-full text-left p-3 rounded-2xl border border-[#EDEBE9] bg-white hover:bg-[#F5F4F3] transition-all flex gap-3 items-center group"
+              >
+                {/* Time block */}
+                <div className="shrink-0 text-center min-w-[44px]">
+                  <p className="text-[14px] font-black text-[#242424] leading-none">
+                    {new Date(appt.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <p className="text-[9px] text-[#A19F9D] font-medium mt-0.5">
+                    {appt.visitType === 'telehealth' ? '📱 Virtual' : '🏥 Clinic'}
+                  </p>
+                </div>
+                <div className="w-px h-8 bg-[#EDEBE9] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12.5px] font-bold text-[#242424] truncate">{appt.patientName}</p>
+                  <p className="text-[11px] text-[#757370] mt-0.5 truncate">{appt.reason}</p>
+                </div>
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${statusStyle[st]}`}>
+                  {st === 'active' ? 'Now' : st === 'imminent' ? 'Soon' : st}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 6 — Pending Results (Clinician)
+// M3 pattern: Feed with priority tonal containers
+// ═══════════════════════════════════════════════════════════════════════════════
+function PendingResultsWidget() {
+  const { patients } = useQueryModel();
+  const [results, setResults] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    Object.keys(patients).forEach(pid => {
+      const q = query(
+        collection(db, `patients/${pid}/investigations`),
+        where('status', 'in', ['ordered', 'sample_collected']),
+        orderBy('createdAt', 'desc'), limit(10)
+      );
+      unsubs.push(onSnapshot(q, snap => {
+        const items = snap.docs.map(d => ({
+          id: d.id, patientId: pid,
+          patientName: (patients as any)[pid]?.name || 'Unknown',
+          ...d.data()
+        }));
+        setResults(prev => [...prev.filter(r => r.patientId !== pid), ...items]);
+      }, () => {}));
+    });
+    return () => unsubs.forEach(u => u());
+  }, []);
+
+  const categoryIcon: Record<string, string> = { laboratory: '🧪', imaging: '🩻', functional: '📈' };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={FlaskConical} label="Pending Results" count={results.length} color="bg-purple-50 text-purple-700" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {results.length === 0 && <Empty message="No pending results" />}
+          {results.map(r => (
+            <div key={r.id} className="px-4 py-3 flex gap-3 items-start">
+              <div className={`h-9 w-9 rounded-2xl flex items-center justify-center text-[16px] shrink-0 ${r.priority === 'urgent' ? 'bg-red-50' : 'bg-purple-50'}`}>
+                {categoryIcon[r.category] || '🔬'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-[12.5px] font-bold text-[#242424] truncate">{r.patientName}</p>
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${urgencyPill(r.priority)}`}>
+                    {r.priority}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#757370] mt-0.5 truncate capitalize">
+                  {r.category} · {r.tests?.map((t: any) => t.testName).join(', ')}
+                </p>
+                <p className="text-[10px] text-[#A19F9D] mt-0.5 capitalize">{r.status?.replace('_', ' ')}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 7 — My Patients (Clinician / Allied)
+// M3 pattern: List with condition chips
+// ═══════════════════════════════════════════════════════════════════════════════
+function MyPatientsWidget({ userId, onNavigate }: { userId: string; onNavigate?: (id: string) => void }) {
+  const { patients } = useQueryModel();
+  const [assigned, setAssigned] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    Object.keys(patients).forEach(pid => {
+      const q = query(collection(db, `patients/${pid}/care_teams`), where('userId', '==', userId), where('status', '==', 'active'));
+      unsubs.push(onSnapshot(q, snap => {
+        if (!snap.empty) setAssigned(prev => new Set([...prev, pid]));
+        else setAssigned(prev => { const n = new Set(prev); n.delete(pid); return n; });
+      }, () => {}));
+    });
+    return () => unsubs.forEach(u => u());
+  }, [userId]);
+
+  const myPatients = Object.values(patients as Record<string, any>).filter(p => assigned.has(p.id));
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Users} label="My Patients" count={myPatients.length} color="bg-[#DFF6DD] text-[#107C10]" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {myPatients.length === 0 && <Empty message="No patients assigned yet" />}
+          {myPatients.map(p => (
+            <ListItem
+              key={p.id}
+              onClick={() => onNavigate?.(p.id)}
+              leading={<Avatar name={p.name} color="#107C10" />}
+              headline={p.name}
+              supporting={p.conditions?.slice(0, 2).join(' · ') || 'No conditions recorded'}
+              trailing={<ChevronRight className="h-4 w-4 text-[#A19F9D] group-hover:text-[#107C10] transition-colors" />}
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 8 — Allied Health Referrals
+// ═══════════════════════════════════════════════════════════════════════════════
+function ReferralsWidget({ specialty, onNavigate }: { specialty?: string; onNavigate?: (id: string) => void }) {
+  const { patients } = useQueryModel();
+  const [refs, setRefs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    Object.keys(patients).forEach(pid => {
+      const q = query(collection(db, `patients/${pid}/referrals`), orderBy('createdAt', 'desc'), limit(5));
+      unsubs.push(onSnapshot(q, snap => {
+        const items = snap.docs
+          .map(d => ({ id: d.id, patientId: pid, patientName: (patients as any)[pid]?.name, ...d.data() }))
+          .filter((r: any) => !specialty || r.specialty?.toLowerCase().includes(specialty.toLowerCase()));
+        setRefs(prev => [...prev.filter(r => r.patientId !== pid), ...items]);
+      }, () => {}));
+    });
+    return () => unsubs.forEach(u => u());
+  }, [specialty]);
+
+  return (
+    <DashCard>
+      <SectionHeader icon={ArrowRight} label="Incoming Referrals" count={refs.length} color="bg-purple-50 text-purple-700" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {refs.length === 0 && <Empty message="No referrals for your specialty" />}
+          {refs.map(r => (
+            <ListItem
+              key={r.id}
+              onClick={() => onNavigate?.(r.patientId)}
+              leading={<Avatar name={r.patientName || '?'} color="#5C2D91" />}
+              headline={r.patientName || 'Unknown'}
+              supporting={r.reason || r.specialty || 'Referral'}
+              trailing={
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                  {r.status || 'Pending'}
+                </span>
+              }
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 9 — Admin: System Overview
+// M3 pattern: Summary cards (stat tiles)
+// ═══════════════════════════════════════════════════════════════════════════════
+function SystemOverviewWidget() {
+  const { patients } = useQueryModel();
+  const [staffCount, setStaffCount] = useState(0);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'), limit(50));
+    return onSnapshot(q, snap => setStaffCount(snap.size), () => {});
+  }, []);
+
+  const pts = Object.values(patients as any);
+  const stats = [
+    { label: 'Total Patients', value: pts.length, icon: Users, color: 'bg-[#DEECF9] text-[#0078D4]', textColor: 'text-[#0078D4]' },
+    { label: 'Active', value: pts.filter((p: any) => p.status === 'active').length, icon: Activity, color: 'bg-[#DFF6DD] text-[#107C10]', textColor: 'text-[#107C10]' },
+    { label: 'Triage', value: pts.filter((p: any) => p.status === 'triage').length, icon: AlertTriangle, color: 'bg-red-50 text-red-600', textColor: 'text-red-700' },
+    { label: 'Staff', value: staffCount, icon: User, color: 'bg-amber-50 text-amber-600', textColor: 'text-amber-700' },
+  ];
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Building2} label="System Overview" color="bg-slate-100 text-slate-600" />
+      <div className="p-4 grid grid-cols-2 gap-3">
+        {stats.map(s => (
+          <div key={s.label} className="rounded-2xl bg-[#FAFAFA] border border-[#EDEBE9] p-4 flex flex-col gap-2">
+            <div className={`h-8 w-8 rounded-xl flex items-center justify-center ${s.color}`}>
+              <s.icon className="h-4 w-4" />
+            </div>
+            <p className={`text-[28px] font-black leading-none ${s.textColor}`}>{s.value}</p>
+            <p className="text-[11px] text-[#A19F9D] font-semibold">{s.label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="px-4 pb-4 flex items-center gap-2 p-3 rounded-2xl bg-green-50 border border-green-200 mx-4 mb-4">
+        <Shield className="h-4 w-4 text-green-700 shrink-0" />
+        <div>
+          <p className="text-[11px] font-bold text-green-800">HIPAA Compliant</p>
+          <p className="text-[10px] text-green-700">All access logs current</p>
+        </div>
+        <Zap className="h-3.5 w-3.5 text-green-600 ml-auto" />
+      </div>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 10 — Admin: Staff Directory
+// ═══════════════════════════════════════════════════════════════════════════════
+function StaffDirectoryWidget() {
+  const [users, setUsers] = useState<any[]>([]);
+  useEffect(() => {
+    const q = query(collection(db, 'users'), limit(30));
+    return onSnapshot(q, snap => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+  }, []);
+
+  const roleColor: Record<string, string> = {
+    clinician: '#107C10', nurse: '#0078D4', allied_health: '#5C2D91',
+    admin: '#D13438', financial: '#8764B8', patient: '#CA5010',
+  };
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Users} label="Active Staff" count={users.length} color="bg-[#DEECF9] text-[#0078D4]" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {users.length === 0 && <Empty message="No staff profiles found" />}
+          {users.map(u => (
+            <ListItem
+              key={u.id}
+              leading={<Avatar name={u.displayName || '?'} color={roleColor[u.role] || '#616161'} />}
+              headline={u.displayName || u.email}
+              supporting={u.specialty || u.email || u.role}
+              trailing={
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0"
+                  style={{ background: `${roleColor[u.role] || '#616161'}15`, color: roleColor[u.role] || '#616161', borderColor: `${roleColor[u.role] || '#616161'}30` }}>
+                  {u.role?.replace('_', ' ')}
+                </span>
+              }
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 11 — Patient: My Vitals
+// M3 pattern: Tonal stat tiles
+// ═══════════════════════════════════════════════════════════════════════════════
+function MyVitalsWidget() {
+  const { vitals } = useQueryModel();
+  const myVitals = (Object.values(vitals as any).flat() as any[]).slice(-1)[0] as any;
+
+  const metrics = myVitals ? [
+    { label: 'Heart Rate', value: `${myVitals.hr}`, unit: 'bpm', icon: Heart, ok: myVitals.hr < 100 && myVitals.hr > 50 },
+    { label: 'Blood Pressure', value: myVitals.bp, unit: 'mmHg', icon: Activity, ok: true },
+    { label: 'Temperature', value: `${myVitals.temp}`, unit: '°F', icon: Thermometer, ok: myVitals.temp < 99.5 },
+    { label: 'SpO2', value: myVitals.spo2 ? `${myVitals.spo2}` : '—', unit: '%', icon: TrendingUp, ok: !myVitals.spo2 || myVitals.spo2 > 95 },
+  ] : [];
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Heart} label="My Vitals" color="bg-red-50 text-red-600" />
+      {!myVitals
+        ? <Empty message="No vitals recorded yet" />
+        : <div className="p-4 grid grid-cols-2 gap-3">
+            {metrics.map(m => (
+              <div key={m.label} className={`rounded-2xl p-4 flex flex-col gap-1.5 border ${m.ok ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex items-center gap-1.5">
+                  <m.icon className={`h-3.5 w-3.5 ${m.ok ? 'text-green-600' : 'text-red-600'}`} />
+                  <p className="text-[10px] font-bold text-[#757370] uppercase tracking-wide">{m.label}</p>
+                </div>
+                <p className={`text-[22px] font-black leading-none ${m.ok ? 'text-green-800' : 'text-red-800'}`}>{m.value}</p>
+                <p className={`text-[10px] font-semibold ${m.ok ? 'text-green-600' : 'text-red-600'}`}>{m.unit}</p>
+              </div>
+            ))}
+          </div>
+      }
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 12 — Patient: My Medications
+// ═══════════════════════════════════════════════════════════════════════════════
+function MyMedicationsWidget() {
+  const [meds, setMeds] = useState<any[]>([]);
+  useEffect(() => {
+    const q = query(collection(db, 'patients/p-1/prescriptions'), where('status', '==', 'active'));
+    return onSnapshot(q, snap => setMeds(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+  }, []);
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Pill} label="My Medications" count={meds.length} color="bg-[#DFF6DD] text-[#107C10]" />
+      <ScrollArea className="flex-1">
+        <div className="divide-y divide-[#F5F4F3] pb-2">
+          {meds.length === 0 && <Empty message="No active prescriptions" />}
+          {meds.map(med => (
+            <div key={med.id} className="px-4 py-3">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-2xl bg-green-50 flex items-center justify-center shrink-0">
+                  <Pill className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12.5px] font-bold text-[#242424] truncate">{med.medicationName}</p>
+                  <p className="text-[11px] text-[#757370] mt-0.5">{med.dosage} · {med.frequency}</p>
+                  {med.sig && <p className="text-[10.5px] text-[#A19F9D] mt-1 italic line-clamp-2">"{med.sig}"</p>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 13 — Financial: Billing Overview
+// ═══════════════════════════════════════════════════════════════════════════════
+function BillingWidget() {
+  const { patients } = useQueryModel();
+  const total = Object.keys(patients).length;
+  const stats = [
+    { label: 'Active Encounters', value: total, color: '#0078D4' },
+    { label: 'Pending Claims', value: Math.ceil(total * 0.6), color: '#CA5010' },
+    { label: 'Approved This Month', value: Math.floor(total * 0.3), color: '#107C10' },
+    { label: 'Requires Review', value: 1, color: '#D13438' },
+  ];
+
+  return (
+    <DashCard>
+      <SectionHeader icon={CreditCard} label="Billing Summary" color="bg-slate-100 text-slate-600" />
+      <div className="p-4 space-y-2">
+        {stats.map(s => (
+          <div key={s.label} className="flex items-center justify-between p-3 rounded-2xl bg-[#FAFAFA] border border-[#EDEBE9]">
+            <p className="text-[12px] font-semibold text-[#444441]">{s.label}</p>
+            <p className="text-[18px] font-black" style={{ color: s.color }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROLE WIDGET LAYOUTS
+// Each role gets exactly 5 widgets laid out in an Android-style responsive grid:
+// - Compact (mobile): single column
+// - Medium (tablet): 2-col, with one card spanning full width
+// - Expanded (desktop): 2–3 cols with supporting pane pattern
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ROLE_META: Record<string, { headline: string; sub: string; accentColor: string }> = {
+  clinician: { headline: 'Clinical Overview', sub: "Your patients, results, and schedule", accentColor: '#107C10' },
+  nurse: { headline: 'Nursing Dashboard', sub: "Queue, vitals, and care tasks", accentColor: '#0078D4' },
+  allied_health: { headline: 'Allied Health Hub', sub: "Referrals, patients, and calls", accentColor: '#5C2D91' },
+  admin: { headline: 'Administration', sub: "System health and staff directory", accentColor: '#D13438' },
+  financial: { headline: 'Billing & Claims', sub: "Financial overview and messaging", accentColor: '#8764B8' },
+  patient: { headline: 'My Health', sub: "Vitals, medications, and appointments", accentColor: '#0078D4' },
+};
+
+function WidgetGrid({ children }: { children: React.ReactNode[] }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0"
+      style={{ gridAutoRows: 'minmax(320px, auto)' }}>
+      {children.map((child, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: i * 0.07, ease: [0.33, 1, 0.68, 1] }}
+          className={`flex flex-col min-h-0 ${i === 0 ? 'md:col-span-2' : ''}`}
+        >
+          {child}
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main export ───────────────────────────────────────────────────────────────
+export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (id: string) => void }) {
+  const { userProfile } = useCurrentUser();
+  const { messages, courtesyCalls, reminders } = useDashboard(userProfile);
+  const role = userProfile?.role || 'clinician';
+  const meta = ROLE_META[role] || ROLE_META.clinician;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = userProfile?.displayName?.split(' ')[0] || 'there';
+
+  const handleRead = async (id: string) => { await markMessageRead(id); };
+  const handleComplete = async (id: string, notes: string) => { await completeCourtesyCall(id, notes); };
+  
+  const handleCompleteReminder = async (id: string) => { await completeReminder(id); };
+  const handleCreateReminder = async (data: any) => { 
+    await createReminder({
+      ...data,
+      assignedToUserId: userProfile?.id,
+      assignedToRole: userProfile?.role
+    });
+  };
+
+  const widgets: Record<string, React.ReactNode[]> = {
+    clinician: [
+      <MessagesWidget messages={messages} onRead={handleRead} />,
+      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      <PendingResultsWidget />,
+      <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
+      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    ],
+    nurse: [
+      <MessagesWidget messages={messages} onRead={handleRead} />,
+      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
+      <MedicationFlagsWidget onNavigate={onNavigateToPatient} />,
+      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    ],
+    allied_health: [
+      <MessagesWidget messages={messages} onRead={handleRead} />,
+      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
+      <ReferralsWidget specialty={userProfile?.specialty as string} onNavigate={onNavigateToPatient} />,
+      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    ],
+    admin: [
+      <MessagesWidget messages={messages} onRead={handleRead} />,
+      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      <SystemOverviewWidget />,
+      <StaffDirectoryWidget />,
+      <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
+      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    ],
+    financial: [
+      <MessagesWidget messages={messages} onRead={handleRead} />,
+      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      <BillingWidget />,
+      <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
+      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    ],
+    patient: [
+      <MessagesWidget messages={messages} onRead={handleRead} />,
+      <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      <MyVitalsWidget />,
+      <MyMedicationsWidget />,
+      <TodayScheduleWidget />,
+      <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    ],
+  };
+
+  const roleWidgets = widgets[role] || widgets.clinician;
+
+  return (
+    <div className="h-full flex flex-col gap-5 min-w-0 overflow-y-auto pb-6">
+      {/* M3 Hero header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.33, 1, 0.68, 1] }}
+        className="flex items-end justify-between shrink-0"
+      >
+        <div>
+          <p className="text-[10px] font-black text-[#A19F9D] uppercase tracking-widest mb-1.5">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+          <h1 className="text-[26px] font-black text-[#1A1A1A] tracking-tight leading-none">
+            {greeting}, <span style={{ color: meta.accentColor }}>{firstName}</span>
+          </h1>
+          <p className="text-[13px] text-[#757370] font-medium mt-1.5">{meta.sub}</p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <div
+            className="h-10 px-4 rounded-full flex items-center gap-2 text-[11px] font-black uppercase tracking-widest"
+            style={{ background: `${meta.accentColor}14`, color: meta.accentColor }}
+          >
+            {role.replace('_', ' ')}
+          </div>
+          {messages.filter(m => !m.read).length > 0 && (
+            <p className="text-[10px] text-[#757370] font-semibold">
+              {messages.filter(m => !m.read).length} unread message{messages.filter(m => !m.read).length > 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Widget grid */}
+      <WidgetGrid>{roleWidgets as React.ReactNode[]}</WidgetGrid>
+    </div>
+  );
+}

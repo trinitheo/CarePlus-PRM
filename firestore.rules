@@ -30,14 +30,22 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == "karlanwartheodore@gmail.com" ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getStaffUser().role == 'admin')
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
     function isClinician() {
       return isSignedIn() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getStaffUser().role == 'clinician') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinician') ||
         request.auth.token.firebase.sign_in_provider == 'anonymous'
+      );
+    }
+
+    function isStaff() {
+      return isSignedIn() && (
+        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial'])
       );
     }
 
@@ -192,6 +200,17 @@ service cloud.firestore {
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
+    function isValidReminder(data) {
+      return data.keys().hasAll(['title', 'dueDate', 'status']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.status in ['pending', 'completed', 'dismissed'] &&
+             (!('priority' in data) || (data.priority in ['routine', 'urgent', 'immediate'])) &&
+             (!('frequency' in data) || (data.frequency in ['once', 'weekly', 'monthly', 'yearly'])) &&
+             (!('assignedToUserId' in data) || (data.assignedToUserId is string)) &&
+             (!('patientId' in data) || (data.patientId is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
+    }
+
     // Collection Rules
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId);
@@ -211,7 +230,7 @@ service cloud.firestore {
       // Sub-collections
       match /care_teams/{memberId} {
         allow get, list: if isSignedIn();
-        allow create: if isAdmin() || (isSignedIn() && memberId == request.auth.uid && isClinician());
+        allow create: if isAdmin() && isValidCareTeamMember(incoming());
         allow update, delete: if isAdmin() || (isSignedIn() && getStaffUser().role == 'admin');
       }
 
@@ -263,6 +282,31 @@ service cloud.firestore {
                      isValidId(appointmentId) &&
                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'time', 'reason', 'updatedAt']);
       allow delete: if isAdmin();
+    }
+
+    match /reminders/{reminderId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(reminderId) && isValidReminder(incoming());
+      allow update: if isSignedIn() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'completedAt', 'completedBy', 'updatedAt'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /courtesy_calls/{callId} {
+      allow get, list: if isSignedIn() && isStaff();
+      allow create: if isSignedIn() && isStaff();
+      allow update: if isSignedIn() && isStaff() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'completionNotes', 'completedAt', 'completedBy'])
+      );
+    }
+
+    match /messages/{messageId} {
+      allow get, list: if isSignedIn() && (request.auth.uid == resource.data.toUserId || request.auth.uid == resource.data.fromUserId);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['read', 'readAt'])
+      );
     }
 
   }
