@@ -69,9 +69,10 @@ interface NoteCardProps {
   onToggleExpand: () => void;
   patientId: string;
   key?: React.Key;
+  canWrite?: boolean;
 }
 
-function NoteCard({ note, isExpanded, onToggleExpand, patientId }: NoteCardProps) {
+function NoteCard({ note, isExpanded, onToggleExpand, patientId, canWrite }: NoteCardProps) {
   const statusColors = {
     draft: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     final: 'bg-green-100 text-green-800 border-green-300',
@@ -139,16 +140,18 @@ function NoteCard({ note, isExpanded, onToggleExpand, patientId }: NoteCardProps
             </div>
           </div>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <SOAPNoteModal patientId={patientId} initialNote={note}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Edit"
-              >
-                <Edit className="w-4 h-4 text-[#616161]" />
-              </Button>
-            </SOAPNoteModal>
+            {canWrite && (
+              <SOAPNoteModal patientId={patientId} initialNote={note}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Edit"
+                >
+                  <Edit className="w-4 h-4 text-[#616161]" />
+                </Button>
+              </SOAPNoteModal>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -204,6 +207,7 @@ interface PatientNotesFeedProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onViewMedications?: () => void;
+  canWrite?: boolean;
 }
 
 export function PatientNotesFeed({ 
@@ -211,7 +215,8 @@ export function PatientNotesFeed({
   onClose, 
   isExpanded, 
   onToggleExpand,
-  onViewMedications
+  onViewMedications,
+  canWrite
 }: PatientNotesFeedProps) {
   const patientId = patient?.id || 'p-1';
   const clinicalData = usePatientClinicalData(patientId);
@@ -314,7 +319,7 @@ export function PatientNotesFeed({
                     <p className="text-[11px] font-bold text-[#616161] uppercase tracking-widest opacity-60">Full Patient Longitudinal Record</p>
                   </div>
                 </div>
-                {processedNotes.length === 0 && !clinicalData.loading && (
+                {processedNotes.length === 0 && !clinicalData.loading && canWrite && (
                    <Button 
                     onClick={handleSeedData}
                     disabled={isSeeding}
@@ -381,6 +386,7 @@ export function PatientNotesFeed({
                     isExpanded={expandedNotes.has(note.id)}
                     onToggleExpand={() => toggleExpand(note.id)}
                     patientId={patientId}
+                    canWrite={canWrite}
                   />
                 ))}
               </div>
@@ -396,7 +402,8 @@ export function PatientNotesFeed({
         </div>
 
         {/* Supporting Rail - Quick Actions */}
-        <div className="hidden lg:flex w-80 bg-white border-l border-[#EDEBE9] flex-col overflow-hidden">
+        {canWrite && (
+          <div className="hidden lg:flex w-80 bg-white border-l border-[#EDEBE9] flex-col overflow-hidden">
           {/* Row 1: Quick Documentation */}
           <div className="flex-1 border-b border-[#F3F2F1] bg-[#FAFAFA]/50 overflow-hidden pt-[23px]">
             <div className="p-6 pt-[22px]">
@@ -471,8 +478,9 @@ export function PatientNotesFeed({
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
-  );
+  </div>
+);
 }
 

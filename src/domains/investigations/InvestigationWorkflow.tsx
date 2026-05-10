@@ -35,9 +35,10 @@ import { motion, AnimatePresence } from 'motion/react';
 interface InvestigationWorkflowProps {
   patientId: string;
   investigations: Investigation[];
+  canWrite?: boolean;
 }
 
-export function InvestigationWorkflow({ patientId, investigations }: InvestigationWorkflowProps) {
+export function InvestigationWorkflow({ patientId, investigations, canWrite }: InvestigationWorkflowProps) {
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [resultSummary, setResultSummary] = useState('');
@@ -248,7 +249,7 @@ export function InvestigationWorkflow({ patientId, investigations }: Investigati
                       </div>
                       <div className="col-span-2 lg:col-span-1 text-right">
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                           {inv.status === 'ordered' && (
+                           {canWrite && inv.status === 'ordered' && (
                              <Button 
                                variant="outline" 
                                size="sm" 
@@ -258,7 +259,7 @@ export function InvestigationWorkflow({ patientId, investigations }: Investigati
                                 Collect Sample
                              </Button>
                            )}
-                           {inv.status === 'sample_collected' && (
+                           {canWrite && inv.status === 'sample_collected' && (
                              <Button 
                                variant="outline" 
                                size="sm" 
@@ -268,7 +269,7 @@ export function InvestigationWorkflow({ patientId, investigations }: Investigati
                                 Enter Result
                              </Button>
                            )}
-                           {inv.status === 'resulted' && (
+                           {canWrite && inv.status === 'resulted' && (
                              <Button 
                                variant="outline" 
                                size="sm" 
@@ -359,7 +360,7 @@ export function InvestigationWorkflow({ patientId, investigations }: Investigati
             <Button variant="ghost" className="font-bold text-[#616161] hover:text-[#242424]" onClick={() => setIsResultModalOpen(false)}>
               Close
             </Button>
-            {selectedInvestigation?.status !== 'reviewed' && (
+            {canWrite && selectedInvestigation?.status !== 'reviewed' && (
               <Button 
                 onClick={handleSubmitResults} 
                 disabled={isUpdating || !resultSummary.trim()}

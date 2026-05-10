@@ -73,9 +73,9 @@ export function ClinicalRecords({
     return { accessLevel: membership.accessLevel, role: membership.userRole };
   }, [clinicalData.care_teams, userProfile]);
 
-  const canReadClinical = myAccess?.accessLevel === 'clinical_full' || myAccess?.accessLevel === 'clinical_limited';
-  const canWriteClinical = myAccess?.accessLevel === 'clinical_full';
-  const isAuthorized = !!myAccess || userProfile?.role === 'admin';
+  const canReadClinical = myAccess?.accessLevel === 'clinical_full' || myAccess?.accessLevel === 'clinical_limited' || userProfile?.role === 'patient';
+  const canWriteClinical = myAccess?.accessLevel === 'clinical_full' && userProfile?.role !== 'patient';
+  const isAuthorized = !!myAccess || userProfile?.role === 'admin' || userProfile?.role === 'patient';
 
   useEffect(() => {
     if (patientId && isAuthorized) {
@@ -205,13 +205,25 @@ export function ClinicalRecords({
         </div>
       </ScrollArea>
       <div className="p-4 bg-[#FAFAFA] border-t border-[#EDEBE9] text-center shrink-0">
-        <Button 
-          variant="link" 
-          onClick={() => setIsPrescriptionPadOpen(true)}
-          className="text-[11px] font-bold text-[#107C10] h-auto p-0 uppercase tracking-widest"
-        >
-          {clinicalData.prescriptions.length > 0 ? "View Full Medication List" : "Issue First Prescription"}
-        </Button>
+        {clinicalData.prescriptions.length > 0 ? (
+          <Button 
+            variant="link" 
+            onClick={() => setActiveTab('medications')}
+            className="text-[11px] font-bold text-[#0078D4] h-auto p-0 uppercase tracking-widest"
+          >
+            View Full Medication List
+          </Button>
+        ) : canWriteClinical ? (
+          <Button 
+            variant="link" 
+            onClick={() => setIsPrescriptionPadOpen(true)}
+            className="text-[11px] font-bold text-[#107C10] h-auto p-0 uppercase tracking-widest"
+          >
+            Issue First Prescription
+          </Button>
+        ) : (
+          <p className="text-[10px] font-bold text-[#A19F9D] uppercase tracking-widest">No active medications</p>
+        )}
       </div>
     </Card>
   );
@@ -473,7 +485,7 @@ export function ClinicalRecords({
                       variant="ghost" 
                       size="icon" 
                       className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
-                      title="Prescription Pad"
+                      title="Issue Prescription"
                       onClick={() => setIsPrescriptionPadOpen(true)}
                   >
                       <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
@@ -503,7 +515,7 @@ export function ClinicalRecords({
                 {/* MIDDLE COLUMN */}
                 <div className="flex flex-col min-h-0 gap-2">
                    <div className="flex-initial min-h-0 transition-all duration-300">
-                      <VitalsCard vitals={patientVitals} patientId={patientId} />
+                      <VitalsCard vitals={patientVitals} patientId={patientId} canWrite={canWriteClinical} />
                    </div>
                    <div 
                       className="flex-1 min-h-[300px]"
@@ -530,6 +542,7 @@ export function ClinicalRecords({
                 isExpanded={isNotesExpanded}
                 onToggleExpand={() => setIsNotesExpanded(!isNotesExpanded)}
                 onViewMedications={() => setActiveTab('medications')}
+                canWrite={canWriteClinical}
               />
             </TabsContent>
 
@@ -539,6 +552,7 @@ export function ClinicalRecords({
                   patientId={patientId}
                   medications={mappedMedications}
                   conditions={patient?.conditions || []}
+                  canWrite={canWriteClinical}
                 />
               </div>
             </TabsContent>
@@ -547,6 +561,7 @@ export function ClinicalRecords({
                <InvestigationWorkflow 
                  patientId={patientId} 
                  investigations={clinicalData.investigations} 
+                 canWrite={canWriteClinical}
                />
             </TabsContent>
 

@@ -100,6 +100,15 @@ export function KnowledgeGraph({
     ...(clinicalData.prescriptions.length > 0 || true ? [{ id: 'rx', label: 'Prescriptions', icon: Pill, type: 'source', color: '#107C10' } as GraphNode] : []),
     ...(clinicalData.investigations.length > 0 || true ? [{ id: 'lab', label: 'LABS', icon: Microscope, type: 'source', color: '#0078D4' } as GraphNode] : []),
     
+    // Health Device Integration Node
+    ...(records.length > 0 ? [{ 
+      id: 'devices', 
+      label: 'DEVICES', 
+      icon: Watch, 
+      type: 'source',
+      color: '#00B7C3' 
+    } as GraphNode] : []),
+    
     // Consolidated Ongoing Conditions Node
     ...(patient?.conditions && patient.conditions.length > 0 || true ? [{
       id: 'ongoing-conditions',

@@ -32,9 +32,10 @@ const TOKENS = {
 interface VitalsCardProps {
   vitals: Vitals[];
   patientId: string;
+  canWrite?: boolean;
 }
 
-export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
+export function VitalsCard({ vitals, patientId, canWrite }: VitalsCardProps) {
   const sizeClass = useWindowSizeClass();
   const [isWatchmanExpanded, setIsWatchmanExpanded] = useState(sizeClass === 'expanded');
   const [isVitalsExpanded, setIsVitalsExpanded] = useState(false);
@@ -143,14 +144,16 @@ export function VitalsCard({ vitals, patientId }: VitalsCardProps) {
           <CardTitle className="text-xl font-bold text-[#242424] tracking-tight">Vitals</CardTitle>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            variant="default" 
-            size="sm" 
-            className="h-8 px-3 rounded-lg bg-[#0078D4] text-[10px] font-bold text-white uppercase tracking-wider hover:bg-[#005A9E] shadow-sm"
-            onClick={() => setIsModalOpen(true)}
-          >
-            Update
-          </Button>
+          {canWrite && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="h-8 px-3 rounded-lg bg-[#0078D4] text-[10px] font-bold text-white uppercase tracking-wider hover:bg-[#005A9E] shadow-sm"
+              onClick={() => setIsModalOpen(true)}
+            >
+              Update
+            </Button>
+          )}
           <div 
             className="flex items-center gap-2 px-2 py-1 bg-[#FDE7E9] border border-[#FBC6CC] rounded-full cursor-pointer hover:bg-[#FBC6CC] transition-colors"
             onClick={() => setIsWatchmanExpanded(!isWatchmanExpanded)}

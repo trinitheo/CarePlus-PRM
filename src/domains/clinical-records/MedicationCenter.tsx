@@ -58,9 +58,10 @@ interface MedicationCenterProps {
   patientId: string;
   medications: Medication[];
   conditions: string[];
+  canWrite?: boolean;
 }
 
-export function MedicationCenter({ patientId, medications, conditions }: MedicationCenterProps) {
+export function MedicationCenter({ patientId, medications, conditions, canWrite }: MedicationCenterProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
   const [interactionResult, setInteractionResult] = useState<string | null>(null);
@@ -298,17 +299,19 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                           <Badge className={`${ADHERENCE_MAP[med.adherenceStatus || 'optimal'].color} border-none text-[9px] font-black uppercase px-2 py-0.5 rounded-sm`}>
                             {ADHERENCE_MAP[med.adherenceStatus || 'optimal'].label} Adherence
                           </Badge>
-                          <div className="hidden group-hover/adh:flex items-center bg-white border border-[#EDEBE9] rounded-md shadow-sm p-0.5 ml-1">
-                            {(Object.keys(ADHERENCE_MAP) as Array<keyof typeof ADHERENCE_MAP>).map((status) => (
-                              <button
-                                key={status}
-                                onClick={() => handleUpdateAdherence(med, status)}
-                                className={`px-1.5 py-0.5 text-[8px] font-black uppercase rounded transition-colors ${med.adherenceStatus === status ? 'bg-[#0078D4] text-white' : 'hover:bg-[#F3F2F1] text-[#616161]'}`}
-                              >
-                                {status[0]}
-                              </button>
-                            ))}
-                          </div>
+                          {canWrite && (
+                            <div className="hidden group-hover/adh:flex items-center bg-white border border-[#EDEBE9] rounded-md shadow-sm p-0.5 ml-1">
+                              {(Object.keys(ADHERENCE_MAP) as Array<keyof typeof ADHERENCE_MAP>).map((status) => (
+                                <button
+                                  key={status}
+                                  onClick={() => handleUpdateAdherence(med, status)}
+                                  className={`px-1.5 py-0.5 text-[8px] font-black uppercase rounded transition-colors ${med.adherenceStatus === status ? 'bg-[#0078D4] text-white' : 'hover:bg-[#F3F2F1] text-[#616161]'}`}
+                                >
+                                  {status[0]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <span className="text-[9px] font-black text-[#BDBDBD] uppercase tracking-wider">Started: {med.prescribedDate || 'N/A'}</span>
                       </div>
@@ -325,71 +328,75 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                         <Info className="h-4 w-4" />
                       </Button>
                       
-                      {confirmDiscontinueId === med.id ? (
-                        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#5C2D91]/20 shadow-lg animate-in zoom-in-95">
-                          <span className="text-[10px] font-black text-[#5C2D91] px-2 uppercase">Discontinue?</span>
-                          <Button 
-                            variant="default" 
-                            size="sm" 
-                            disabled={actionLoading === med.id}
-                            className="h-7 px-3 text-[10px] font-black uppercase bg-[#5C2D91] hover:bg-[#4a2475] text-white rounded-lg shadow-sm"
-                            onClick={() => handleDiscontinue(med.id || '')}
-                          >
-                            {actionLoading === med.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Yes'}
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
-                            onClick={() => setConfirmDiscontinueId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#5C2D91] hover:bg-[#F3F2F1]" 
-                          title="Discontinue"
-                          onClick={() => setConfirmDiscontinueId(med.id || null)}
-                        >
-                          <History className="h-4 w-4" />
-                        </Button>
-                      )}
+                        {canWrite && (
+                          confirmDiscontinueId === med.id ? (
+                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#5C2D91]/20 shadow-lg animate-in zoom-in-95">
+                              <span className="text-[10px] font-black text-[#5C2D91] px-2 uppercase">Discontinue?</span>
+                              <Button 
+                                variant="default" 
+                                size="sm" 
+                                disabled={actionLoading === med.id}
+                                className="h-7 px-3 text-[10px] font-black uppercase bg-[#5C2D91] hover:bg-[#4a2475] text-white rounded-lg shadow-sm"
+                                onClick={() => handleDiscontinue(med.id || '')}
+                              >
+                                {actionLoading === med.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Yes'}
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
+                                onClick={() => setConfirmDiscontinueId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#5C2D91] hover:bg-[#F3F2F1]" 
+                              title="Discontinue"
+                              onClick={() => setConfirmDiscontinueId(med.id || null)}
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                          )
+                        )}
 
-                      {confirmDeleteId === med.id ? (
-                        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#D13438]/20 shadow-lg animate-in zoom-in-95">
-                          <span className="text-[10px] font-black text-[#D13438] px-2 uppercase">Confirm?</span>
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            disabled={actionLoading === med.id}
-                            className="h-7 px-3 text-[10px] font-black uppercase bg-[#D13438] hover:bg-[#a4262c] text-white rounded-lg shadow-sm"
-                            onClick={() => handlePermanentDelete(med.id || '')}
-                          >
-                            {actionLoading === med.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Delete'}
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
-                            onClick={() => setConfirmDeleteId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9]" 
-                          title="Delete Record"
-                          onClick={() => setConfirmDeleteId(med.id || null)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                        {canWrite && (
+                          confirmDeleteId === med.id ? (
+                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-[#D13438]/20 shadow-lg animate-in zoom-in-95">
+                              <span className="text-[10px] font-black text-[#D13438] px-2 uppercase">Confirm?</span>
+                              <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                disabled={actionLoading === med.id}
+                                className="h-7 px-3 text-[10px] font-black uppercase bg-[#D13438] hover:bg-[#a4262c] text-white rounded-lg shadow-sm"
+                                onClick={() => handlePermanentDelete(med.id || '')}
+                              >
+                                {actionLoading === med.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Delete'}
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-3 text-[10px] font-black uppercase text-[#616161] hover:bg-[#F3F2F1] rounded-lg"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 rounded-lg text-[#BDBDBD] hover:text-[#D13438] hover:bg-[#FDE7E9]" 
+                              title="Delete Record"
+                              onClick={() => setConfirmDeleteId(med.id || null)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )
+                        )}
                     </div>
                   </motion.div>
                 )) : (
@@ -424,14 +431,16 @@ export function MedicationCenter({ patientId, medications, conditions }: Medicat
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-[9px] font-black uppercase text-[#0078D4] hover:bg-[#DEECF9] rounded-md hidden group-hover:flex"
-                        onClick={() => handleReactivate(med)}
-                      >
-                        Restore
-                      </Button>
+                      {canWrite && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 px-2 text-[9px] font-black uppercase text-[#0078D4] hover:bg-[#DEECF9] rounded-md hidden group-hover:flex"
+                          onClick={() => handleReactivate(med)}
+                        >
+                          Restore
+                        </Button>
+                      )}
                       <Badge variant="ghost" className={`text-[9px] font-black uppercase tracking-tighter ${med.status === 'cancelled' ? 'text-[#D13438]' : 'text-[#A19F9D]'}`}>
                         {med.status === 'cancelled' ? 'Voided' : 'Complete Cycle'}
                       </Badge>

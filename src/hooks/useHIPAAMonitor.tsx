@@ -87,11 +87,6 @@ export function HIPAAMonitorProvider({ children }: { children: React.ReactNode }
     <HIPAAMonitorContext.Provider value={{ logAccess, auditTrail, isLocked, unlockSession }}>
         {children}
         
-        {/* Persistent HIPAA Indicator */}
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-slate-900/90 text-white px-3 py-1.5 rounded-full shadow-lg border border-slate-700 pointer-events-none transition-opacity duration-500 opacity-80 hover:opacity-100">
-            <ShieldAlert className="h-4 w-4 text-emerald-400" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200">HIPAA Protected</span>
-        </div>
 
         {/* Lock Screen Overlay */}
         <AnimatePresence>

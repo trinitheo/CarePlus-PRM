@@ -29,6 +29,9 @@ const SPECIALTIES: AlliedHealthSpecialty[] = [
 export function CareTeamManager({ patientId }: { patientId: string }) {
   const { userProfile } = useCurrentUser();
   const isAdminUser = userProfile?.role === 'admin';
+  const isPatient = userProfile?.role === 'patient';
+  const myMember = members.find(m => m.userId === userProfile?.id);
+  const canManageTeam = isAdminUser || (myMember?.accessLevel === 'clinical_full' && !isPatient);
   
   const [members, setMembers] = useState<CareTeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,9 +131,9 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
             <p className="text-[9px] text-[#616161] font-medium leading-none mt-1">Tiered access control for clinical team</p>
           </div>
 
-          {isAdminUser && (
+          {canManageTeam && (
             <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-              <DialogTrigger asChild>
+               <DialogTrigger asChild>
                 <Button size="sm" className="h-8 bg-[#0078D4] hover:bg-[#005A9E] text-white text-[10px] font-bold rounded-lg px-3 gap-2">
                   <UserPlus className="h-3.5 w-3.5" />
                   Assign Staff
@@ -265,7 +268,7 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
                         </div>
                         <div className="flex items-center gap-1">
                           {getAccessBadge(member.accessLevel)}
-                          {isAdminUser && (
+                          {canManageTeam && (
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -309,7 +312,7 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#616161]">No Staff Assigned</p>
                   <p className="text-[9px] font-bold text-[#A19F9D] mt-2 max-w-[180px]">All patient data currently locked to default admin access levels.</p>
                 </div>
-                {isAdminUser && (
+                 {canManageTeam && (
                   <Button 
                     size="sm" 
                     variant="outline" 

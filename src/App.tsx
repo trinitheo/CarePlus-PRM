@@ -133,8 +133,9 @@ export default function App() {
         {currentModule === 'dashboard' && (
           <div className="h-full flex flex-col min-w-0">
             <RoleDashboard onNavigateToPatient={(id) => {
-              selectPatient(id);
-              handleNavigate('patients');
+              setCurrentModule('patients');
+              setViewState({ subView: 'detail', selectedPatientId: id });
+              setIsListOpen(false);
             }} />
           </div>
         )}
@@ -234,7 +235,11 @@ export default function App() {
         
         {currentModule === 'scheduling' && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <UpcomingSchedule />
+            <UpcomingSchedule onNavigateToPatient={(id) => {
+              setCurrentModule('patients');
+              setViewState({ subView: 'detail', selectedPatientId: id });
+              setIsListOpen(false);
+            }} />
           </div>
         )}
 

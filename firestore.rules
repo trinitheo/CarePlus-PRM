@@ -79,9 +79,11 @@ service cloud.firestore {
 
     // Entity Validations
     function isValidUser(data) {
-      return data.keys().hasAll(['email', 'role']) &&
-             data.email is string && data.email.size() <= 256 &&
-             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient'];
+      return data.keys().hasAll(['role']) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
+             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient'] &&
+             (!('dashboardSettings' in data) || (data.dashboardSettings is map)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidCareTeamMember(data) {
@@ -216,8 +218,8 @@ service cloud.firestore {
       allow get: if isSignedIn() && (request.auth.uid == userId);
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
       allow update: if (isSignedIn() && request.auth.uid == userId) && 
-                     incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'specialty']) &&
-                     isValidUser(incoming());
+                     isValidUser(incoming()) &&
+                     incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'specialty', 'dashboardSettings', 'updatedAt']);
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 

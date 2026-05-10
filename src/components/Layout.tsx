@@ -74,7 +74,7 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
           <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-emerald-50">
             <ShieldCheck className="h-6 w-6" />
           </div>
-          <span className="text-[9px] font-bold uppercase">SECURE</span>
+          <span className="hidden lg:block text-[9px] font-bold uppercase">SECURE</span>
         </button>
 
         <button 
@@ -125,7 +125,7 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
         <div className="p-1.5 rounded-full transition-colors h-8 w-8 flex items-center justify-center">
           <ShieldCheck className="h-5 w-5" />
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-tight">HIPAA</span>
+        <span className="hidden lg:block text-[10px] font-bold uppercase tracking-tight">HIPAA</span>
       </button>
     </nav>
   );

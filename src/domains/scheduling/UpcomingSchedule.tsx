@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQueryModel, Appointment, Patient } from '../../store/eventStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { 
@@ -19,8 +20,9 @@ import { calculatePriority } from '../../lib/triageLogic';
 import { transition } from '../../lib/motion';
 import { updateAppointmentStatus } from '../../services/clinicalFirestoreService';
 
-export function UpcomingSchedule() {
+export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?: (id: string) => void }) {
   const { appointments, patients } = useQueryModel();
+  const { userProfile } = useCurrentUser();
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedApptId, setSelectedApptId] = useState<string | null>(null);
@@ -50,7 +52,12 @@ export function UpcomingSchedule() {
       .filter(appt => {
         const apptDate = new Date(appt.time).getTime();
         // Point 4: Calculate what counts as "Today"
-        return apptDate >= today && apptDate < endOfToday;
+        const isToday = apptDate >= today && apptDate < endOfToday;
+        
+        // Filter by patient if the user is a patient
+        const matchesUser = userProfile?.role === 'patient' ? appt.patientId === userProfile.id : true;
+        
+        return isToday && matchesUser;
       })
       .filter(appt => {
         // Point 3: Cross-Reference System (Looking up patient name)
@@ -209,7 +216,11 @@ export function UpcomingSchedule() {
                                  }`}
                                  onClick={(e) => {
                                    e.stopPropagation();
-                                   if (appt.status === 'scheduled') handleStatusUpdate(appt.id, 'checked_in');
+                                   if (appt.status === 'scheduled') {
+                                     handleStatusUpdate(appt.id, 'checked_in');
+                                   } else {
+                                     onNavigateToPatient?.(appt.patientId);
+                                   }
                                  }}
                                >
                                  {appt.status === 'scheduled' ? 'Confirm Arrival' : 'View record'}
@@ -404,7 +415,7 @@ export function UpcomingSchedule() {
                    )}
                    <Button 
                      className="bg-[#0078D4] hover:bg-[#005A9E] text-white shadow-lg shadow-[#0078D4]/20 rounded-xl px-8 font-black uppercase tracking-widest text-[11px]"
-                     onClick={() => setSelectedApptId(null)}
+                     onClick={() => onNavigateToPatient?.(selectedAppt.patientId)}
                    >
                      Launch Exam Room
                    </Button>

@@ -96,11 +96,11 @@ export function DemoLogin() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#FAFAFA] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-[#FAFAFA] overflow-y-auto flex justify-center p-4 py-12 md:items-center md:py-4">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="max-w-4xl w-full"
+        className="max-w-4xl w-full my-auto"
       >
         <div className="grid md:grid-cols-5 gap-8 bg-white rounded-[32px] p-8 shadow-2xl shadow-[#000000]/5 border border-[#EDEBE9]">
           

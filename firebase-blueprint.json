@@ -13,6 +13,10 @@
           "enum": ["clinician", "nurse", "allied_health", "admin", "financial", "patient"] 
         },
         "specialty": { "type": "string", "description": "e.g. Physiotherapist, Psychologist, Optometrist" },
+        "dashboardSettings": {
+          "type": "object",
+          "description": "Customized dashboard layout for different screen sizes"
+        },
         "organizationId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },

@@ -524,10 +524,10 @@ export async function updateUserDashboardSettings(userId: string, settings: any)
   const path = `users/${userId}`;
   try {
     const docRef = doc(db, path);
-    await updateDoc(docRef, {
+    await updateDoc(docRef, cleanData({
       dashboardSettings: settings,
       updatedAt: serverTimestamp()
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

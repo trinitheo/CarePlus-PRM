@@ -15,7 +15,8 @@ import {
   Calendar, ChevronRight, Check, X, Thermometer, Heart, Activity,
   Users, Building2, Shield, CreditCard, TrendingUp, AlertTriangle,
   Zap, Phone, ArrowRight, Clock, User, MoreHorizontal, Bell, Plus,
-  GripVertical, Settings2, Save, Eye, EyeOff, Maximize2, Minimize2
+  GripVertical, Settings2, Save, Eye, EyeOff, Maximize2, Minimize2,
+  Wind, Droplets, Scale, Smartphone, Apple, Share2, Link2
 } from 'lucide-react';
 import { 
   completeCourtesyCall, 
@@ -24,6 +25,7 @@ import {
   completeReminder,
   updateUserDashboardSettings 
 } from '../../services/clinicalFirestoreService';
+import { DEFAULT_DASHBOARD_SETTINGS } from '../../constants';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -44,6 +46,10 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+import { useWindowSizeClass } from '../../hooks/useAdaptiveWidth';
+import { VitalsCard } from '../clinical-records/VitalsCard';
+import { HealthConnectManager } from '../clinical-records/HealthConnectManager';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts: any): string {
@@ -112,14 +118,14 @@ function ListItem({ leading, headline, supporting, trailing, onClick, urgent }: 
 }
 
 // ─── M3 Card shell ───────────────────────────────────────────────────────────
-function DashCard({ children, className = '', isEditing, onToggleVisibility, onToggleSize, visible = true, size = 'small' }: { 
+function DashCard({ children, className = '', isEditing, onToggleVisibility, onToggleSize, visible = true, size = '1x1' }: { 
   children: React.ReactNode; 
   className?: string;
   isEditing?: boolean;
   onToggleVisibility?: () => void;
   onToggleSize?: () => void;
   visible?: boolean;
-  size?: 'small' | 'large';
+  size?: '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2';
 }) {
   return (
     <div className={`
@@ -134,9 +140,9 @@ function DashCard({ children, className = '', isEditing, onToggleVisibility, onT
             variant="ghost" 
             size="sm" 
             onClick={(e) => { e.stopPropagation(); onToggleSize?.(); }}
-            className="h-8 w-8 p-0 rounded-full bg-white/80 backdrop-blur hover:bg-white"
+            className="h-8 w-auto px-2 rounded-full bg-white/80 backdrop-blur hover:bg-white text-[10px] font-black text-[#0078D4]"
           >
-            {size === 'large' ? <Minimize2 className="h-4 w-4 text-[#0078D4]" /> : <Maximize2 className="h-4 w-4 text-[#0078D4]" />}
+            {size}
           </Button>
           <Button 
             variant="ghost" 
@@ -161,7 +167,7 @@ function SortableWidget({ id, children, isEditing, onToggleVisibility, onToggleS
   onToggleVisibility: () => void;
   onToggleSize: () => void;
   visible: boolean;
-  size: 'small' | 'large';
+  size: '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2';
 }) {
   const {
     attributes,
@@ -674,16 +680,20 @@ function MedicationFlagsWidget({ onNavigate }: { onNavigate?: (id: string) => vo
 // WIDGET 5 — Today's Appointments (Clinician + Allied + Nurse)
 // M3 pattern: Cards with time chips and visit-type indicators
 // ═══════════════════════════════════════════════════════════════════════════════
-function TodayScheduleWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
+function TodayScheduleWidget({ onNavigate, patientId }: { onNavigate?: (id: string) => void, patientId?: string }) {
   const { appointments, patients } = useQueryModel();
   const today = new Date().toDateString();
 
   const todayAppts = useMemo(() =>
     Object.values(appointments as any)
-      .filter((a: any) => new Date(a.time).toDateString() === today)
+      .filter((a: any) => {
+        const isToday = new Date(a.time).toDateString() === today;
+        const matchesPatient = patientId ? a.patientId === patientId : true;
+        return isToday && matchesPatient;
+      })
       .map((a: any) => ({ ...a, patientName: (patients as any)[a.patientId]?.name || 'Unknown Patient' }))
       .sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()),
-    [appointments, patients]
+    [appointments, patients, today, patientId]
   );
 
   const now = new Date();
@@ -749,7 +759,7 @@ function TodayScheduleWidget({ onNavigate }: { onNavigate?: (id: string) => void
 // WIDGET 6 — Pending Results (Clinician)
 // M3 pattern: Feed with priority tonal containers
 // ═══════════════════════════════════════════════════════════════════════════════
-function PendingResultsWidget() {
+function PendingResultsWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
   const { patients } = useQueryModel();
   const [results, setResults] = useState<any[]>([]);
 
@@ -771,7 +781,7 @@ function PendingResultsWidget() {
       }, () => {}));
     });
     return () => unsubs.forEach(u => u());
-  }, []);
+  }, [patients]);
 
   const categoryIcon: Record<string, string> = { laboratory: '🧪', imaging: '🩻', functional: '📈' };
 
@@ -782,13 +792,17 @@ function PendingResultsWidget() {
         <div className="divide-y divide-[#F5F4F3] pb-2">
           {results.length === 0 && <Empty message="No pending results" />}
           {results.map(r => (
-            <div key={r.id} className="px-4 py-3 flex gap-3 items-start">
+            <button 
+              key={r.id} 
+              onClick={() => onNavigate?.(r.patientId)}
+              className="w-full text-left px-4 py-3 flex gap-3 items-start hover:bg-[#F5F4F3] transition-colors group"
+            >
               <div className={`h-9 w-9 rounded-2xl flex items-center justify-center text-[16px] shrink-0 ${r.priority === 'urgent' ? 'bg-red-50' : 'bg-purple-50'}`}>
                 {categoryIcon[r.category] || '🔬'}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1">
-                  <p className="text-[12.5px] font-bold text-[#242424] truncate">{r.patientName}</p>
+                  <p className="text-[12.5px] font-bold text-[#242424] group-hover:text-[#0078D4] transition-colors truncate">{r.patientName}</p>
                   <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${urgencyPill(r.priority)}`}>
                     {r.priority}
                   </span>
@@ -798,7 +812,7 @@ function PendingResultsWidget() {
                 </p>
                 <p className="text-[10px] text-[#A19F9D] mt-0.5 capitalize">{r.status?.replace('_', ' ')}</p>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </ScrollArea>
@@ -989,35 +1003,76 @@ function StaffDirectoryWidget() {
 // WIDGET 11 — Patient: My Vitals
 // M3 pattern: Tonal stat tiles
 // ═══════════════════════════════════════════════════════════════════════════════
-function MyVitalsWidget() {
+function MyVitalsWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
+  const { userProfile } = useCurrentUser();
   const { vitals } = useQueryModel();
-  const myVitals = (Object.values(vitals as any).flat() as any[]).slice(-1)[0] as any;
+  const myVitalsList = vitals[userProfile?.id || ''] || [];
+  const latest = myVitalsList[myVitalsList.length - 1];
 
-  const metrics = myVitals ? [
-    { label: 'Heart Rate', value: `${myVitals.hr}`, unit: 'bpm', icon: Heart, ok: myVitals.hr < 100 && myVitals.hr > 50 },
-    { label: 'Blood Pressure', value: myVitals.bp, unit: 'mmHg', icon: Activity, ok: true },
-    { label: 'Temperature', value: `${myVitals.temp}`, unit: '°F', icon: Thermometer, ok: myVitals.temp < 99.5 },
-    { label: 'SpO2', value: myVitals.spo2 ? `${myVitals.spo2}` : '—', unit: '%', icon: TrendingUp, ok: !myVitals.spo2 || myVitals.spo2 > 95 },
-  ] : [];
+  const metrics = useMemo(() => {
+    if (!latest) return [];
+    return [
+      { label: 'Heart Rate', value: latest.hr, unit: 'bpm', icon: Heart, color: '#D13438', ok: latest.hr < 100 && latest.hr > 60 },
+      { label: 'Blood Pressure', value: latest.bp, unit: 'mmHg', icon: Activity, color: '#0078D4', ok: true },
+      { label: 'Resp Rate', value: latest.rr || '--', unit: 'bpm', icon: Wind, color: '#107C10', ok: true },
+      { label: 'SpO2', value: latest.spo2 || '--', unit: '%', icon: Droplets, color: '#0078D4', ok: !latest.spo2 || latest.spo2 >= 95 },
+      { label: 'Temp', value: latest.temp ? Number(latest.temp).toFixed(1) : '--', unit: '°C', icon: Thermometer, color: '#845701', ok: latest.temp < 37.5 && latest.temp > 36.5 },
+      { label: 'Weight', value: latest.weight || '--', unit: 'kg', icon: Scale, color: '#616161', ok: true },
+    ];
+  }, [latest]);
+
+  if (!userProfile?.id) return <Empty message="No active session" />;
 
   return (
     <DashCard>
-      <SectionHeader icon={Heart} label="My Vitals" color="bg-red-50 text-red-600" />
-      {!myVitals
-        ? <Empty message="No vitals recorded yet" />
-        : <div className="p-4 grid grid-cols-2 gap-3">
-            {metrics.map(m => (
-              <div key={m.label} className={`rounded-2xl p-4 flex flex-col gap-1.5 border ${m.ok ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-200'}`}>
-                <div className="flex items-center gap-1.5">
-                  <m.icon className={`h-3.5 w-3.5 ${m.ok ? 'text-green-600' : 'text-red-600'}`} />
-                  <p className="text-[10px] font-bold text-[#757370] uppercase tracking-wide">{m.label}</p>
+      <SectionHeader 
+        icon={Heart} 
+        label="My Vitals" 
+        color="bg-red-50 text-red-600" 
+        action={
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 px-2 text-[9px] font-black uppercase text-[#0078D4] hover:bg-[#DEECF9]"
+            onClick={() => userProfile?.id && onNavigate?.(userProfile.id)}
+          >
+            Full Record
+          </Button>
+        }
+      />
+      <ScrollArea className="flex-1">
+        {!latest ? (
+          <Empty message="No vitals recorded yet" />
+        ) : (
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              {metrics.map(m => (
+                <div 
+                  key={m.label} 
+                  className={`rounded-2xl p-3.5 flex flex-col gap-1 border transition-all hover:shadow-md ${m.ok ? 'bg-[#FAFAFA] border-[#EDEBE9]' : 'bg-red-50 border-red-200'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <m.icon className={`h-3 w-3 ${m.ok ? 'text-[#757370]' : 'text-red-600'}`} style={m.ok ? { color: m.color } : {}} />
+                    <p className="text-[9px] font-black text-[#757370] uppercase tracking-wider">{m.label}</p>
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <p className={`text-[18px] font-black leading-none ${m.ok ? 'text-[#242424]' : 'text-red-800'}`}>{m.value}</p>
+                    <p className="text-[9px] font-bold text-[#A19F9D] lowercase italic">{m.unit}</p>
+                  </div>
                 </div>
-                <p className={`text-[22px] font-black leading-none ${m.ok ? 'text-green-800' : 'text-red-800'}`}>{m.value}</p>
-                <p className={`text-[10px] font-semibold ${m.ok ? 'text-green-600' : 'text-red-600'}`}>{m.unit}</p>
+              ))}
+            </div>
+            
+            {/* Minimal Watchman alert if critical */}
+            {latest.hr > 110 || (latest.spo2 && latest.spo2 < 93) ? (
+              <div className="p-3 bg-red-100 border border-red-200 rounded-2xl flex items-center gap-3">
+                <Zap className="h-4 w-4 text-red-700" />
+                <p className="text-[10px] font-bold text-red-800 uppercase tracking-tight">Watchman: Immediate Review Advised</p>
               </div>
-            ))}
+            ) : null}
           </div>
-      }
+        )}
+      </ScrollArea>
     </DashCard>
   );
 }
@@ -1025,16 +1080,34 @@ function MyVitalsWidget() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // WIDGET 12 — Patient: My Medications
 // ═══════════════════════════════════════════════════════════════════════════════
-function MyMedicationsWidget() {
+function MyMedicationsWidget({ onNavigate }: { onNavigate?: (id: string) => void }) {
+  const { userProfile } = useCurrentUser();
   const [meds, setMeds] = useState<any[]>([]);
+  
   useEffect(() => {
-    const q = query(collection(db, 'patients/p-1/prescriptions'), where('status', '==', 'active'));
+    if (!userProfile?.id) return;
+    const q = query(collection(db, `patients/${userProfile.id}/prescriptions`), where('status', '==', 'active'));
     return onSnapshot(q, snap => setMeds(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
-  }, []);
+  }, [userProfile?.id]);
 
   return (
     <DashCard>
-      <SectionHeader icon={Pill} label="My Medications" count={meds.length} color="bg-[#DFF6DD] text-[#107C10]" />
+      <SectionHeader 
+        icon={Pill} 
+        label="My Medications" 
+        count={meds.length} 
+        color="bg-[#DFF6DD] text-[#107C10]" 
+        action={
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 px-2 text-[9px] font-black uppercase text-[#0078D4] hover:bg-[#DEECF9]"
+            onClick={() => userProfile?.id && onNavigate?.(userProfile.id)}
+          >
+            Manage
+          </Button>
+        }
+      />
       <ScrollArea className="flex-1">
         <div className="divide-y divide-[#F5F4F3] pb-2">
           {meds.length === 0 && <Empty message="No active prescriptions" />}
@@ -1087,6 +1160,48 @@ function BillingWidget() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// WIDGET 13 — Patient: Health Connect Sync
+// ═══════════════════════════════════════════════════════════════════════════════
+function HealthSyncWidget() {
+  const { userProfile } = useCurrentUser();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <DashCard>
+      <SectionHeader icon={Link2} label="Device Sync" color="bg-emerald-100 text-emerald-700" />
+      <div className="p-4 flex flex-col items-center justify-center gap-3 text-center flex-1">
+        <div className="flex -space-x-2">
+          <div className="h-10 w-10 rounded-full bg-white border-2 border-emerald-50 flex items-center justify-center shadow-sm">
+            <Smartphone className="h-5 w-5 text-green-500" />
+          </div>
+          <div className="h-10 w-10 rounded-full bg-white border-2 border-emerald-50 flex items-center justify-center shadow-sm">
+            <Apple className="h-5 w-5 text-red-500" />
+          </div>
+        </div>
+        <div>
+          <p className="text-[12px] font-bold text-[#242424]">Health Connect & Apple Health</p>
+          <p className="text-[10px] text-[#757370] font-medium leading-tight mt-1">Sync your clinical records with real-time wearable telemetry.</p>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full rounded-xl border-[#EDEBE9] hover:bg-[#FAFAFA] font-bold text-xs mt-2"
+          onClick={() => setIsOpen(true)}
+        >
+          Manage Connection
+        </Button>
+      </div>
+
+      <HealthConnectManager 
+        patientId={userProfile?.id || ''} 
+        isOpen={isOpen} 
+        onClose={() => setIsOpen(false)} 
+      />
+    </DashCard>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ROLE WIDGET LAYOUTS
 // Each role gets exactly 5 widgets laid out in an Android-style responsive grid:
 // - Compact (mobile): single column
@@ -1103,33 +1218,50 @@ const ROLE_META: Record<string, { headline: string; sub: string; accentColor: st
   patient: { headline: 'My Health', sub: "Vitals, medications, and appointments", accentColor: '#0078D4' },
 };
 
-function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSize, visibility, sizes }: { 
+function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSize, visibility, sizes, viewClass }: { 
   children: Record<string, React.ReactNode>;
   isEditing: boolean;
   order: string[];
   onToggleVisibility: (id: string) => void;
   onToggleSize: (id: string) => void;
   visibility: Record<string, boolean>;
-  sizes: Record<string, 'small' | 'large'>;
+  sizes: Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2'>;
+  viewClass: 'compact' | 'medium' | 'expanded';
 }) {
   const displayOrder = isEditing ? order : order.filter(id => visibility[id]);
+
+  const getSizeClasses = (id: string) => {
+    const size = sizes[id] || '1x1';
+    const isCompact = viewClass === 'compact';
+    
+    switch (size) {
+      case '1x1': return 'col-span-1 row-span-1';
+      case '1x2': return 'col-span-1 row-span-2';
+      case '2x1': return 'col-span-2 row-span-1';
+      case '2x2': return 'col-span-2 row-span-2';
+      case '2x3': return 'col-span-2 row-span-3';
+      case '4x2': return isCompact ? 'col-span-2 row-span-2' : 'col-span-4 row-span-2';
+      default: return 'col-span-1 row-span-1';
+    }
+  };
 
   return (
     <SortableContext
       items={displayOrder}
       strategy={verticalListSortingStrategy}
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0"
-        style={{ gridAutoRows: 'minmax(320px, auto)' }}>
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 flex-1 min-h-0"
+        style={{ gridAutoRows: '150px' }}>
         {displayOrder.map((id, i) => {
-          const isLarge = sizes[id] === 'large' || (i === 0 && !sizes[id]); // default first one to large if no size set
+          const currentSize = sizes[id] || '1x1';
           return (
             <motion.div
               key={id}
+              layout
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.05, ease: [0.33, 1, 0.68, 1] }}
-              className={`flex flex-col min-h-0 ${isLarge ? 'md:col-span-2' : ''}`}
+              className={`flex flex-col min-h-0 ${getSizeClasses(id)}`}
             >
               <SortableWidget 
                 id={id} 
@@ -1137,7 +1269,7 @@ function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSi
                 onToggleVisibility={() => onToggleVisibility(id)}
                 onToggleSize={() => onToggleSize(id)}
                 visible={visibility[id]}
-                size={sizes[id] || (i === 0 ? 'large' : 'small')}
+                size={currentSize}
               >
                 {children[id]}
               </SortableWidget>
@@ -1153,17 +1285,25 @@ function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSi
 export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (id: string) => void }) {
   const { userProfile } = useCurrentUser();
   const { messages, courtesyCalls, reminders } = useDashboard(userProfile);
+  const viewClass = useWindowSizeClass(); // 'compact' | 'medium' | 'expanded'
   const role = userProfile?.role || 'clinician';
   const meta = ROLE_META[role] || ROLE_META.clinician;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = userProfile?.displayName?.split(' ')[0] || 'there';
 
-  // --- Dashboard Customization State ---
+  // --- Dashboard Customization State (Multi-view) ---
   const [isEditing, setIsEditing] = useState(false);
-  const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
-  const [widgetVisibility, setWidgetVisibility] = useState<Record<string, boolean>>({});
-  const [widgetSizes, setWidgetSizes] = useState<Record<string, 'small' | 'large'>>({});
+  
+  // Mapping of size classes to easier names if preferred, but we use the ones from hook
+  const [allOrders, setAllOrders] = useState<Record<string, string[]>>({});
+  const [allVisibility, setAllVisibility] = useState<Record<string, Record<string, boolean>>>({});
+  const [allSizes, setAllSizes] = useState<Record<string, Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2'>>>({});
+
+  // Helper to get current view data or defaults
+  const widgetOrder = allOrders[viewClass] || [];
+  const widgetVisibility = allVisibility[viewClass] || {};
+  const widgetSizes = allSizes[viewClass] || {};
 
   const handleRead = async (id: string) => { await markMessageRead(id); };
   const handleComplete = async (id: string, notes: string) => { await completeCourtesyCall(id, notes); };
@@ -1182,7 +1322,7 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
       messages: <MessagesWidget messages={messages} onRead={handleRead} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
-      results: <PendingResultsWidget />,
+      results: <PendingResultsWidget onNavigate={onNavigateToPatient} />,
       patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
       calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
     },
@@ -1221,10 +1361,10 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
     patient: {
       messages: <MessagesWidget messages={messages} onRead={handleRead} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
-      vitals: <MyVitalsWidget />,
-      medications: <MyMedicationsWidget />,
-      schedule: <TodayScheduleWidget />,
-      calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+      vitals: <MyVitalsWidget onNavigate={onNavigateToPatient} />,
+      medications: <MyMedicationsWidget onNavigate={onNavigateToPatient} />,
+      schedule: <TodayScheduleWidget patientId={userProfile?.id} onNavigate={onNavigateToPatient} />,
+      health_sync: <HealthSyncWidget />,
     },
   };
 
@@ -1232,54 +1372,119 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
 
   // Sync state with user profile
   useEffect(() => {
-    if (userProfile?.dashboardSettings) {
-      const { order, visibility, sizes } = userProfile.dashboardSettings;
-      // Ensure we have all current widgets in the order, in case new ones were added to code
-      const currentIds = Object.keys(availableWidgets);
-      const cleanedOrder = (order || []).filter((id: string) => currentIds.includes(id));
-      const missingIds = currentIds.filter(id => !cleanedOrder.includes(id));
+    const currentIds = Object.keys(availableWidgets);
+    const viewTypes: ('compact' | 'medium' | 'expanded')[] = ['compact', 'medium', 'expanded'];
+    
+    const newOrders: Record<string, string[]> = {};
+    const newVisibility: Record<string, Record<string, boolean>> = {};
+    const newSizes: Record<string, Record<string, any>> = {};
+
+    viewTypes.forEach(v => {
+      const saved = userProfile?.dashboardSettings?.[v];
+      const roleDefaults = (DEFAULT_DASHBOARD_SETTINGS[role] || DEFAULT_DASHBOARD_SETTINGS.clinician)[v];
       
-      setWidgetOrder([...cleanedOrder, ...missingIds]);
-      setWidgetVisibility(visibility || currentIds.reduce((acc, id) => ({ ...acc, [id]: true }), {}));
-      setWidgetSizes(sizes || {});
-    } else {
-      const defaultOrder = Object.keys(availableWidgets);
-      setWidgetOrder(defaultOrder);
-      setWidgetVisibility(defaultOrder.reduce((acc, id) => ({ ...acc, [id]: true }), {}));
-      setWidgetSizes({});
-    }
+      if (saved) {
+        const cleanedOrder = (saved.order || []).filter((id: string) => currentIds.includes(id));
+        const missingIds = currentIds.filter(id => !cleanedOrder.includes(id));
+        newOrders[v] = [...cleanedOrder, ...missingIds];
+        newVisibility[v] = saved.visibility || currentIds.reduce((acc, id) => ({ ...acc, [id]: true }), {});
+        newSizes[v] = saved.sizes || {};
+      } else {
+        newOrders[v] = roleDefaults.order.filter(id => currentIds.includes(id));
+        // Add any missing IDs that might be in the available widgets but not in the default order
+        const missingIds = currentIds.filter(id => !newOrders[v].includes(id));
+        if (missingIds.length > 0) {
+          newOrders[v] = [...newOrders[v], ...missingIds];
+        }
+        
+        newVisibility[v] = { ...roleDefaults.visibility };
+        newSizes[v] = { ...roleDefaults.sizes };
+      }
+    });
+
+    setAllOrders(newOrders);
+    setAllVisibility(newVisibility);
+    setAllSizes(newSizes);
   }, [userProfile?.id, role]);
 
   const handleToggleVisibility = (id: string) => {
-    setWidgetVisibility(prev => ({ ...prev, [id]: !prev[id] }));
+    setAllVisibility(prev => ({
+      ...prev,
+      [viewClass]: {
+        ...(prev[viewClass] || {}),
+        [id]: !prev[viewClass]?.[id]
+      }
+    }));
   };
 
   const handleToggleSize = (id: string) => {
-    setWidgetSizes(prev => ({ 
-      ...prev, 
-      [id]: prev[id] === 'large' ? 'small' : 'large' 
-    }));
+    setAllSizes(prev => {
+      const currentViewSizes = prev[viewClass] || {};
+      const current = currentViewSizes[id] || '1x1';
+      const cycle: Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2'> = {
+        '1x1': '1x2',
+        '1x2': '2x1',
+        '2x1': '2x2',
+        '2x2': '2x3',
+        '2x3': '4x2',
+        '4x2': '1x1',
+      };
+      
+      return { 
+        ...prev, 
+        [viewClass]: {
+          ...currentViewSizes,
+          [id]: cycle[current]
+        }
+      };
+    });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      setWidgetOrder((items) => {
+      setAllOrders((prev) => {
+        const items = prev[viewClass] || [];
         const oldIndex = items.indexOf(active.id as string);
         const newIndex = items.indexOf(over.id as string);
-        return arrayMove(items, oldIndex, newIndex);
+        return {
+          ...prev,
+          [viewClass]: arrayMove(items, oldIndex, newIndex)
+        };
       });
     }
   };
 
   const saveSettings = async () => {
     if (!userProfile?.id) return;
-    await updateUserDashboardSettings(userProfile.id, {
-      order: widgetOrder,
-      visibility: widgetVisibility,
-      sizes: widgetSizes
-    });
+    
+    // Captured snapshot of state to save
+    const settingsToSave = {
+      compact: {
+        order: allOrders.compact || [],
+        visibility: allVisibility.compact || {},
+        sizes: allSizes.compact || {}
+      },
+      medium: {
+        order: allOrders.medium || [],
+        visibility: allVisibility.medium || {},
+        sizes: allSizes.medium || {}
+      },
+      expanded: {
+        order: allOrders.expanded || [],
+        visibility: allVisibility.expanded || {},
+        sizes: allSizes.expanded || {}
+      }
+    };
+
     setIsEditing(false);
+    
+    try {
+      await updateUserDashboardSettings(userProfile.id, settingsToSave);
+    } catch (error) {
+      console.error("Failed to save dashboard settings:", error);
+      setIsEditing(true); // Re-enable if failed so they can try again
+    }
   };
 
   const sensors = useSensors(
@@ -1322,6 +1527,22 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
                 Cancel
               </Button>
             )}
+            {isEditing && (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={async () => {
+                  if (userProfile?.id) {
+                    await updateUserDashboardSettings(userProfile.id, null);
+                    // Refresh view
+                    window.location.reload();
+                  }
+                }}
+                className="h-9 px-4 rounded-full font-black text-[11px] uppercase tracking-widest text-[#616161] hover:bg-[#F3F2F1]"
+              >
+                Reset to Defaults
+              </Button>
+            )}
           </div>
           <p className="text-[13px] text-[#757370] font-medium mt-1.5">
             {isEditing ? 'Drag handles to reorder, use eye icon to toggle visibility' : meta.sub}
@@ -1355,6 +1576,7 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
           onToggleSize={handleToggleSize}
           visibility={widgetVisibility}
           sizes={widgetSizes}
+          viewClass={viewClass}
         >
           {availableWidgets}
         </WidgetGrid>
