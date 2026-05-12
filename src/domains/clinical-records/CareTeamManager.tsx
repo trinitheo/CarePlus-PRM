@@ -27,13 +27,13 @@ const SPECIALTIES: AlliedHealthSpecialty[] = [
 ];
 
 export function CareTeamManager({ patientId }: { patientId: string }) {
+  const [members, setMembers] = useState<CareTeamMember[]>([]);
   const { userProfile } = useCurrentUser();
   const isAdminUser = userProfile?.role === 'admin';
   const isPatient = userProfile?.role === 'patient';
   const myMember = members.find(m => m.userId === userProfile?.id);
   const canManageTeam = isAdminUser || (myMember?.accessLevel === 'clinical_full' && !isPatient);
   
-  const [members, setMembers] = useState<CareTeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);

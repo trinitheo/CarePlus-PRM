@@ -59,6 +59,8 @@ export interface Patient {
   status?: 'active' | 'pending' | 'discharged' | 'triage';
   conditions?: string[];
   lastVisit?: string;
+  chiefComplaint?: string;
+  tags?: string[];
 }
 
 export interface Vitals {
@@ -129,16 +131,16 @@ const initialState: AppState = {
     'p-1': {
       id: 'intake-1',
       patientId: 'p-1',
-      chiefComplaint: 'Follow up for chronic conditions',
-      historyOfPresentIllness: 'Eleanor is a 42-year-old female with a known history of hypertension and diabetes mellitus. She reports being a heavy drinker (approx. 4-5 units/day).',
-      medicalHistory: 'Hypertension, Diabetes Mellitus Type 2',
+      chiefComplaint: 'New onset Diabetes management & PCOS follow-up',
+      historyOfPresentIllness: 'Sarah is a 42-year-old female with a known history of PCOS and obesity. Recently diagnosed with Diabetes Mellitus Type 2. Currently starting Metformin and continuing HRT (Estrogen/Progesterone).',
+      medicalHistory: 'PCOS, Obesity, Type 2 Diabetes (New)',
       familyHistory: 'Father with early MI',
-      socialHistory: 'Heavy drinker, non-smoker',
+      socialHistory: 'Active, uses Android Wear and Health Connect',
       surgicalHistory: 'Appendectomy',
       immunizations: 'Up to date with COVID and Flu',
       hospitalizations: 'None in last 5 years',
-      reviewOfSystems: 'Negative for weight loss, positive for occasional dyspnea',
-      medications: 'Lisinopril 10mg PO OD, Rosuvastatin 20mg PO OD',
+      reviewOfSystems: 'Negative for weight loss, positive for irregular cycles',
+      medications: 'Metformin 500mg BID, HRT (Combined)',
       allergies: 'Penicillin',
       timestamp: Date.now() - 86400000
     }
@@ -149,9 +151,9 @@ const initialState: AppState = {
       patientId: 'p-1', 
       providerId: 'prov-1', 
       time: new Date().toISOString(), // Make it today for visibility
-      reason: 'Standard Follow-up for Hypertension',
+      reason: 'Diabetes Management Review & PCOS Follow-up',
       status: 'scheduled',
-      visitType: 'telehealth'
+      visitType: 'in_clinic'
     },
     'appt-2': { 
       id: 'appt-2', 

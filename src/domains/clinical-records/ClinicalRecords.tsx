@@ -141,7 +141,7 @@ export function ClinicalRecords({
   }, [clinicalData.vitals, localVitals]);
 
   const patientVitals = mergedAllVitals;
-  const intake = clinicalIntakes[patientId];
+  const intake = clinicalData.clinical_intakes[0] || (clinicalIntakes ? clinicalIntakes[patientId] : undefined);
   const latestVitals = patientVitals[patientVitals.length - 1];
 
   const mappedMedications = useMemo(() => {

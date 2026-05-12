@@ -36,12 +36,20 @@ export default function App() {
             await savePatient('p-1', { 
               firstName: 'Sarah', 
               lastName: 'Mitchell', 
-              dob: '1988-06-12', 
-              mrn: 'MRN-880612', 
-              gender: 'female', 
-              status: 'active'
+              name: 'Sarah Mitchell',
+              dob: '1984-03-15', 
+              mrn: 'MRN-77291-SM', 
+              gender: 'Female', 
+              age: 42,
+              status: 'active',
+              conditions: [
+                'Diabetes Mellitus Type 2 (Newly Diagnosed)',
+                'Obesity',
+                'PCOS'
+              ],
+              tags: ['Health Connect', 'Android Wear']
             });
-            console.log("Seeded p-1");
+            console.log("Seeded p-1 as Sarah Mitchell");
           }
           
           const p2Snap = await getDocFromServer(p2Ref);
@@ -81,10 +89,14 @@ export default function App() {
   const [viewState, setViewState] = useState<{
     subView: 'explorer' | 'detail' | 'onboarding';
     selectedPatientId: string | null;
-  }>({
-    subView: 'explorer',
-    selectedPatientId: null
+  }>(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('precison_health_view_state') : null;
+    return saved ? JSON.parse(saved) : { subView: 'explorer', selectedPatientId: null };
   });
+
+  useEffect(() => {
+    sessionStorage.setItem('precison_health_view_state', JSON.stringify(viewState));
+  }, [viewState]);
 
   const [isListOpen, setIsListOpen] = useState(true);
 
@@ -105,8 +117,7 @@ export default function App() {
 
   const handleNavigate = (module: string) => {
     setCurrentModule(module);
-    if (module === 'patients') {
-      setViewState({ subView: 'explorer', selectedPatientId: null });
+    if (module === 'patients' && viewState.subView === 'explorer') {
       setIsListOpen(true);
     }
   };

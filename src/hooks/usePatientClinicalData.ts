@@ -28,6 +28,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 export function usePatientClinicalData(patientId: string) {
   const [data, setData] = useState({
     patient: { conditions: [] } as any,
+    clinical_intakes: [],
     clinical_records: [],
     prescriptions: [],
     investigations: [],
@@ -62,6 +63,7 @@ export function usePatientClinicalData(patientId: string) {
       unsubscribers.push(unsubPatient);
 
       const collections = [
+        'clinical_intakes',
         'clinical_records',
         'prescriptions',
         'investigations',

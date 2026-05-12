@@ -69,8 +69,8 @@ function urgencyPill(p: string) {
 }
 
 // ─── M3-style Section Header ─────────────────────────────────────────────────
-function SectionHeader({ icon: Icon, label, count, color }: {
-  icon: React.ElementType; label: string; count?: number; color: string;
+function SectionHeader({ icon: Icon, label, count, color, action }: {
+  icon: React.ElementType; label: string; count?: number; color: string; action?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-2.5 px-4 pt-4 pb-2">
@@ -78,7 +78,9 @@ function SectionHeader({ icon: Icon, label, count, color }: {
         <Icon className="h-3.5 w-3.5" />
       </div>
       <span className="text-[11px] font-black uppercase tracking-[0.1em] text-[#444441] flex-1">{label}</span>
-      {count !== undefined && count > 0 && (
+      {action ? (
+        <div className="shrink-0">{action}</div>
+      ) : count !== undefined && count > 0 && (
         <span className="h-5 min-w-5 px-1.5 rounded-full bg-[#0078D4] text-white text-[9px] font-black flex items-center justify-center">
           {count > 99 ? '99+' : count}
         </span>

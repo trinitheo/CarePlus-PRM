@@ -19,9 +19,9 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
   const { patients } = useQueryModel();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredPatients = (Object.values(patients) as Patient[]).filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.mrn.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredPatients = (Object.values(patients) as (Patient & { tags?: string[] })[]).filter(p => 
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (p.mrn || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -91,16 +91,24 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
                             <User className={`h-5 w-5 ${isSelected ? 'text-[#0078D4]' : 'text-[#616161]'}`} />
                           )}
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
                             <p className={`font-bold truncate tracking-tight ${compact ? 'text-[13px]' : 'text-[15px]'} ${isSelected ? 'text-[#0078D4]' : 'text-[#242424]'}`}>
                               {p.name}
                             </p>
+                            {p.tags?.some(t => t.toLowerCase().includes('wear') || t.toLowerCase().includes('health connect')) && (
+                              <Activity className="h-3 w-3 text-[#107C10] shrink-0" />
+                            )}
                           </div>
                           <div className="flex items-center gap-2 text-[10px] font-medium text-[#616161]">
                             <span className="tabular-nums">MRN-{p.mrn?.startsWith('MRN-') ? p.mrn.replace('MRN-', '') : p.mrn}</span>
-                            {isSelected && <Badge className="h-4 px-1 text-[8px] bg-[#0078D4] text-white border-none uppercase font-black">Active</Badge>}
+                            {isSelected && <Badge className="h-4 px-1 text-[8px] bg-[#0078D4] text-white border-none uppercase font-black tracking-widest">Active</Badge>}
                           </div>
+                          {!compact && p.chiefComplaint && (
+                            <p className="text-[11px] text-[#616161] mt-1 line-clamp-1 font-medium italic">
+                              "{p.chiefComplaint}"
+                            </p>
+                          )}
                         </div>
                       </div>
                       

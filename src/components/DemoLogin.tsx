@@ -48,12 +48,25 @@ export function DemoLogin() {
 
     // 2. Add to Demo Patient Care Team (p-1) to ensure permission to write records
     // This is required for Day 1 "Make data real" functionality
-    const { addToCareTeam } = await import('../services/clinicalFirestoreService');
+    const { addToCareTeam, provisionSarahMitchell } = await import('../services/clinicalFirestoreService');
     await addToCareTeam('p-1', userId, {
       accessLevel: role === 'admin' || role === 'clinician' ? 'clinical_full' : 'clinical_limited',
       userRole: role,
       userSpecialty: specialtyStr || undefined
     });
+
+    // 3. Provision Sarah Mitchell (User Specific Request)
+    try {
+      await provisionSarahMitchell();
+      // Also add current user to Sarah's care team so they can see/edit her
+      await addToCareTeam('sarah-mitchell-42', userId, {
+        accessLevel: role === 'admin' || role === 'clinician' ? 'clinical_full' : 'clinical_limited',
+        userRole: role,
+        userSpecialty: specialtyStr || undefined
+      });
+    } catch (e) {
+      console.warn('Sarah Mitchell provisioning skipped or failed (maybe already exists)', e);
+    }
   };
 
   const handleSignIn = async (useGoogle = false) => {

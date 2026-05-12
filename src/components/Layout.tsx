@@ -98,6 +98,15 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
 }
 
 function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
+  const { userProfile } = useCurrentUser();
+
+  const handleSwitchProfile = async () => {
+    if (userProfile && auth.currentUser) {
+      await deleteDoc(doc(db, 'users', auth.currentUser.uid));
+      window.location.reload();
+    }
+  };
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-4 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       {NAV_ITEMS.map((item) => {
@@ -118,6 +127,17 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
           </button>
         );
       })}
+      
+      <button 
+        className="flex flex-col items-center gap-1 text-[#616161] hover:opacity-80 transition-opacity"
+        onClick={handleSwitchProfile}
+      >
+        <div className="p-1.5 rounded-full transition-colors h-8 w-8 flex items-center justify-center">
+          <RefreshCcw className="h-5 w-5" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-tight">ROLE</span>
+      </button>
+
       <button
         onClick={onOpenHipaa}
         className="flex flex-col items-center gap-1 transition-all duration-150 text-emerald-600"

@@ -5,11 +5,12 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope, AlertCircle, Lock } from 'lucide-react';
+import { Search, FileText, X, Maximize2, Loader2, Check, ChevronRight, Plus, Stethoscope, AlertCircle, Lock, Sparkles, Mic, History } from 'lucide-react';
 import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
 import { saveSOAPNote, updateSOAPNote } from '../../services/clinicalFirestoreService';
+import { processMedicalConversation } from '../../services/medAsrService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { motion, AnimatePresence, Variants } from 'motion/react';
 
@@ -25,6 +26,11 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
+  // MedASR State
+  const [isMedAsrOpen, setIsMedAsrOpen] = React.useState(false);
+  const [transcript, setTranscript] = React.useState('');
+  const [isTranscribing, setIsTranscribing] = React.useState(false);
+
   // Form State
   const [title, setTitle] = React.useState(initialNote?.title || 'Follow-up SOAP Note');
   const [specialty, setSpecialty] = React.useState(initialNote?.specialty || 'General Practice');
@@ -212,6 +218,8 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
   const handleClose = () => {
     setIsOpen(false);
     setErrorMessage(null);
+    setIsMedAsrOpen(false);
+    setTranscript('');
     // Short delay to allow exit animation before resetting form
     setTimeout(() => {
       if (!initialNote) {
@@ -228,12 +236,113 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
     }, 200);
   };
 
+  const handleMedAsrProcess = async () => {
+    if (!transcript.trim()) return;
+    setIsTranscribing(true);
+    try {
+      const result = await processMedicalConversation(transcript);
+      setSubjective(result.subjective);
+      setObjective(result.objective);
+      setAssessment(result.assessment);
+      setPlan(result.plan);
+      setTitle(result.title);
+      if (result.workingDiagnoses.length > 0) {
+        setWorkingDiagnoses(prev => {
+          const combined = [...prev, ...result.workingDiagnoses];
+          return Array.from(new Set(combined)); // Deduplicate
+        });
+      }
+      setIsMedAsrOpen(false);
+      setTranscript('');
+      scrollToSection('subjective');
+    } catch (e) {
+      console.error("MedASR processing failed", e);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className="sm:max-w-[1050px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col h-[90vh] focus:outline-none">
+      <DialogContent showCloseButton={false} className="sm:max-w-[1050px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col h-[90vh] focus:outline-none relative">
+        <AnimatePresence>
+          {isMedAsrOpen && (
+            <motion.div 
+              initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+              animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
+              exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+              className="absolute inset-0 z-[60] bg-white/60 flex items-center justify-center p-8"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="bg-white w-full max-w-2xl rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.18)] border border-[#EDEBE9] overflow-hidden flex flex-col"
+              >
+                <div className="bg-[#4285F4] p-8 text-white flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="bg-white p-1.5 rounded-lg">
+                        <Sparkles className="h-5 w-5 text-[#4285F4]" />
+                      </div>
+                      <h3 className="text-xl font-black tracking-tight uppercase">MedASR</h3>
+                    </div>
+                    <p className="text-white/80 text-sm font-medium">Google Health AI • Clinical Intelligence Layer</p>
+                  </div>
+                  <button onClick={() => setIsMedAsrOpen(false)} className="hover:bg-white/10 p-2 rounded-full transition-colors">
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+                <div className="p-8 space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-bold text-[#242424] flex items-center gap-2">
+                        <Mic className="h-4 w-4 text-[#4285F4]" />
+                        Conversation Transcript
+                      </Label>
+                      <button 
+                        onClick={() => setTranscript("Doctor: Hello Sarah, what brings you in today?\nPatient: I've been feeling very thirsty lately and I've noticed I'm going to the bathroom more often. Also, I have some irregular cycles.\nDoctor: I see. Have you had your blood sugar checked recently?\nPatient: No, but my father has diabetes.\nDoctor: Okay, let's check your A1C today. Your blood pressure is 135/85. Heart rate is 82. Cycles have been every 35-40 days for a year.\nPatient: Okay.\nDoctor: Assessment: Likely new onset Type 2 Diabetes Mellitus given symptoms and family history. Also suspect PCOS exacerbation.\nPlan: Order CBC, A1C, and Lipid Panel today. Start Metformin 500mg BID once lab results confirm A1C > 6.5. Follow up in 2 weeks.")}
+                        className="text-[11px] font-bold text-[#4285F4] hover:underline flex items-center gap-1"
+                      >
+                        <History className="h-3 w-3" />
+                        Load Example Session
+                      </button>
+                    </div>
+                    <Textarea 
+                      placeholder="Paste conversation transcript or dictation text here..." 
+                      className="min-h-[250px] bg-[#FAFAFA] border-[#EDEBE9] focus:border-[#4285F4] focus:ring-1 focus:ring-[#4285F4]/20 rounded-xl text-[14px] p-4 leading-relaxed resize-none shadow-inner"
+                      value={transcript}
+                      onChange={(e) => setTranscript(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <Button 
+                      onClick={handleMedAsrProcess}
+                      disabled={isTranscribing || !transcript.trim()}
+                      className="flex-1 bg-[#4285F4] hover:bg-[#3367D6] text-white font-black h-14 rounded-2xl shadow-xl shadow-[#4285F4]/20 transition-all text-lg gap-3"
+                    >
+                      {isTranscribing ? (
+                        <>
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                          Google Health AI Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-5 w-5" />
+                          Generate Clinical Foundation Note
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Fluent 2 Header Pattern */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-[#EDEBE9] shrink-0 bg-white z-10">
           <DialogHeader className="p-0">
@@ -255,6 +364,15 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
               </motion.span>
             </DialogTitle>
           </DialogHeader>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMedAsrOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#F3F9FD] text-[#4285F4] hover:bg-[#E1F0FE] rounded-lg transition-all font-bold text-[13px] border border-[#CFE4FA] shadow-sm uppercase tracking-tight"
+            >
+              <Sparkles className="h-4 w-4" />
+              MedASR
+            </button>
             <DialogClose asChild>
               <Button 
                 variant="ghost" 
@@ -265,6 +383,7 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
                 <X className="h-5 w-5" />
               </Button>
             </DialogClose>
+          </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">

@@ -30,7 +30,8 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == "karlanwartheodore@gmail.com" ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin')
       );
     }
 
@@ -50,7 +51,8 @@ service cloud.firestore {
     }
 
     function getStaffUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let user = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return user != null ? user.data : null;
     }
 
     function isCareTeamMember(patientId) {
@@ -232,8 +234,8 @@ service cloud.firestore {
       // Sub-collections
       match /care_teams/{memberId} {
         allow get, list: if isSignedIn();
-        allow create: if isAdmin() && isValidCareTeamMember(incoming());
-        allow update, delete: if isAdmin() || (isSignedIn() && getStaffUser().role == 'admin');
+        allow create, update: if (isAdmin() || (isSignedIn() && memberId == request.auth.uid)) && isValidCareTeamMember(incoming());
+        allow delete: if isAdmin();
       }
 
       match /clinical_records/{recordId} {
