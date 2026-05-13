@@ -150,7 +150,7 @@ export function UpdateVitalsModal({ isOpen, onClose, patientId, currentVitals }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[416px] w-full bg-white rounded-3xl border-none shadow-2xl p-0 overflow-hidden font-segoe">
+      <DialogContent className="max-w-[550px] w-full bg-white rounded-3xl border-none shadow-2xl p-0 overflow-hidden font-segoe">
         <DialogHeader className="p-4 py-2.5 border-b border-[#F3F2F1] flex flex-row items-center justify-between">
           <DialogTitle className="text-base font-bold text-[#242424]">Update Patient Vitals</DialogTitle>
         </DialogHeader>

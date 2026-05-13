@@ -10,7 +10,7 @@ import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
 import { saveSOAPNote, updateSOAPNote } from '../../services/clinicalFirestoreService';
-import { processMedicalConversation } from '../../services/medAsrService';
+import { processMedicalConversation } from '../../services/transcriptionService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { motion, AnimatePresence, Variants } from 'motion/react';
 
@@ -26,8 +26,8 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
   const [isOpen, setIsOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
-  // MedASR State
-  const [isMedAsrOpen, setIsMedAsrOpen] = React.useState(false);
+  // Transcription State
+  const [isTranscriptionOpen, setIsTranscriptionOpen] = React.useState(false);
   const [transcript, setTranscript] = React.useState('');
   const [isTranscribing, setIsTranscribing] = React.useState(false);
 
@@ -218,7 +218,7 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
   const handleClose = () => {
     setIsOpen(false);
     setErrorMessage(null);
-    setIsMedAsrOpen(false);
+    setIsTranscriptionOpen(false);
     setTranscript('');
     // Short delay to allow exit animation before resetting form
     setTimeout(() => {
@@ -236,7 +236,7 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
     }, 200);
   };
 
-  const handleMedAsrProcess = async () => {
+  const handleTranscriptionProcess = async () => {
     if (!transcript.trim()) return;
     setIsTranscribing(true);
     try {
@@ -252,11 +252,21 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
           return Array.from(new Set(combined)); // Deduplicate
         });
       }
-      setIsMedAsrOpen(false);
+      setIsTranscriptionOpen(false);
       setTranscript('');
       scrollToSection('subjective');
-    } catch (e) {
-      console.error("MedASR processing failed", e);
+    } catch (e: any) {
+      console.error("Transcription processing failed", e);
+      let errorMsg = "Transcription failed. Please try again.";
+      
+      // Handle specific Gemini API errors based on skill guidelines
+      if (e?.error?.code === 400 || e?.error?.status === "INVALID_ARGUMENT" || e?.message?.includes("API key")) {
+        errorMsg = "API Key Error: Please check or renew your API key in the 'Settings > Secrets' panel.";
+      } else if (e?.error?.code === 429) {
+        errorMsg = "Quota exceeded. Consider upgrading your plan in 'Settings > Secrets'.";
+      }
+      
+      alert(errorMsg);
     } finally {
       setIsTranscribing(false);
     }
@@ -267,9 +277,9 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className="sm:max-w-[1050px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col h-[90vh] focus:outline-none relative">
+      <DialogContent showCloseButton={false} className="sm:max-w-[1050px] w-[95vw] p-0 overflow-hidden bg-white border-[#EDEBE9] rounded-2xl shadow-2xl flex flex-col h-[85vh] focus:outline-none">
         <AnimatePresence>
-          {isMedAsrOpen && (
+          {isTranscriptionOpen && (
             <motion.div 
               initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
               animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
@@ -288,11 +298,11 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
                       <div className="bg-white p-1.5 rounded-lg">
                         <Sparkles className="h-5 w-5 text-[#4285F4]" />
                       </div>
-                      <h3 className="text-xl font-black tracking-tight uppercase">MedASR</h3>
+                      <h3 className="text-xl font-black tracking-tight uppercase">Transcription</h3>
                     </div>
                     <p className="text-white/80 text-sm font-medium">Google Health AI • Clinical Intelligence Layer</p>
                   </div>
-                  <button onClick={() => setIsMedAsrOpen(false)} className="hover:bg-white/10 p-2 rounded-full transition-colors">
+                  <button onClick={() => setIsTranscriptionOpen(false)} className="hover:bg-white/10 p-2 rounded-full transition-colors">
                     <X className="h-6 w-6" />
                   </button>
                 </div>
@@ -320,7 +330,7 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
                   </div>
                   <div className="flex gap-4">
                     <Button 
-                      onClick={handleMedAsrProcess}
+                      onClick={handleTranscriptionProcess}
                       disabled={isTranscribing || !transcript.trim()}
                       className="flex-1 bg-[#4285F4] hover:bg-[#3367D6] text-white font-black h-14 rounded-2xl shadow-xl shadow-[#4285F4]/20 transition-all text-lg gap-3"
                     >
@@ -367,11 +377,11 @@ export function SOAPNoteModal({ patientId, children, initialNote, canWrite = tru
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setIsMedAsrOpen(true)}
+              onClick={() => setIsTranscriptionOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-[#F3F9FD] text-[#4285F4] hover:bg-[#E1F0FE] rounded-lg transition-all font-bold text-[13px] border border-[#CFE4FA] shadow-sm uppercase tracking-tight"
             >
               <Sparkles className="h-4 w-4" />
-              MedASR
+              Transcription
             </button>
             <DialogClose asChild>
               <Button 

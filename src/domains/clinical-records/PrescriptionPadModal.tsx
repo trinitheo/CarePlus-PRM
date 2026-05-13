@@ -222,7 +222,7 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, 
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[550px] w-full p-0 overflow-hidden bg-white border-none rounded-3xl shadow-2xl">
+            <DialogContent className="max-w-[650px] w-full p-0 overflow-hidden bg-white border-none rounded-3xl shadow-2xl h-[85vh] flex flex-col">
                 <DialogHeader className="px-8 py-6 bg-[#FAFAFA] border-b border-[#EDEBE9]">
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-[#DEECF9] flex items-center justify-center">
@@ -235,7 +235,7 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, 
                     </div>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[70vh]">
+                <ScrollArea className="flex-1">
                     <div className="p-8 space-y-8">
                         {/* Medication Search */}
                         <div className="space-y-2 relative">

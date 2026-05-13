@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export interface MedAsrResult {
+export interface TranscriptionResult {
   title: string;
   subjective: string;
   objective: string;
@@ -12,12 +12,12 @@ export interface MedAsrResult {
 }
 
 /**
- * Simulates Google Health AI MedASR functionality using Gemini with a specialized medical prompt.
+ * Simulates Google Health AI transcription functionality using Gemini with a specialized medical prompt.
  * This function processes a conversation transcript and generates a structured SOAP note.
  */
-export async function processMedicalConversation(transcript: string): Promise<MedAsrResult> {
+export async function processMedicalConversation(transcript: string): Promise<TranscriptionResult> {
   try {
-    const prompt = `Act as a Google Health AI MedASR (Medical Automatic Speech Recognition) and Clinical Documentation assistant.
+    const prompt = `Act as a Google Health AI clinical documentation and Transcription assistant.
     
     Task: Convert the provided medical conversation transcript into a professionally structured SOAP note.
     
@@ -44,15 +44,20 @@ export async function processMedicalConversation(transcript: string): Promise<Me
     Return ONLY the JSON.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
     });
 
     const text = response.text;
-    const cleanedText = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(cleanedText);
+    if (!text) throw new Error("No response from AI model");
+    
+    return JSON.parse(text);
   } catch (error) {
-    console.error("MedASR Processing Error:", error);
-    throw new Error("Failed to process conversation with MedASR.");
+    console.error("Transcription Processing Error:", error);
+    // If it's a 400 (INVALID_ARGUMENT) or 403 (PERMISSION_DENIED), we re-throw to be caught by UI
+    throw error;
   }
 }

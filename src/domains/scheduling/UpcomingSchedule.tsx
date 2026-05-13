@@ -299,10 +299,10 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
 
       {/* Appointment Detail Portal - Point 7 */}
       <Dialog open={!!selectedApptId} onOpenChange={(open) => !open && setSelectedApptId(null)}>
-        <DialogContent className="w-full max-w-5xl rounded-2xl border-none shadow-2xl p-0 overflow-hidden bg-white">
+        <DialogContent className="sm:max-w-[1050px] w-[95vw] h-[85vh] rounded-2xl border-none shadow-2xl p-0 overflow-hidden bg-white flex flex-col">
           {selectedAppt && (
-            <div className="flex flex-col">
-               <div className="bg-[#FAFAFA] p-10 lg:p-12 border-b border-[#F3F2F1] relative">
+            <div className="flex flex-col h-full">
+               <div className="bg-[#FAFAFA] p-8 lg:p-10 border-b border-[#F3F2F1] relative shrink-0">
                  <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: calculatePriority(selectedAppt.reason).color }} />
                  <div className="flex items-start justify-between">
                    <div className="flex items-center gap-6">
@@ -336,105 +336,113 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
                    </div>
                  </div>
                </div>
-
-               <div className="p-8 lg:p-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
-                 <div className="lg:col-span-7 space-y-10">
-                   {/* Clinical Context Section */}
-                   <section>
-                     <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#A19F9D] flex items-center gap-2 mb-4">
-                       <FileText className="h-4 w-4" />
-                       Clinical Presentation & Reason
-                     </h4>
-                     <div className="bg-[#F8F9FA] p-6 rounded-2xl border border-[#EDEBE9] relative overflow-hidden group">
-                       <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                         <Activity className="h-12 w-12 text-[#0078D4]" />
-                       </div>
-                       <p className="text-xl font-bold text-[#242424] leading-tight mb-4">{selectedAppt.reason}</p>
-                       <div className="flex flex-wrap gap-3">
-                         <div className="bg-white border border-[#EDEBE9] px-3 py-1.5 rounded-lg flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: calculatePriority(selectedAppt.reason).color }} />
-                            <span className="text-[11px] font-black uppercase tracking-wider text-[#616161]">{calculatePriority(selectedAppt.reason).priority} Priority</span>
+               <ScrollArea className="flex-1">
+                 <div className="p-8 lg:p-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
+                   <div className="lg:col-span-7 space-y-10">
+                     {/* Clinical Context Section */}
+                     <section>
+                       <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#A19F9D] flex items-center gap-2 mb-4">
+                         <FileText className="h-4 w-4" />
+                         Clinical Presentation & Reason
+                       </h4>
+                       <div className="bg-[#F8F9FA] p-6 rounded-2xl border border-[#EDEBE9] relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                           <Activity className="h-12 w-12 text-[#0078D4]" />
                          </div>
-                         <div className="bg-white border border-[#EDEBE9] px-3 py-1.5 rounded-lg flex items-center gap-2">
-                            <Clock className="h-3 w-3 text-[#616161]" />
-                            <span className="text-[11px] font-black uppercase tracking-wider text-[#616161]">30 Min Duration</span>
+                         <p className="text-xl font-bold text-[#242424] leading-tight mb-4">{selectedAppt.reason}</p>
+                         <div className="flex flex-wrap gap-3">
+                           <div className="bg-white border border-[#EDEBE9] px-3 py-1.5 rounded-lg flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: calculatePriority(selectedAppt.reason).color }} />
+                              <span className="text-[11px] font-black uppercase tracking-wider text-[#616161]">{calculatePriority(selectedAppt.reason).priority} Priority</span>
+                           </div>
+                           <div className="bg-white border border-[#EDEBE9] px-3 py-1.5 rounded-lg flex items-center gap-2">
+                              <Clock className="h-3 w-3 text-[#616161]" />
+                              <span className="text-[11px] font-black uppercase tracking-wider text-[#616161]">30 Min Duration</span>
+                           </div>
                          </div>
                        </div>
-                     </div>
-                   </section>
-
-                   {/* Patient Demographics / Context */}
-                   <section className="grid grid-cols-2 gap-6">
-                     <div className="bg-white p-5 rounded-2xl border border-[#EDEBE9]">
-                        <h5 className="text-[9px] font-black uppercase tracking-[0.15em] text-[#A19F9D] mb-3">Encounter Type</h5>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-xl bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9]">
-                            {selectedAppt.visitType === 'telehealth' ? <Video className="h-5 w-5 text-[#0078D4]" /> : <MapPin className="h-5 w-5 text-[#616161]" />}
+                     </section>
+ 
+                     {/* Patient Demographics / Context */}
+                     <section className="grid grid-cols-2 gap-6">
+                       <div className="bg-white p-5 rounded-2xl border border-[#EDEBE9]">
+                          <h5 className="text-[9px] font-black uppercase tracking-[0.15em] text-[#A19F9D] mb-3">Encounter Type</h5>
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9]">
+                              {selectedAppt.visitType === 'telehealth' ? <Video className="h-5 w-5 text-[#0078D4]" /> : <MapPin className="h-5 w-5 text-[#616161]" />}
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-black text-[#242424] capitalize">{selectedAppt.visitType?.replace('_', ' ')} Visit</p>
+                              <p className="text-[10px] font-bold text-[#616161]">Standard Protocol</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-[13px] font-black text-[#242424] capitalize">{selectedAppt.visitType?.replace('_', ' ')} Visit</p>
-                            <p className="text-[10px] font-bold text-[#616161]">Standard Protocol</p>
-                          </div>
-                        </div>
-                     </div>
-                     <div className="bg-white p-5 rounded-2xl border border-[#EDEBE9]">
-                        <h5 className="text-[9px] font-black uppercase tracking-[0.15em] text-[#A19F9D] mb-3">Insurance Verification</h5>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
-                             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                          </div>
-                          <div>
-                            <p className="text-[13px] font-black text-[#242424]">Active Plan</p>
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase">Verified</p>
-                          </div>
-                        </div>
-                     </div>
-                   </section>
-                 </div>
-
-                 <div className="lg:col-span-5 space-y-10 lg:border-l lg:border-[#F3F2F1] lg:pl-12">
-                    {/* Patient Contact Area */}
-                    <section>
-                      <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#A19F9D] flex items-center gap-2 mb-5">
-                        <User className="h-4 w-4" />
-                        Patient Engagement
-                      </h4>
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4 group cursor-pointer p-2 -m-2 rounded-xl hover:bg-[#F3F2F1] transition-colors">
-                          <div className="h-10 w-10 rounded-xl bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9] group-hover:bg-white transition-colors">
-                            <Phone className="h-5 w-5 text-[#616161]" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#A19F9D] mb-0.5">Primary Contact</p>
-                            <p className="text-sm font-black text-[#242424]">{selectedAppt.patient?.phone || '(555) 012-3456'}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 group cursor-pointer p-2 -m-2 rounded-xl hover:bg-[#F3F2F1] transition-colors">
-                          <div className="h-10 w-10 rounded-xl bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9] group-hover:bg-white transition-colors">
-                            <Mail className="h-5 w-5 text-[#616161]" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#A19F9D] mb-0.5">Secure Email</p>
-                            <p className="text-sm font-black text-[#242424]">{selectedAppt.patient?.email || 'p.patient@example.com'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* Quick Administrative Tools */}
-                    <section className="pt-8 border-t border-[#F3F2F1]">
-                       <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#A19F9D] mb-5">Workflow Controls</h4>
-                       <div className="grid grid-cols-2 gap-3">
-                         <Button variant="outline" className="rounded-xl text-[10px] font-black uppercase h-11 border-[#EDEBE9] hover:bg-[#F5F4F3] tracking-widest">Reschedule</Button>
-                         <Button variant="outline" className="rounded-xl text-[10px] font-black uppercase h-11 border-[#EDEBE9] hover:bg-[#F5F4F3] tracking-widest">Edit Reason</Button>
-                         <Button variant="outline" className="col-span-2 rounded-xl text-[10px] font-black uppercase h-11 border-red-100 text-[#D13438] hover:bg-red-50 tracking-widest mt-2">
-                           <AlertCircle className="h-3 w-3 mr-2" />
-                           Cancel Appointment
-                         </Button>
                        </div>
-                    </section>
+                       <div className="bg-white p-5 rounded-2xl border border-[#EDEBE9]">
+                          <h5 className="text-[9px] font-black uppercase tracking-[0.15em] text-[#A19F9D] mb-3">Insurance Verification</h5>
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-black text-[#242424]">Active Plan</p>
+                              <p className="text-[10px] font-bold text-emerald-600 uppercase">Verified</p>
+                            </div>
+                          </div>
+                       </div>
+                     </section>
+                   </div>
+ 
+                   <div className="lg:col-span-5 space-y-10 lg:border-l lg:border-[#F3F2F1] lg:pl-12">
+                      {/* Patient Contact Area */}
+                      <section>
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#A19F9D] flex items-center gap-2 mb-5">
+                          <User className="h-4 w-4" />
+                          Patient Engagement
+                        </h4>
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-4 group cursor-pointer p-2 -m-2 rounded-xl hover:bg-[#F3F2F1] transition-colors">
+                            <div className="h-10 w-10 rounded-xl bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9] group-hover:bg-white transition-colors">
+                              <Phone className="h-5 w-5 text-[#616161]" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-[#A19F9D] mb-0.5">Primary Contact</p>
+                              <p className="text-sm font-black text-[#242424]">{selectedAppt.patient?.phone || '(555) 012-3456'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 group cursor-pointer p-2 -m-2 rounded-xl hover:bg-[#F3F2F1] transition-colors">
+                            <div className="h-10 w-10 rounded-xl bg-[#FAFAFA] flex items-center justify-center border border-[#EDEBE9] group-hover:bg-white transition-colors">
+                              <Mail className="h-5 w-5 text-[#616161]" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-[#A19F9D] mb-0.5">Secure Email</p>
+                              <p className="text-sm font-black text-[#242424]">{selectedAppt.patient?.email || 'p.patient@example.com'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+ 
+                      {/* Quick Administrative Tools */}
+                      <section className="pt-8 border-t border-[#F3F2F1]">
+                         <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#A19F9D] mb-5">Workflow Controls</h4>
+                         <div className="grid grid-cols-2 gap-3">
+                           <Button variant="outline" className="rounded-xl text-[10px] font-black uppercase h-11 border-[#EDEBE9] hover:bg-[#F5F4F3] tracking-widest">Reschedule</Button>
+                           <Button variant="outline" className="rounded-xl text-[10px] font-black uppercase h-11 border-[#EDEBE9] hover:bg-[#F5F4F3] tracking-widest">Edit Reason</Button>
+                          <Button 
+                             variant="outline" 
+                             className="col-span-2 rounded-xl text-[10px] font-black uppercase h-11 border-red-100 text-[#D13438] hover:bg-red-50 tracking-widest mt-2"
+                             onClick={() => {
+                               handleStatusUpdate(selectedAppt.id, 'cancelled');
+                               setSelectedApptId(null);
+                             }}
+                           >
+                             <AlertCircle className="h-3 w-3 mr-2" />
+                             Cancel Appointment
+                           </Button>
+                         </div>
+                      </section>
+                   </div>
                  </div>
-               </div>
+               </ScrollArea>
 
                <div className="bg-[#F8F8F8] p-6 border-t border-[#F3F2F1] flex justify-between items-center">
                  <Button variant="ghost" className="text-[#616161] font-bold" onClick={() => setSelectedApptId(null)}>
