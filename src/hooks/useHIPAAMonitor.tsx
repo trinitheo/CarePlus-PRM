@@ -17,6 +17,7 @@ interface HIPAAMonitorContextType {
   auditTrail: AuditEvent[];
   isLocked: boolean;
   unlockSession: () => void;
+  lockSession: () => void;
 }
 
 const HIPAAMonitorContext = createContext<HIPAAMonitorContextType | null>(null);
@@ -39,7 +40,6 @@ export function HIPAAMonitorProvider({ children }: { children: React.ReactNode }
         details
     };
     setAuditTrail(prev => [event, ...prev].slice(0, 100)); // Keep last 100 in memory
-    console.log('[HIPAA AUDIT LOG]', event);
   };
 
   const handleActivity = () => {
@@ -78,13 +78,18 @@ export function HIPAAMonitorProvider({ children }: { children: React.ReactNode }
     logAccess('SESSION_RESUMED', 'System', 'Session');
   };
 
+  const lockSession = () => {
+    setIsLocked(true);
+    logAccess('MANUAL_LOCK', 'System', 'Session');
+  };
+
   // Log app startup
   useEffect(() => {
       logAccess('APP_STARTUP', 'System', 'App');
   }, []);
 
   return (
-    <HIPAAMonitorContext.Provider value={{ logAccess, auditTrail, isLocked, unlockSession }}>
+    <HIPAAMonitorContext.Provider value={{ logAccess, auditTrail, isLocked, unlockSession, lockSession }}>
         {children}
         
 

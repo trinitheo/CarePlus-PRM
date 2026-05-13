@@ -10,7 +10,7 @@ import { Separator } from '../../components/ui/separator';
 import { Badge } from '../../components/ui/badge';
 import { searchICD10, ClinicalCode } from '../../services/clinicalRegistryService';
 import { saveSOAPNote, updateSOAPNote } from '../../services/clinicalFirestoreService';
-import { processMedicalConversation } from '../../services/transcriptionService';
+import { processMedicalConversation } from '../../services/aiService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { motion, AnimatePresence, Variants } from 'motion/react';
 

@@ -18,7 +18,6 @@ export function HealthConnectManager({ patientId, isOpen, onClose }: ConnectionP
   const dispatch = useCommandDispatcher();
   const [status, setStatus] = useState<Record<string, 'disconnected' | 'connecting' | 'connected'>>({
     health_connect: 'disconnected',
-    google_fit: 'disconnected',
     apple_health: 'disconnected',
   });
 
@@ -38,28 +37,9 @@ export function HealthConnectManager({ patientId, isOpen, onClose }: ConnectionP
   };
 
   const ingestSamples = (service: string) => {
-    const samples = [
-      { type: 'STEPS', value: 8432, source: 'watch' },
-      { type: 'MEDICATION_ADHERENCE', value: 'Lisinopril 10mg - Taken', source: 'medication_log' },
-      { type: 'KCAL_INTAKE', value: 1850, source: 'diet' },
-    ];
-
-    samples.forEach((sample, index) => {
-      setTimeout(() => {
-        dispatch({
-          type: 'HEALTH_DATA_INGESTED',
-          payload: {
-            id: `hr-${Date.now()}-${index}`,
-            patientId,
-            source: sample.source as any,
-            type: sample.type,
-            value: sample.value,
-            timestamp: Date.now(),
-          },
-        });
-        setLastSync(new Date().toLocaleTimeString());
-      }, index * 500);
-    });
+    // In a real application, this would trigger a background sync with the device API.
+    // For this demo, we simply mark the connection as successful.
+    setLastSync(new Date().toLocaleTimeString());
   };
 
   const services = [

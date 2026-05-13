@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { 
   Shield, Stethoscope, Activity, HeartHandshake, 
   Settings, Landmark, User, ArrowRight, Loader2,
-  Lock, CheckCircle2
+  Lock, CheckCircle2, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserRole, AlliedHealthSpecialty } from '../types';
@@ -26,6 +26,7 @@ const ROLES: { id: UserRole; label: string; icon: any; color: string; desc: stri
   { id: 'allied_health', label: 'Allied Health', icon: HeartHandshake, color: '#5C2D91', desc: 'Specialized care tracking (PT, Psych, etc).' },
   { id: 'admin', label: 'Administrator', icon: Settings, color: '#D13438', desc: 'Full care team management and systemic overrides.' },
   { id: 'financial', label: 'Financial', icon: Landmark, color: '#666666', desc: 'Billing, claims, and insurance verification only.' },
+  { id: 'front_desk', label: 'Front Desk', icon: Briefcase, color: '#00B7C3', desc: 'Patient check-in, queue management, and basic demographics.' },
   { id: 'patient', label: 'Patient', icon: User, color: '#FFB900', desc: 'View own health trends, medications, and messages.' },
 ];
 
@@ -65,7 +66,7 @@ export function DemoLogin() {
         userSpecialty: specialtyStr || undefined
       });
     } catch (e) {
-      console.warn('Sarah Mitchell provisioning skipped or failed (maybe already exists)', e);
+      // Sarah Mitchell provisioning skipped or failed (maybe already exists)
     }
   };
 
@@ -98,10 +99,8 @@ export function DemoLogin() {
 
       if (currentUser) {
         await performProvisioning(currentUser.uid, selectedRole, specialty || undefined);
-        console.log('Demo profile provisioned for', selectedRole);
       }
     } catch (err: any) {
-      console.error('Failed to provision demo account:', err);
       setError(err.message || 'Authentication failed');
     } finally {
       setIsLoading(false);

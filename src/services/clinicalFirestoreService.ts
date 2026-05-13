@@ -15,6 +15,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 
+export { db, auth };
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -58,7 +60,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -153,33 +154,9 @@ export async function saveSOAPNote(patientId: string, data: any) {
       updatedAt: serverTimestamp(),
     }));
 
-    // 2. Automatically sync codes/diagnoses to Ongoing Conditions
-    const conditionsToSync = [
-      ...(data.icd10Codes || []),
-      ...(data.workingDiagnoses || [])
-    ];
-    
-    if (conditionsToSync.length > 0) {
-      await updatePatientConditions(patientId, conditionsToSync);
-    }
-
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
-  }
-}
-
-// Sync conditions to master patient record
-export async function updatePatientConditions(patientId: string, conditions: string[]) {
-  const path = `patients`;
-  try {
-    const patientRef = doc(db, path, patientId);
-    await updateDoc(patientRef, cleanData({
-      conditions: arrayUnion(...conditions),
-      updatedAt: serverTimestamp()
-    }));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
@@ -191,16 +168,6 @@ export async function updateSOAPNote(patientId: string, noteId: string, data: an
       ...data,
       updatedAt: serverTimestamp(),
     }));
-
-    // Automatically sync codes/diagnoses to Ongoing Conditions
-    const conditionsToSync = [
-      ...(data.icd10Codes || []),
-      ...(data.workingDiagnoses || [])
-    ];
-    
-    if (conditionsToSync.length > 0) {
-      await updatePatientConditions(patientId, conditionsToSync);
-    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -352,106 +319,135 @@ export async function savePatient(patientId: string, data: any) {
   }
 }
 
+// Messages
+export async function sendMessage(data: { recipientId: string, recipientName: string, subject: string, body: string, patientId?: string, patientName?: string }) {
+  const path = `messages`;
+  try {
+    await addDoc(collection(db, path), cleanData({
+      ...data,
+      senderId: auth.currentUser?.uid || 'anonymous-entry',
+      senderName: auth.currentUser?.displayName || 'Clinical Staff',
+      createdAt: serverTimestamp(),
+      read: false
+    }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
 /**
  * Provisions a specific patient record for demo purposes: Sarah Mitchell
  */
-export async function provisionSarahMitchell() {
-  const patientId = 'sarah-mitchell-42';
-  const path = `patients`;
-  
-  const patientData = {
-    firstName: 'Sarah',
-    lastName: 'Mitchell',
-    name: 'Sarah Mitchell',
-    dob: '1984-03-15',
-    mrn: 'MRN-77291-SM',
-    gender: 'Female',
-    age: 42,
-    email: 'sarah.mitchell@example.com',
-    phone: '(555) 091-8827',
-    status: 'active',
-    conditions: [
-      'Diabetes Mellitus Type 2 (Newly Diagnosed)',
-      'Obesity',
-      'PCOS (Polycystic Ovary Syndrome)'
-    ],
-    lastVisit: new Date().toISOString(),
-    tags: ['Health Connect', 'Android Wear'],
-    updatedAt: serverTimestamp(),
-  };
+export async function provisionDemoPatients() {
+  const patients = [
+    {
+      id: 'p-1',
+      firstName: 'Sarah',
+      lastName: 'Mitchell',
+      name: 'Sarah Mitchell',
+      dob: '1984-03-15',
+      mrn: 'MRN-77291-SM',
+      gender: 'Female',
+      age: 42,
+      email: 'sarah.mitchell@example.com',
+      phone: '(555) 091-8827',
+      address: '123 Pine St, Seattle, WA 98101',
+      status: 'active',
+      conditions: [
+        'Diabetes Mellitus Type 2 (Newly Diagnosed)',
+        'Obesity',
+        'PCOS (Polycystic Ovary Syndrome)'
+      ],
+      lastVisit: new Date().toISOString(),
+      tags: ['Health Connect', 'Android Wear', 'High Motivation'],
+      updatedAt: serverTimestamp(),
+    },
+    {
+      id: 'p-2',
+      firstName: 'Marcus',
+      lastName: 'Chen',
+      name: 'Marcus Chen',
+      dob: '1998-07-22',
+      mrn: 'MRN-88102-MC',
+      gender: 'Male',
+      age: 28,
+      email: 'm.chen@example.com',
+      phone: '(555) 123-4567',
+      address: '456 Oak Ave, Bellevue, WA 98004',
+      status: 'active',
+      conditions: [
+        'Seasonal Allergies',
+        'Mild Asthma'
+      ],
+      lastVisit: new Date(Date.now() - 432000000).toISOString(), // 5 days ago
+      tags: ['Student', 'Scheduled'],
+      updatedAt: serverTimestamp(),
+    }
+  ];
 
-  try {
+  for (const patientData of patients) {
+    const patientId = patientData.id;
     // 1. Create Patient
-    await setDoc(doc(db, path, patientId), cleanData(patientData));
+    await setDoc(doc(db, 'patients', patientId), cleanData(patientData));
 
-    // 2. Add health connect records (simulated)
-    const recordsPath = `patients/${patientId}/health_records`;
-    const now = Date.now();
-    const records = [
-      { source: 'health_connect', device: 'Android Wear', type: 'heart_rate', value: 72, timestamp: now - 3600000 },
-      { source: 'health_connect', device: 'Android Wear', type: 'steps', value: 4200, timestamp: now - 86400000 },
-      { source: 'health_connect', device: 'Android Wear', type: 'blood_glucose', value: 140, timestamp: now - 7200000 }
-    ];
+    // 2. Add health connect records (simulated) for Sarah
+    if (patientId === 'p-1') {
+      const recordsPath = `patients/${patientId}/health_records`;
+      const now = Date.now();
+      const records = [
+        { source: 'health_connect', device: 'Android Wear', type: 'heart_rate', value: 72, timestamp: now - 3600000 },
+        { source: 'health_connect', device: 'Android Wear', type: 'steps', value: 4200, timestamp: now - 86400000 },
+        { source: 'health_connect', device: 'Android Wear', type: 'blood_glucose', value: 140, timestamp: now - 7200000 }
+      ];
 
-    for (const record of records) {
-      await addDoc(collection(db, recordsPath), cleanData({
-        ...record,
+      for (const record of records) {
+        await addDoc(collection(db, recordsPath), cleanData({
+          ...record,
+          patientId,
+          createdAt: serverTimestamp()
+        }));
+      }
+
+      // 3. Add Clinical Intake (Context)
+      const intakePath = `patients/${patientId}/clinical_intakes`;
+      await setDoc(doc(db, intakePath, 'initial-intake'), cleanData({
         patientId,
-        createdAt: serverTimestamp()
+        chiefComplaint: 'Management of newly diagnosed Diabetes and PCOS symptoms',
+        historyOfPresentIllness: 'Sarah is a 42-year-old female recently diagnosed with Type 2 Diabetes. She has a long-standing history of PCOS and obesity. Currently starting Metformin and continuing HRT for hormone management.',
+        medicalHistory: 'PCOS, Obesity, Type 2 Diabetes (New)',
+        medications: 'Metformin 500mg BID, HRT (Estrogen/Progesterone)',
+        socialHistory: 'Active, uses wearable technology for health tracking (Android Wear).',
+        authorId: auth.currentUser?.uid || 'system',
+        timestamp: now
       }));
     }
 
-    // 3. Add Clinical Intake (Context)
-    const intakePath = `patients/${patientId}/clinical_intakes`;
-    await setDoc(doc(db, intakePath, 'initial-intake'), cleanData({
-      patientId,
-      chiefComplaint: 'Management of newly diagnosed Diabetes and PCOS symptoms',
-      historyOfPresentIllness: 'Sarah is a 42-year-old female recently diagnosed with Type 2 Diabetes. She has a long-standing history of PCOS and obesity. Currently starting Metformin and continuing HRT for hormone management.',
-      medicalHistory: 'PCOS, Obesity, Type 2 Diabetes (New)',
-      medications: 'Metformin 500mg BID, HRT (Estrogen/Progesterone)',
-      socialHistory: 'Active, uses wearable technology for health tracking (Android Wear).',
-      authorId: auth.currentUser?.uid || 'system',
-      timestamp: now
-    }));
-
-    // 4. Add current prescriptions
-    const rxPath = `patients/${patientId}/prescriptions`;
-    const meds = [
-      { name: 'Metformin', dosage: '500mg', frequency: 'Twice daily', startDate: '2026-05-01', status: 'active', condition: 'Type 2 Diabetes' },
-      { name: 'HRT (Combined)', dosage: 'Varies', frequency: 'Daily', startDate: '2025-11-12', status: 'active', condition: 'PCOS / Hormone Replacement' }
-    ];
-
-    for (const med of meds) {
-       await addDoc(collection(db, rxPath), cleanData({
-         ...med,
-         patientId,
-         authorId: auth.currentUser?.uid || 'system',
-         createdAt: serverTimestamp()
-       }));
-    }
-
-    // 5. Add a scheduled appointment for today
+    // 4. Add scheduled appointments
     const apptPath = `appointments`;
     const apptDate = new Date();
-    apptDate.setHours(apptDate.getHours() + 2); // 2 hours from now
+    if (patientId === 'p-1') {
+      apptDate.setHours(apptDate.getHours() + 2);
+    } else {
+      apptDate.setHours(apptDate.getHours() + 4);
+    }
     
     await addDoc(collection(db, apptPath), cleanData({
       patientId,
       time: apptDate.toISOString(),
-      reason: 'Diabetes Management Review & PCOS Follow-up',
+      reason: patientId === 'p-1' ? 'Diabetes Management Review & PCOS Follow-up' : 'Routine Allergy Follow-up',
       visitType: 'in_clinic',
       status: 'scheduled',
       authorId: auth.currentUser?.uid || 'system',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     }));
-
-    console.log('Sarah Mitchell demo data provisioned successfully');
-    return patientId;
-  } catch (error) {
-    console.error('Failed to provision Sarah Mitchell:', error);
-    throw error;
   }
+
+  return 'p-1';
+}
+
+export async function provisionSarahMitchell() {
+  return provisionDemoPatients();
 }
 
 // Clinical Intake

@@ -27,26 +27,56 @@ service cloud.firestore {
       return resource.data;
     }
 
+    // RBAC Helpers
+    function getRole() {
+      return get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && 
+             getRole() == role;
+    }
+
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == "karlanwartheodore@gmail.com" ||
+        hasRole('admin') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin')
       );
     }
 
+    function isManager() {
+      return isAdmin() || hasRole('manager');
+    }
+
     function isClinician() {
-      return isSignedIn() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'clinician') ||
-        request.auth.token.firebase.sign_in_provider == 'anonymous'
+      return isManager() || hasRole('clinician') || (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'clinician')
+      );
+    }
+
+    function isFrontDesk() {
+      return isManager() || hasRole('front_desk') || (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'front_desk')
       );
     }
 
     function isStaff() {
       return isSignedIn() && (
-        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        isAdmin() || 
+        isManager() || 
+        isClinician() || 
+        isFrontDesk() ||
+        hasRole('nurse') ||
+        hasRole('allied_health') ||
+        hasRole('financial') ||
+        hasRole('read_only') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial'])
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'front_desk'])
       );
     }
 
@@ -58,13 +88,13 @@ service cloud.firestore {
     function isCareTeamMember(patientId) {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)) ||
-        isAdmin() ||
-        isClinician()
+        isStaff()
       );
     }
 
     function getCareTeamAccess(patientId) {
-      return get(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)).data.accessLevel;
+      let careTeamDoc = get(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid));
+      return careTeamDoc != null && 'accessLevel' in careTeamDoc.data ? careTeamDoc.data.accessLevel : 'none';
     }
 
     // Global Admin Bypass
@@ -83,7 +113,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
              (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
-             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient'] &&
+             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient', 'front_desk'] &&
              (!('dashboardSettings' in data) || (data.dashboardSettings is map)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
@@ -190,7 +220,7 @@ service cloud.firestore {
     function isValidInteraction(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'authorRole', 'type', 'content']) &&
              (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
-             data.authorRole in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient'] &&
+             data.authorRole in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient', 'front_desk'] &&
              data.type in ['clinical', 'nursing', 'pt', 'social_care', 'financial', 'support_group'] &&
              data.content is string && data.content.size() <= 10000;
     }
@@ -217,6 +247,7 @@ service cloud.firestore {
 
     // Collection Rules
     match /users/{userId} {
+      allow get, list: if isSignedIn() && isStaff();
       allow get: if isSignedIn() && (request.auth.uid == userId);
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
       allow update: if (isSignedIn() && request.auth.uid == userId) && 
@@ -239,7 +270,7 @@ service cloud.firestore {
       }
 
       match /clinical_records/{recordId} {
-        allow get, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow get, list: if isCareTeamMember(patientId) && (isStaff() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
         allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(recordId) && isValidClinicalRecord(incoming());
         allow update: if isAuthor(existing()) && isValidId(recordId) && 
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'title', 'subjective', 'objective', 'assessment', 'plan', 'icd10Codes', 'workingDiagnoses', 'updatedAt']);
@@ -247,7 +278,7 @@ service cloud.firestore {
       }
 
       match /prescriptions/{prescriptionId} {
-        allow read, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow read, list: if isCareTeamMember(patientId);
         allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(prescriptionId) && isValidPrescription(incoming());
         allow update: if isAuthor(existing()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adherenceStatus', 'adherenceScore', 'discontinuationReason', 'discontinuedAt', 'discontinuedBy', 'updatedAt']);
@@ -255,14 +286,14 @@ service cloud.firestore {
       }
 
       match /investigations/{investigationId} {
-        allow get, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow get, list: if isCareTeamMember(patientId);
         allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(investigationId) && isValidInvestigation(incoming());
         allow update: if isAuthor(existing()) && isValidId(investigationId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'instructions', 'resultSummary', 'resultDate', 'updatedAt']);
       }
 
       match /procedures/{procedureId} {
-        allow get, list: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow get, list: if isCareTeamMember(patientId);
         allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) == 'clinical_full') && isValidId(procedureId) && isValidProcedure(incoming());
         allow update: if isAuthor(existing()) && isValidId(procedureId) &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'targetDate', 'updatedAt']);
@@ -270,19 +301,26 @@ service cloud.firestore {
 
       match /vitals/{vitalId} {
         allow get, list: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId) && (isClinician() || getCareTeamAccess(patientId) in ['clinical_full', 'clinical_limited']);
+        allow create: if isCareTeamMember(patientId);
       }
 
       match /interactions/{interactionId} {
         allow get, list: if isCareTeamMember(patientId);
         allow create: if isCareTeamMember(patientId) && isValidId(interactionId) && isValidInteraction(incoming());
       }
+
+      match /referrals/{referralId} {
+        allow get, list: if isCareTeamMember(patientId);
+        allow create: if isCareTeamMember(patientId) && isValidId(referralId) && isValidReferral(incoming());
+        allow update: if isAuthor(existing()) && isValidId(referralId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'toProvider', 'updatedAt']);
+      }
     }
 
     match /appointments/{appointmentId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isValidId(appointmentId) && isValidAppointment(incoming());
-      allow update: if isSignedIn() && (isAuthor(existing()) || isAdmin() || isClinician()) &&
+      allow update: if isSignedIn() && (isAuthor(existing()) || isAdmin() || isStaff()) &&
                      isValidId(appointmentId) &&
                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'time', 'reason', 'updatedAt']);
       allow delete: if isAdmin();
@@ -311,6 +349,86 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId && (
         incoming().diff(existing()).affectedKeys().hasOnly(['read', 'readAt'])
       );
+    }
+
+    // Module Specific Collections
+    match /rooms/{roomId} {
+      allow read: if isSignedIn() && isStaff();
+      allow write: if isManager();
+    }
+
+    match /charges/{chargeId} {
+      allow read: if isSignedIn() && isStaff();
+      allow create, update: if isSignedIn() && (isClinician() || hasRole('financial') || isManager());
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn() && (isStaff() || request.auth.uid == resource.data.patientId);
+      allow create, update: if isSignedIn() && (hasRole('financial') || isManager());
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isSignedIn() && (isStaff() || request.auth.uid == resource.data.patientId);
+      allow create: if isSignedIn();
+    }
+
+    match /inventory/{itemId} {
+      allow read: if isSignedIn() && isStaff();
+      allow create, update: if isStaff() && (isManager() || hasRole('nurse') || hasRole('front_desk'));
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn() && (isStaff() || request.auth.uid == resource.data.assignedToUserId);
+      allow create: if isSignedIn() && isStaff();
+      allow update: if isSignedIn() && (isStaff() || request.auth.uid == resource.data.assignedToUserId);
+    }
+
+    match /clinical_templates/{templateId} {
+      allow read: if isSignedIn() && isStaff();
+      allow write: if isClinician() || isManager();
+    }
+
+    match /results/{resultId} {
+      allow read: if isSignedIn() && (isStaff() || (resource.data != null && request.auth.uid == resource.data.patientId));
+      allow create: if isStaff();
+    }
+
+    match /checkins/{checkinId} {
+      allow read: if isSignedIn() && isStaff();
+      allow create, update: if isStaff();
+    }
+
+    match /consents/{consentId} {
+      allow read: if isSignedIn() && (isStaff() || request.auth.uid == resource.data.patientId);
+      allow create: if isSignedIn();
+    }
+
+    match /sops/{sopId} {
+      allow read: if isSignedIn() && isStaff();
+      allow write: if isManager();
+    }
+
+    match /sop_acknowledgments/{ackId} {
+      allow read: if isSignedIn() && isStaff();
+      allow create: if isSignedIn() && isStaff();
+    }
+
+    match /contracts/{contractId} {
+      allow read: if isManager();
+      allow write: if isAdmin();
+    }
+
+    // Role Management
+    match /roles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Audit Logs
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn(); // Any signed in user can trigger an audit log (system writes via client)
+      allow update, delete: if false; // Immutable logs
     }
 
   }

@@ -129,9 +129,28 @@
         "indication": { "type": "string" },
         "instructions": { "type": "string" },
         "status": { "type": "string", "enum": ["ordered", "sample_collected", "resulted", "reviewed", "cancelled"] },
+        "acknowledgedBy": { "type": "string" },
+        "acknowledgedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["patientId", "authorId", "category", "tests"]
+    },
+    "InvestigationResult": {
+      "title": "Investigation Result",
+      "description": "Specific data or file for an investigation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "investigationId": { "type": "string" },
+        "testName": { "type": "string" },
+        "value": { "type": "string" },
+        "units": { "type": "string" },
+        "referenceRange": { "type": "string" },
+        "interpretation": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["investigationId", "testName", "value"]
     },
     "Procedure": {
       "title": "Procedure",
@@ -209,6 +228,39 @@
       },
       "required": ["patientId", "authorId", "authorRole", "type", "content"]
     },
+    "Charge": {
+      "title": "Clinical Charge",
+      "description": "A single billable item or service",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "encounterId": { "type": "string" },
+        "clinicianId": { "type": "string" },
+        "code": { "type": "string", "description": "CPT or internal code" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["captured", "pending_review", "billed", "void"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "code", "amount", "status"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Aggregated charges for billing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "chargeIds": { "type": "array", "items": { "type": "string" } },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "sent", "partial", "paid", "overdue", "void"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "chargeIds", "totalAmount", "status"]
+    },
     "Appointment": {
       "title": "Appointment",
       "description": "Scheduled clinical encounter",
@@ -216,18 +268,78 @@
       "properties": {
         "id": { "type": "string" },
         "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
         "providerId": { "type": "string" },
+        "providerName": { "type": "string" },
+        "roomId": { "type": "string" },
+        "roomName": { "type": "string" },
         "time": { "type": "string", "format": "date-time" },
-        "duration": { "type": "number" },
+        "duration": { "type": "number", "default": 30 },
         "reason": { "type": "string" },
-        "status": { "type": "string", "enum": ["scheduled", "confirmed", "checked_in", "in_progress", "completed", "cancelled"] },
+        "status": { "type": "string", "enum": ["scheduled", "confirmed", "checked_in", "in_room", "completed", "cancelled", "no_show"] },
         "visitType": { "type": "string", "enum": ["in_clinic", "telehealth"] },
         "priority": { "type": "string", "enum": ["immediate", "urgent", "routine"] },
-        "priorityColor": { "type": "string" },
+        "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["patientId", "time", "reason", "status"]
+      "required": ["patientId", "time", "reason", "status", "providerId"]
+    },
+    "CheckIn": {
+      "title": "Patient Check-In",
+      "description": "Arrival record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "appointmentId": { "type": "string" },
+        "arrivalTime": { "type": "string", "format": "date-time" },
+        "insuranceVerified": { "type": "boolean" },
+        "outstandingBalance": { "type": "number" },
+        "status": { "type": "string", "enum": ["arrived", "triaged", "cancelled"] }
+      },
+      "required": ["patientId", "arrivalTime", "status"]
+    },
+    "Consent": {
+      "title": "Patient Consent",
+      "description": "Legal acknowledgment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["general", "surgical", "hipaa", "telehealth"] },
+        "signedAt": { "type": "string", "format": "date-time" },
+        "documentUrl": { "type": "string" }
+      },
+      "required": ["patientId", "type", "signedAt"]
+    },
+    "SOP": {
+      "title": "Standard Operating Procedure",
+      "description": "Organizational governance document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "version": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "active", "archived"] },
+        "reviewDate": { "type": "string", "format": "date" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "version", "status"]
+    },
+    "Room": {
+      "title": "Clinical Room",
+      "description": "Physical or virtual space for encounters",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["exam", "procedure", "telehealth", "consult"] },
+        "status": { "type": "string", "enum": ["available", "occupied", "maintenance"] },
+        "currentAppointmentId": { "type": "string" }
+      },
+      "required": ["name", "type", "status"]
     },
     "Reminder": {
       "title": "Reminder",
@@ -250,9 +362,111 @@
         "completedBy": { "type": "string" }
       },
       "required": ["title", "dueDate", "status"]
+    },
+    "UserRole": {
+      "title": "User Role",
+      "description": "RBAC role assignment",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager", "clinician", "front_desk", "read_only"] },
+        "assignedBy": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "role"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "System audit trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "resourceId": { "type": "string" },
+        "resourceType": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "object" }
+      },
+      "required": ["action", "performedBy", "timestamp"]
+    },
+    "InventoryItem": {
+      "title": "Inventory Item",
+      "description": "Clinical supply or medication stock",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["consumables", "medications", "equipment"] },
+        "stockLevel": { "type": "number" },
+        "minThreshold": { "type": "number" },
+        "unit": { "type": "string" },
+        "expiryDate": { "type": "string", "format": "date" },
+        "location": { "type": "string" },
+        "lastRestockedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "stockLevel", "minThreshold"]
+    },
+    "Task": {
+      "title": "Internal Task",
+      "description": "Workflow management item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["clinical", "administrative", "billing", "followup"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "archived"] },
+        "assignedTo": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "priority", "status", "assignedTo"]
+    },
+    "ClinicalTemplate": {
+      "title": "Clinical Template",
+      "description": "Structure for clinical notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["SOAP", "Procedure", "Follow-up"] },
+        "fields": { "type": "array", "items": { "type": "object" } },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "type", "fields"]
     }
   },
   "firestore": {
+    "/roles/{userId}": {
+      "schema": "UserRole",
+      "description": "RBAC assignment"
+    },
+    "/checkins/{checkinId}": {
+      "schema": "CheckIn",
+      "description": "Daily patient arrival log"
+    },
+    "/consents/{consentId}": {
+      "schema": "Consent",
+      "description": "Signed patient acknowledgments"
+    },
+    "/sops/{sopId}": {
+      "schema": "SOP",
+      "description": "Organizational governance repository"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Historical audit trail"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Clinical resource management"
+    },
+    "/clinical_templates/{templateId}": {
+      "schema": "ClinicalTemplate",
+      "description": "Dynamic documentation structures"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles"
@@ -285,6 +499,10 @@
       "schema": "Investigation",
       "description": "Patient lab/imaging orders"
     },
+    "/results/{resultId}": {
+      "schema": "InvestigationResult",
+      "description": "Granular result data"
+    },
     "/patients/{patientId}/procedures/{procedureId}": {
       "schema": "Procedure",
       "description": "Patient procedures"
@@ -300,6 +518,22 @@
     "/patients/{patientId}/interactions/{interactionId}": {
       "schema": "Interaction",
       "description": "Historical interactions with care team"
+    },
+    "/charges/{chargeId}": {
+      "schema": "Charge",
+      "description": "Financial line items"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Billing records"
+    },
+    "/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Supply chain management"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Operational task tracking"
     }
   }
 }

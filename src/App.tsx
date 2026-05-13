@@ -9,6 +9,12 @@ import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
 import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
+import { AppointmentScheduler } from './modules/scheduling/AppointmentScheduler';
+import { InvestigationWorkflow } from './modules/clinical/investigations/InvestigationWorkflow';
+import { FrontDeskConsole } from './modules/frontdesk/FrontDeskConsole';
+import { GovernanceRepository } from './modules/admin/governance/GovernanceRepository';
+import { InventoryManager } from './modules/inventory/InventoryManager';
+import { PatientSupportEcosystem } from './domains/patient-management/PatientSupportEcosystem';
 import { RoleDashboard } from './domains/dashboard/RoleDashboard';
 import { Activity, ChevronRight, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
@@ -16,7 +22,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
 import { DemoLogin } from './components/DemoLogin';
 import { useCurrentUser } from './hooks/useCurrentUser';
-import { savePatient } from './services/clinicalFirestoreService';
+import { savePatient, provisionDemoPatients } from './services/clinicalFirestoreService';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
@@ -29,43 +35,13 @@ export default function App() {
         
         try {
           const p1Ref = doc(db, 'patients', 'p-1');
-          const p2Ref = doc(db, 'patients', 'p-2');
-          
           const p1Snap = await getDocFromServer(p1Ref);
-          if (!p1Snap.exists()) {
-            await savePatient('p-1', { 
-              firstName: 'Sarah', 
-              lastName: 'Mitchell', 
-              name: 'Sarah Mitchell',
-              dob: '1984-03-15', 
-              mrn: 'MRN-77291-SM', 
-              gender: 'Female', 
-              age: 42,
-              status: 'active',
-              conditions: [
-                'Diabetes Mellitus Type 2 (Newly Diagnosed)',
-                'Obesity',
-                'PCOS'
-              ],
-              tags: ['Health Connect', 'Android Wear']
-            });
-            console.log("Seeded p-1 as Sarah Mitchell");
-          }
           
-          const p2Snap = await getDocFromServer(p2Ref);
-          if (!p2Snap.exists()) {
-            await savePatient('p-2', { 
-              firstName: 'James', 
-              lastName: 'Wilson', 
-              dob: '1975-03-24', 
-              mrn: 'MRN-750324', 
-              gender: 'male',
-              status: 'active'
-            });
-            console.log("Seeded p-2");
+          if (!p1Snap.exists()) {
+            await provisionDemoPatients();
           }
         } catch (e) {
-          console.error("Seed failed", e);
+          // Fail silently or report to a monitoring service
         }
       }
 
@@ -78,9 +54,7 @@ export default function App() {
           // Diagnostic ping
           await getDocFromServer(doc(db, '_diagnostics', 'connection'));
         } catch (error: any) {
-          if (error?.message?.includes('offline')) {
-            console.error("Clinical Core is offline. Check Firebase configuration.");
-          }
+          // Connection test failed
         }
       }
       testFirestoreConnection();
@@ -246,11 +220,31 @@ export default function App() {
         
         {currentModule === 'scheduling' && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <UpcomingSchedule onNavigateToPatient={(id) => {
-              setCurrentModule('patients');
-              setViewState({ subView: 'detail', selectedPatientId: id });
-              setIsListOpen(false);
-            }} />
+            <AppointmentScheduler />
+          </div>
+        )}
+
+        {currentModule === 'front-desk' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <FrontDeskConsole />
+          </div>
+        )}
+
+        {currentModule === 'investigations' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <InvestigationWorkflow />
+          </div>
+        )}
+
+        {currentModule === 'governance' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <GovernanceRepository />
+          </div>
+        )}
+        
+        {currentModule === 'inventory' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <InventoryManager />
           </div>
         )}
 
@@ -269,7 +263,11 @@ export default function App() {
 
         {currentModule === 'care-team' && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <NurseWorkflow />
+            {userProfile?.role === 'patient' ? (
+              <PatientSupportEcosystem />
+            ) : (
+              <NurseWorkflow />
+            )}
           </div>
         )}
       </Shell>

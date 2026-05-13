@@ -90,6 +90,23 @@ export const DEFAULT_DASHBOARD_SETTINGS: Record<UserRole, Record<'compact' | 'me
       sizes: { billing: '2x2', messages: '2x2', reminders: '2x2', schedule: '2x1', patients: '2x1', calls: '2x1' }
     }
   },
+  front_desk: {
+    compact: {
+      order: ['queue', 'schedule', 'messages', 'reminders', 'billing', 'calls'],
+      visibility: { queue: true, schedule: true, messages: true, reminders: true, billing: true, calls: true },
+      sizes: { queue: '2x2', schedule: '2x2', messages: '2x2', reminders: '1x1', billing: '1x1', calls: '1x1' }
+    },
+    medium: {
+      order: ['queue', 'schedule', 'messages', 'reminders', 'billing', 'calls'],
+      visibility: { queue: true, schedule: true, messages: true, reminders: true, billing: true, calls: true },
+      sizes: { queue: '2x2', schedule: '2x2', messages: '2x2', reminders: '2x1', billing: '2x1', calls: '2x1' }
+    },
+    expanded: {
+      order: ['queue', 'schedule', 'messages', 'reminders', 'billing', 'calls'],
+      visibility: { queue: true, schedule: true, messages: true, reminders: true, billing: true, calls: true },
+      sizes: { queue: '2x2', schedule: '2x2', messages: '2x2', reminders: '2x1', billing: '2x1', calls: '2x1' }
+    }
+  },
   patient: {
     compact: {
       order: ['vitals', 'medications', 'messages', 'reminders', 'schedule', 'health_sync'],

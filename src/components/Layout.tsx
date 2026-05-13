@@ -1,25 +1,47 @@
 import { 
-  Activity, Calendar, FileText, Settings, LayoutDashboard,
+  Activity, Calendar, FileText, LayoutDashboard,
   Users, CreditCard, ShieldCheck, User,
-  RefreshCcw 
+  RefreshCcw, Beaker, Briefcase, BookOpen, Package 
 } from 'lucide-react';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { HIPAAComplianceDashboard } from '../domains/compliance/HIPAAComplianceDashboard';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { db, auth } from '../lib/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
+import { UserRole } from '../types';
 
-const NAV_ITEMS = [
-  { id: 'dashboard', icon: LayoutDashboard, label: 'Home' },
-  { id: 'patients', icon: Users, label: 'Patients' },
-  { id: 'scheduling', icon: Calendar, label: 'Schedule' },
-  { id: 'billing', icon: CreditCard, label: 'Billing' },
-  { id: 'care-team', icon: FileText, label: 'Collab' },
+const ALL_NAV_ITEMS = [
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'financial', 'front_desk', 'patient'] },
+  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'financial'] },
+  { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'front_desk', 'patient'] },
+  { id: 'front-desk', icon: Briefcase, label: 'Front Desk', roles: ['admin', 'manager', 'nurse', 'front_desk', 'financial'] },
+  { id: 'investigations', icon: Beaker, label: 'Diagnostics', roles: ['admin', 'manager', 'clinician', 'nurse'] },
+  { id: 'inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager', 'clinician', 'nurse'] },
+  { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'financial'] },
+  { id: 'governance', icon: BookOpen, label: 'Governance', roles: ['admin', 'manager'] },
+  { id: 'care-team', icon: FileText, label: 'Collab', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'patient'] },
 ];
+
+function useFilteredNav(role: string | undefined) {
+  return useMemo(() => {
+    if (!role) return [];
+    const normalizedRole = role.toLowerCase();
+    
+    return ALL_NAV_ITEMS
+      .filter(item => item.roles.includes(normalizedRole))
+      .map(item => {
+        if (item.id === 'care-team' && normalizedRole === 'patient') {
+          return { ...item, label: 'Team' };
+        }
+        return item;
+      });
+  }, [role]);
+}
 
 function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   const { userProfile } = useCurrentUser();
+  const navItems = useFilteredNav(userProfile?.role);
 
   const handleSwitchProfile = async () => {
     if (userProfile && auth.currentUser) {
@@ -36,7 +58,7 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
         </div>
 
         <nav className="flex flex-col items-center gap-6">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const active = currentModule === item.id;
             return (
@@ -99,6 +121,7 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
 
 function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   const { userProfile } = useCurrentUser();
+  const navItems = useFilteredNav(userProfile?.role);
 
   const handleSwitchProfile = async () => {
     if (userProfile && auth.currentUser) {
@@ -109,7 +132,7 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-4 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-      {NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         const Icon = item.icon;
         const active = currentModule === item.id;
         return (
