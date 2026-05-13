@@ -28,7 +28,8 @@ const ROLE_META: Record<string, { headline: string; sub: string; accentColor: st
   nurse: { headline: 'Nursing Dashboard', sub: "Queue, vitals, and care tasks", accentColor: '#0078D4' },
   allied_health: { headline: 'Allied Health Hub', sub: "Referrals, patients, and calls", accentColor: '#5C2D91' },
   admin: { headline: 'Administration', sub: "System health and staff directory", accentColor: '#D13438' },
-  financial: { headline: 'Billing & Claims', sub: "Financial overview and messaging", accentColor: '#8764B8' },
+  manager: { headline: 'Practice Operations', sub: "Queue management, staff directory, and billing overview", accentColor: '#004E8C' },
+  billing: { headline: 'Billing & Claims', sub: "Financial overview and messaging", accentColor: '#8764B8' },
   front_desk: { headline: 'Reception & Queue', sub: "Patient check-ins and front-desk flow", accentColor: '#00B7C3' },
   patient: { headline: 'My Health', sub: "Vitals, medications, and appointments", accentColor: '#0078D4' },
 };
@@ -81,7 +82,14 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
         directory: <StaffDirectoryWidget staff={data.staffUsers} />,
         queue: <CheckInQueueWidget queue={data.queue} onNavigate={onNavigateToPatient} />,
       },
-      financial: {
+      manager: {
+        ...shared,
+        overview: <SystemOverviewWidget stats={data.systemStats} />,
+        directory: <StaffDirectoryWidget staff={data.staffUsers} />,
+        billing: <BillingWidget stats={data.billingStats} />,
+        queue: <CheckInQueueWidget queue={data.queue} onNavigate={onNavigateToPatient} />,
+      },
+      billing: {
         ...shared,
         billing: <BillingWidget stats={data.billingStats} />,
         schedule: <TodayScheduleWidget schedule={data.todaySchedule} onNavigate={onNavigateToPatient} />,

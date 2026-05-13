@@ -23,7 +23,7 @@ interface InteractionEntryModalProps {
 export function InteractionEntryModal({ patientId, isOpen, onClose }: InteractionEntryModalProps) {
   const dispatch = useCommandDispatcher();
   const { userProfile, loading: userLoading } = useCurrentUser();
-  const [type, setType] = useState<'clinical' | 'nursing' | 'pt' | 'social_care' | 'financial' | 'support_group'>('clinical');
+  const [type, setType] = useState<'clinical' | 'nursing' | 'pt' | 'social_care' | 'billing' | 'support_group'>('clinical');
   const [role, setRole] = useState<UserRole>('clinician');
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +37,8 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
         case 'clinician': setType('clinical'); break;
         case 'nurse': setType('nursing'); break;
         case 'allied_health': setType('pt'); break;
-        case 'financial': setType('financial'); break;
+        case 'billing': setType('billing'); break;
+        case 'manager': setType('social_care'); break;
         case 'admin': setType('social_care'); break;
         case 'patient': setType('support_group'); break;
       }
@@ -107,8 +108,9 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
                   <SelectItem value="clinician">Clinician / MD</SelectItem>
                   <SelectItem value="nurse">Nurse / RN</SelectItem>
                   <SelectItem value="allied_health">Allied Professional</SelectItem>
+                  <SelectItem value="manager">Practice Manager</SelectItem>
                   <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="financial">Financial Desk</SelectItem>
+                  <SelectItem value="billing">Billing Specialist</SelectItem>
                   <SelectItem value="patient">Patient Self-Entry</SelectItem>
                 </SelectContent>
               </Select>
@@ -125,7 +127,7 @@ export function InteractionEntryModal({ patientId, isOpen, onClose }: Interactio
                   <SelectItem value="nursing">Nursing Support</SelectItem>
                   <SelectItem value="pt">PT / Rehabilitation</SelectItem>
                   <SelectItem value="social_care">Social & Family Care</SelectItem>
-                  <SelectItem value="financial">Financial Guidance</SelectItem>
+                  <SelectItem value="billing">Billing/Financial Guidance</SelectItem>
                   <SelectItem value="support_group">Support Group</SelectItem>
                 </SelectContent>
               </Select>

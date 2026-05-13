@@ -6,9 +6,10 @@ import {
   collection, 
   addDoc 
 } from 'firebase/firestore';
-import { db, auth } from './clinicalFirestoreService'; // Assuming shared db instance
+import { db, auth } from './clinicalFirestoreService';
+import { UserRole } from '../types';
 
-export type AppRole = 'admin' | 'manager' | 'clinician' | 'front_desk' | 'read_only';
+export type AppRole = UserRole | 'read_only';
 
 export interface UserRoleRecord {
   userId: string;

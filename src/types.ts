@@ -1,4 +1,20 @@
-export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'financial' | 'patient' | 'front_desk';
+export type UserRole = 
+  | 'clinician' 
+  | 'nurse' 
+  | 'allied_health' 
+  | 'admin' 
+  | 'manager' 
+  | 'billing' 
+  | 'front_desk' 
+  | 'patient';
+
+export type RoleCategory = 'Healthcare Staff' | 'Non-Healthcare Staff' | 'Admin Team';
+
+export const ROLE_GROUPS: Record<RoleCategory, UserRole[]> = {
+  'Healthcare Staff': ['clinician', 'nurse', 'allied_health'],
+  'Non-Healthcare Staff': ['manager', 'billing', 'front_desk'],
+  'Admin Team': ['admin', 'manager']
+};
 
 export type AlliedHealthSpecialty = 
   | 'Physiotherapist' 

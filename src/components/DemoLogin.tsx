@@ -25,7 +25,8 @@ const ROLES: { id: UserRole; label: string; icon: any; color: string; desc: stri
   { id: 'nurse', label: 'Nurse', icon: Activity, color: '#0078D4', desc: 'Vitals, interactions, and limited record contribution.' },
   { id: 'allied_health', label: 'Allied Health', icon: HeartHandshake, color: '#5C2D91', desc: 'Specialized care tracking (PT, Psych, etc).' },
   { id: 'admin', label: 'Administrator', icon: Settings, color: '#D13438', desc: 'Full care team management and systemic overrides.' },
-  { id: 'financial', label: 'Financial', icon: Landmark, color: '#666666', desc: 'Billing, claims, and insurance verification only.' },
+  { id: 'manager', label: 'Practice Manager', icon: Shield, color: '#004E8C', desc: 'Operations oversight, scheduling, and admin governance.' },
+  { id: 'billing', label: 'Billing Specialist', icon: Landmark, color: '#666666', desc: 'Billing, claims, and insurance verification only.' },
   { id: 'front_desk', label: 'Front Desk', icon: Briefcase, color: '#00B7C3', desc: 'Patient check-in, queue management, and basic demographics.' },
   { id: 'patient', label: 'Patient', icon: User, color: '#FFB900', desc: 'View own health trends, medications, and messages.' },
 ];

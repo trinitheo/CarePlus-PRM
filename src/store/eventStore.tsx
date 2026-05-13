@@ -19,7 +19,7 @@ interface Interaction {
   patientId: string;
   authorId: string;
   authorRole: UserRole;
-  type: 'clinical' | 'nursing' | 'pt' | 'social_care' | 'financial' | 'support_group';
+  type: 'clinical' | 'nursing' | 'pt' | 'social_care' | 'billing' | 'support_group';
   content: string;
   category?: string;
   timestamp: number;

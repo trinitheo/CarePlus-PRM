@@ -12,13 +12,13 @@ import { doc, deleteDoc } from 'firebase/firestore';
 import { UserRole } from '../types';
 
 const ALL_NAV_ITEMS = [
-  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'financial', 'front_desk', 'patient'] },
-  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'financial'] },
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'front_desk', 'patient'] },
+  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing'] },
   { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'front_desk', 'patient'] },
-  { id: 'front-desk', icon: Briefcase, label: 'Front Desk', roles: ['admin', 'manager', 'nurse', 'front_desk', 'financial'] },
+  { id: 'front-desk', icon: Briefcase, label: 'Front Desk', roles: ['admin', 'manager', 'nurse', 'front_desk', 'billing'] },
   { id: 'investigations', icon: Beaker, label: 'Diagnostics', roles: ['admin', 'manager', 'clinician', 'nurse'] },
   { id: 'inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager', 'clinician', 'nurse'] },
-  { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'financial'] },
+  { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'billing'] },
   { id: 'governance', icon: BookOpen, label: 'Governance', roles: ['admin', 'manager'] },
   { id: 'care-team', icon: FileText, label: 'Collab', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'patient'] },
 ];

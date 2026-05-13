@@ -10,7 +10,7 @@
         "displayName": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["clinician", "nurse", "allied_health", "admin", "financial", "patient"] 
+          "enum": ["clinician", "nurse", "allied_health", "admin", "manager", "billing", "front_desk", "patient"] 
         },
         "specialty": { "type": "string", "description": "e.g. Physiotherapist, Psychologist, Optometrist" },
         "dashboardSettings": {
@@ -220,8 +220,8 @@
         "id": { "type": "string" },
         "patientId": { "type": "string" },
         "authorId": { "type": "string" },
-        "authorRole": { "type": "string", "enum": ["doctor", "nurse", "pt", "social_worker", "financial_counselor", "community_lead"] },
-        "type": { "type": "string", "enum": ["clinical", "nursing", "pt", "social_care", "financial", "support_group"] },
+        "authorRole": { "type": "string", "enum": ["clinician", "nurse", "allied_health", "admin", "manager", "billing", "front_desk", "patient"] },
+        "type": { "type": "string", "enum": ["clinical", "nursing", "pt", "social_care", "billing", "support_group"] },
         "content": { "type": "string" },
         "category": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
@@ -369,7 +369,7 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "manager", "clinician", "front_desk", "read_only"] },
+        "role": { "type": "string", "enum": ["admin", "manager", "clinician", "nurse", "allied_health", "billing", "front_desk", "patient"] },
         "assignedBy": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

@@ -259,7 +259,7 @@ export function SystemOverviewWidget({ stats }: { stats: any[] }) {
 export function StaffDirectoryWidget({ staff }: { staff: any[] }) {
   const roleColor: Record<string, string> = {
     clinician: '#107C10', nurse: '#0078D4', allied_health: '#5C2D91',
-    admin: '#D13438', financial: '#8764B8', patient: '#CA5010',
+    admin: '#D13438', billing: '#8764B8', patient: '#CA5010',
   };
 
   return (

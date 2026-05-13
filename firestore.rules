@@ -73,10 +73,9 @@ service cloud.firestore {
         isFrontDesk() ||
         hasRole('nurse') ||
         hasRole('allied_health') ||
-        hasRole('financial') ||
-        hasRole('read_only') ||
+        hasRole('billing') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'front_desk'])
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['clinician', 'nurse', 'allied_health', 'admin', 'manager', 'billing', 'front_desk'])
       );
     }
 
@@ -113,7 +112,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
              (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
-             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient', 'front_desk'] &&
+             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'manager', 'billing', 'patient', 'front_desk'] &&
              (!('dashboardSettings' in data) || (data.dashboardSettings is map)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
@@ -220,8 +219,8 @@ service cloud.firestore {
     function isValidInteraction(data) {
       return data.keys().hasAll(['patientId', 'authorId', 'authorRole', 'type', 'content']) &&
              (data.authorId == 'anonymous-entry' || (isSignedIn() && data.authorId == request.auth.uid)) &&
-             data.authorRole in ['clinician', 'nurse', 'allied_health', 'admin', 'financial', 'patient', 'front_desk'] &&
-             data.type in ['clinical', 'nursing', 'pt', 'social_care', 'financial', 'support_group'] &&
+             data.authorRole in ['clinician', 'nurse', 'allied_health', 'admin', 'manager', 'billing', 'patient', 'front_desk'] &&
+             data.type in ['clinical', 'nursing', 'pt', 'social_care', 'billing', 'support_group'] &&
              data.content is string && data.content.size() <= 10000;
     }
 
@@ -359,12 +358,12 @@ service cloud.firestore {
 
     match /charges/{chargeId} {
       allow read: if isSignedIn() && isStaff();
-      allow create, update: if isSignedIn() && (isClinician() || hasRole('financial') || isManager());
+      allow create, update: if isSignedIn() && (isClinician() || hasRole('billing') || isManager());
     }
 
     match /invoices/{invoiceId} {
       allow read: if isSignedIn() && (isStaff() || request.auth.uid == resource.data.patientId);
-      allow create, update: if isSignedIn() && (hasRole('financial') || isManager());
+      allow create, update: if isSignedIn() && (hasRole('billing') || isManager());
     }
 
     match /payments/{paymentId} {
