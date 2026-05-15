@@ -1,20 +1,4 @@
-export type UserRole = 
-  | 'clinician' 
-  | 'nurse' 
-  | 'allied_health' 
-  | 'admin' 
-  | 'manager' 
-  | 'billing' 
-  | 'front_desk' 
-  | 'patient';
-
-export type RoleCategory = 'Healthcare Staff' | 'Non-Healthcare Staff' | 'Admin Team';
-
-export const ROLE_GROUPS: Record<RoleCategory, UserRole[]> = {
-  'Healthcare Staff': ['clinician', 'nurse', 'allied_health'],
-  'Non-Healthcare Staff': ['manager', 'billing', 'front_desk'],
-  'Admin Team': ['admin', 'manager']
-};
+export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient';
 
 export type AlliedHealthSpecialty = 
   | 'Physiotherapist' 
@@ -26,6 +10,42 @@ export type AlliedHealthSpecialty =
   | 'Dietitian' 
   | 'Nutritionist' 
   | 'Optometrist';
+
+export interface Patient {
+  id: string; // The app unique identifier (linked to User.id)
+  mrn: string; // Medical Record Number (Unique clinical identifier)
+  firstName: string;
+  lastName: string;
+  dob: string;
+  gender: string;
+  email?: string;
+  phone?: string;
+  status: 'active' | 'inactive';
+  conditions?: string[];
+  lastVisit?: string;
+  tags?: string[];
+  chiefComplaint?: string;
+  createdAt: any;
+}
+
+export interface MedicalNode {
+  id: string;
+  type: 'identity' | 'narrative' | 'background' | 'screening' | 'objective' | 'synthesis' | 'disposition';
+  position: { x: number; y: number };
+  data: {
+    label: string;
+    details: string;
+    status: 'normal' | 'abnormal' | 'critical' | 'pending';
+    category?: string;
+    dob?: string;
+    icon?: any;
+  };
+}
+
+export interface ClinicalHistoryMap {
+  nodes: MedicalNode[];
+  edges: { id: string; source: string; target: string; label?: string }[];
+}
 
 export interface User {
   id: string;

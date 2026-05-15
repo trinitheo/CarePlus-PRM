@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { 
   Network, User, Activity, Watch, Pill, Utensils, Database, FileText, 
   Microscope, Stethoscope, UserPlus, Heart, Droplets, Users, 
-  DollarSign, Accessibility, MessagesSquare, HeartHandshake, ClipboardCheck, Shield 
+  DollarSign, Accessibility, MessagesSquare, HeartHandshake, ClipboardCheck 
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
@@ -125,7 +125,7 @@ export function KnowledgeGraph({
       let color = '#0078D4';
 
       if (type === 'social_care') { icon = HeartHandshake; label = 'SOCIAL CARE'; color = '#E3008C'; }
-      if (type === 'billing') { icon = DollarSign; label = 'Billing'; color = '#107C10'; }
+      if (type === 'financial') { icon = DollarSign; label = 'Financial'; color = '#107C10'; }
       if (type === 'pt') { icon = Accessibility; label = 'PT / Rehab'; color = '#5C2D91'; }
       if (type === 'support_group') { icon = MessagesSquare; label = 'Support'; color = '#008272'; }
       if (type === 'nursing') { icon = Stethoscope; label = 'Nursing'; color = '#D13438'; }

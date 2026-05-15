@@ -1,14 +1,5 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  query, 
-  where, 
-  serverTimestamp,
-  doc,
-  updateDoc
-} from 'firebase/firestore';
-import { db, auth } from './clinicalFirestoreService';
+import { auth } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -24,9 +15,6 @@ export interface Charge {
   status: 'captured' | 'pending_review' | 'billed' | 'void';
 }
 
-/**
- * Uses Gemini to suggest CPT and ICD-10 codes based on clinical documentation.
- */
 export async function suggestClinicalCodes(clinicalNote: string) {
   try {
     const prompt = `Act as an expert medical billing and coding assistant.
@@ -60,32 +48,29 @@ export async function suggestClinicalCodes(clinicalNote: string) {
 }
 
 export async function captureCharge(data: Omit<Charge, 'id'>) {
-  const adminId = auth.currentUser?.uid;
-  return await addDoc(collection(db, 'charges'), {
+  const adminId = auth.currentUser?.uid || 'system';
+  return mockDbService.addItem('charges', {
     ...data,
     clinicianId: adminId,
-    status: 'captured',
-    createdAt: serverTimestamp()
+    status: 'captured'
   });
 }
 
 export async function createInvoice(patientId: string, chargeIds: string[]) {
-  // 1. Get charges to calculate total
-  const chargesSnap = await getDocs(collection(db, 'charges'));
+  const charges = mockDbService.getCollection('charges');
   let total = 0;
-  chargesSnap.forEach(d => {
+  charges.forEach((d: any) => {
     if (chargeIds.includes(d.id)) {
-      total += d.data().amount;
+      total += d.amount;
     }
   });
 
-  return await addDoc(collection(db, 'invoices'), {
+  return mockDbService.addItem('invoices', {
     patientId,
     chargeIds,
     totalAmount: total,
     paidAmount: 0,
     status: 'sent',
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-    createdAt: serverTimestamp()
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   });
 }

@@ -1,41 +1,27 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp,
-  getDoc 
-} from 'firebase/firestore';
-import { db, auth } from './clinicalFirestoreService';
+import { auth } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 
 export async function createInvestigationOrder(patientId: string, data: any) {
-  const adminId = auth.currentUser?.uid;
-  return await addDoc(collection(db, 'patients', patientId, 'investigations'), {
+  const adminId = auth.currentUser?.uid || 'system';
+  return mockDbService.addItem('investigations', {
     ...data,
     authorId: adminId,
-    status: 'ordered',
-    createdAt: serverTimestamp()
-  });
+    status: 'ordered'
+  }, patientId);
 }
 
 export async function uploadInvestigationResult(investigationId: string, resultData: any) {
-  // 1. Add result to global results collection
-  await addDoc(collection(db, 'results'), {
+  mockDbService.addItem('results', {
     investigationId,
-    ...resultData,
-    createdAt: serverTimestamp()
+    ...resultData
   });
-
-  // 2. Update investigation status
-  // Note: Needs patientId to target subcollection if using the nested structure
 }
 
 export async function acknowledgeResult(patientId: string, investigationId: string) {
-  const adminId = auth.currentUser?.uid;
-  const ref = doc(db, 'patients', patientId, 'investigations', investigationId);
-  await updateDoc(ref, {
+  const adminId = auth.currentUser?.uid || 'system';
+  mockDbService.updateItem('investigations', investigationId, {
     status: 'reviewed',
     acknowledgedBy: adminId,
-    acknowledgedAt: serverTimestamp()
-  });
+    acknowledgedAt: { seconds: Math.floor(Date.now() / 1000) }
+  }, patientId);
 }

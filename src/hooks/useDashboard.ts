@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { mockDbService } from '../lib/mockDatabase';
 import { User } from '../types';
 
 export interface DashboardMessage {
@@ -66,51 +65,25 @@ export function useDashboard(user: User | null) {
 
   useEffect(() => {
     if (!user) return;
-    const unsubs: (() => void)[] = [];
 
-    // Messages for this user
-    const msgQ = query(
-      collection(db, 'messages'),
-      where('toUserId', '==', user.id),
-      orderBy('createdAt', 'desc'),
-      limit(20)
-    );
-    unsubs.push(onSnapshot(msgQ, snap => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as DashboardMessage)));
+    // Simulate real-time polling or just one-shot for mock
+    const fetchData = () => {
+      const allMsgs = mockDbService.getCollection('messages');
+      setMessages(allMsgs.filter((m: any) => m.toUserId === user.id));
+
+      const allCCs = mockDbService.getCollection('courtesy_calls' as any);
+      setCourtesyCalls(allCCs.filter((c: any) => c.assignedToUserId === user.id && c.status === 'pending'));
+
+      const allRems = mockDbService.getCollection('reminders');
+      setReminders(allRems.filter((r: any) => 
+        r.status === 'pending' && 
+        (r.assignedToUserId === user.id || r.assignedToRole === user.role || (!r.assignedToUserId && !r.assignedToRole))
+      ));
+
       setLoading(false);
-    }, () => setLoading(false)));
+    };
 
-    // Courtesy calls assigned to this user
-    const ccQ = query(
-      collection(db, 'courtesy_calls'),
-      where('assignedToUserId', '==', user.id),
-      where('status', '==', 'pending'),
-      orderBy('createdAt', 'desc'),
-      limit(20)
-    );
-    unsubs.push(onSnapshot(ccQ, snap => {
-      setCourtesyCalls(snap.docs.map(d => ({ id: d.id, ...d.data() } as CourtesyCallTask)));
-    }, () => {}));
-
-    // Reminders for this user (assigned specifically or by role)
-    const remQ = query(
-      collection(db, 'reminders'),
-      where('status', '==', 'pending'),
-      orderBy('dueDate', 'asc'),
-      limit(30)
-    );
-    unsubs.push(onSnapshot(remQ, snap => {
-      const allReminders = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reminder));
-      // Client side filter for simplicity in a multitenant/role-based demo
-      const myReminders = allReminders.filter(r => 
-        r.assignedToUserId === user.id || 
-        r.assignedToRole === user.role ||
-        (!r.assignedToUserId && !r.assignedToRole) // General reminders
-      );
-      setReminders(myReminders);
-    }, () => {}));
-
-    return () => unsubs.forEach(u => u());
+    fetchData();
   }, [user?.id, user?.role]);
 
   return { messages, courtesyCalls, pendingResults, reminders, loading };

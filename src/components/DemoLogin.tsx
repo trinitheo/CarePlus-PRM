@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { 
   Shield, Stethoscope, Activity, HeartHandshake, 
   Settings, Landmark, User, ArrowRight, Loader2,
-  Lock, CheckCircle2, Briefcase
+  Lock, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserRole, AlliedHealthSpecialty } from '../types';
@@ -21,13 +21,11 @@ const SPECIALTIES: AlliedHealthSpecialty[] = [
 ];
 
 const ROLES: { id: UserRole; label: string; icon: any; color: string; desc: string }[] = [
-  { id: 'clinician', label: 'Clinician', icon: Stethoscope, color: '#107C10', desc: 'Full profile access, prescribing, and record creation.' },
-  { id: 'nurse', label: 'Nurse', icon: Activity, color: '#0078D4', desc: 'Vitals, interactions, and limited record contribution.' },
-  { id: 'allied_health', label: 'Allied Health', icon: HeartHandshake, color: '#5C2D91', desc: 'Specialized care tracking (PT, Psych, etc).' },
-  { id: 'admin', label: 'Administrator', icon: Settings, color: '#D13438', desc: 'Full care team management and systemic overrides.' },
-  { id: 'manager', label: 'Practice Manager', icon: Shield, color: '#004E8C', desc: 'Operations oversight, scheduling, and admin governance.' },
-  { id: 'billing', label: 'Billing Specialist', icon: Landmark, color: '#666666', desc: 'Billing, claims, and insurance verification only.' },
-  { id: 'front_desk', label: 'Front Desk', icon: Briefcase, color: '#00B7C3', desc: 'Patient check-in, queue management, and basic demographics.' },
+  { id: 'clinician', label: 'Clinician', icon: Stethoscope, color: '#107C10', desc: 'Focus on patient care. View schedules and clinical lists. No billing access.' },
+  { id: 'nurse', label: 'Nurse', icon: Activity, color: '#0078D4', desc: 'Triage responsibility. Perform intake, vitals, and screening.' },
+  { id: 'allied_health', label: 'Allied Health', icon: HeartHandshake, color: '#00B7C3', desc: 'Specialized healthcare. Physiotherapy, Psychology, Nutrition.' },
+  { id: 'admin', label: 'Practice Admin', icon: Settings, color: '#D13438', desc: 'Combined Front Desk and Practice Manager role. Full operational oversight.' },
+  { id: 'billing', label: 'Revenue Cycle', icon: Landmark, color: '#666666', desc: 'Patient-as-customer view. Handles credit, insurance, and billing support.' },
   { id: 'patient', label: 'Patient', icon: User, color: '#FFB900', desc: 'View own health trends, medications, and messages.' },
 ];
 
@@ -67,7 +65,7 @@ export function DemoLogin() {
         userSpecialty: specialtyStr || undefined
       });
     } catch (e) {
-      // Sarah Mitchell provisioning skipped or failed (maybe already exists)
+      console.warn('Sarah Mitchell provisioning skipped or failed (maybe already exists)', e);
     }
   };
 
@@ -100,8 +98,10 @@ export function DemoLogin() {
 
       if (currentUser) {
         await performProvisioning(currentUser.uid, selectedRole, specialty || undefined);
+        console.log('Demo profile provisioned for', selectedRole);
       }
     } catch (err: any) {
+      console.error('Failed to provision demo account:', err);
       setError(err.message || 'Authentication failed');
     } finally {
       setIsLoading(false);
@@ -183,7 +183,11 @@ export function DemoLogin() {
                       key={role.id}
                       onClick={() => {
                         setSelectedRole(role.id);
-                        if (role.id !== 'allied_health') setSpecialty('');
+                        if (role.id === 'allied_health') {
+                          setSpecialty('Dietitian');
+                        } else {
+                          setSpecialty('');
+                        }
                       }}
                       className={`relative flex flex-col text-left p-4 rounded-2xl border-2 transition-all group ${selectedRole === role.id ? 'border-[#0078D4] bg-[#F3F9FD] ring-4 ring-[#0078D4]/5' : 'border-[#F3F2F1] hover:border-[#BDBDBD] hover:bg-[#FAFAFA]'}`}
                     >

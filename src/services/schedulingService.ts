@@ -1,81 +1,78 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  Timestamp,
-  deleteDoc
-} from 'firebase/firestore';
-import { db } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
+import { logAudit } from './auditService';
 
-export interface AppointmentData {
+export interface Appointment {
+  id: string;
   patientId: string;
-  patientName: string;
   providerId: string;
-  providerName: string;
   roomId?: string;
-  roomName?: string;
-  time: Date;
+  time: any;
   duration: number;
+  status: 'scheduled' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+  visitType: 'clinic' | 'virtual';
   reason: string;
-  status: 'scheduled' | 'confirmed' | 'checked_in' | 'in_room' | 'completed' | 'cancelled' | 'no_show';
-  visitType: 'in_clinic' | 'telehealth';
-  priority: 'immediate' | 'urgent' | 'routine';
-  notes?: string;
-}
-
-export async function createAppointment(data: AppointmentData) {
-  return await addDoc(collection(db, 'appointments'), {
-    ...data,
-    time: Timestamp.fromDate(data.time),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-}
-
-export async function updateAppointment(id: string, data: Partial<AppointmentData>) {
-  const ref = doc(db, 'appointments', id);
-  const updatePayload: any = { ...data, updatedAt: serverTimestamp() };
-  if (data.time) {
-    updatePayload.time = Timestamp.fromDate(data.time);
-  }
-  return await updateDoc(ref, updatePayload);
-}
-
-export async function getAppointmentsByDateRange(start: Date, end: Date) {
-  const q = query(
-    collection(db, 'appointments'),
-    where('time', '>=', Timestamp.fromDate(start)),
-    where('time', '<=', Timestamp.fromDate(end)),
-    orderBy('time', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-}
-
-export async function cancelAppointment(id: string) {
-  return await updateAppointment(id, { status: 'cancelled' });
+  priority: 'routine' | 'urgent' | 'emergency';
 }
 
 export interface Room {
   id: string;
   name: string;
+  type: 'exam' | 'procedure' | 'telehealth' | 'consult';
   status: 'available' | 'occupied' | 'maintenance';
-}
-
-export async function transitionAppointment(id: string, status: AppointmentData['status'], roomId?: string, roomName?: string) {
-  const updateData: any = { status };
-  if (roomId) updateData.roomId = roomId;
-  if (roomName) updateData.roomName = roomName;
-  return await updateAppointment(id, updateData);
+  currentAppointmentId?: string;
 }
 
 export async function getRooms() {
-  const snapshot = await getDocs(collection(db, 'rooms'));
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
+  return mockDbService.getCollection('rooms');
+}
+
+export async function updateRoomStatus(roomId: string, status: Room['status'], appointmentId?: string) {
+  mockDbService.updateItem('rooms', roomId, {
+    status,
+    currentAppointmentId: appointmentId || null
+  });
+
+  await logAudit({
+    action: 'ROOM_STATUS_CHANGE',
+    entityId: roomId,
+    entityType: 'appointment',
+    details: `Room status changed to ${status}`
+  });
+}
+
+export async function transitionAppointment(appointmentId: string, newStatus: string, roomId?: string) {
+  const updates: any = { status: newStatus };
+  if (roomId) updates.roomId = roomId;
+
+  mockDbService.updateItem('appointments', appointmentId, updates);
+
+  await logAudit({
+    action: 'APPOINTMENT_TRANSITION',
+    entityId: appointmentId,
+    entityType: 'appointment',
+    details: `Appointment moved to status: ${newStatus}`
+  });
+
+  if (roomId && (newStatus === 'in_progress' || newStatus === 'in_room')) {
+    await updateRoomStatus(roomId, 'occupied', appointmentId);
+  } else if (newStatus === 'completed' || newStatus === 'cancelled') {
+    const rooms = await getRooms();
+    const room = rooms.find((r: any) => r.currentAppointmentId === appointmentId);
+    if (room) {
+      await updateRoomStatus(room.id, 'available');
+    }
+  }
+}
+
+export async function createAppointment(data: Omit<Appointment, 'id'>) {
+  const id = mockDbService.addItem('appointments', data);
+
+  await logAudit({
+    action: 'APPOINTMENT_CREATED',
+    entityId: id,
+    entityType: 'appointment',
+    details: `New appointment scheduled for patient ${data.patientId}`
+  });
+
+  return id;
 }

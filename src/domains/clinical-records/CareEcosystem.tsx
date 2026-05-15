@@ -30,7 +30,7 @@ export function CareEcosystem({ patientId }: { patientId: string }) {
   const getIcon = (type: string) => {
     switch (type) {
       case 'social_care': return HeartHandshake;
-      case 'billing': return DollarSign;
+      case 'financial': return DollarSign;
       case 'pt': return Accessibility;
       case 'support_group': return MessagesSquare;
       case 'nursing': return Stethoscope;
@@ -41,7 +41,7 @@ export function CareEcosystem({ patientId }: { patientId: string }) {
   const getColor = (type: string) => {
     switch (type) {
       case 'social_care': return 'text-[#E3008C] bg-[#FDE7F3]';
-      case 'billing': return 'text-[#107C10] bg-[#DFF6DD]';
+      case 'financial': return 'text-[#107C10] bg-[#DFF6DD]';
       case 'pt': return 'text-[#5C2D91] bg-[#EFE9F5]';
       case 'support_group': return 'text-[#008272] bg-[#E1F2F1]';
       case 'nursing': return 'text-[#D13438] bg-[#FDE7E9]';

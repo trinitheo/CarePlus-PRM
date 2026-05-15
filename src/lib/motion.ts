@@ -1,3 +1,4 @@
+import { Variants } from 'motion/react';
 
 // Fluent 2 Duration (in seconds for Framer Motion)
 export const duration = {

@@ -1,15 +1,5 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  getDocs, 
-  query, 
-  where, 
-  serverTimestamp,
-  doc,
-  deleteDoc
-} from 'firebase/firestore';
-import { db, auth } from './clinicalFirestoreService';
+import { auth } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 
 export interface InternalTask {
   id: string;
@@ -26,25 +16,17 @@ export interface InternalTask {
 }
 
 export async function createInternalTask(data: Omit<InternalTask, 'id' | 'createdBy'>) {
-  const adminId = auth.currentUser?.uid;
-  return await addDoc(collection(db, 'tasks'), {
+  const adminId = auth.currentUser?.uid || 'system';
+  return mockDbService.addItem('tasks', {
     ...data,
-    createdBy: adminId || 'system',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    createdBy: adminId
   });
 }
 
 export async function updateTaskStatus(taskId: string, status: InternalTask['status']) {
-  const ref = doc(db, 'tasks', taskId);
-  await updateDoc(ref, {
-    status,
-    updatedAt: serverTimestamp()
-  });
+  mockDbService.updateItem('tasks', taskId, { status });
 }
 
 export async function toggleSubtask(taskId: string, subtaskIndex: number, completed: boolean) {
-  const ref = doc(db, 'tasks', taskId);
-  // Real implementation would use array item update, but for POC:
-  // we would fetch and update.
+  // Logic simplified for mock
 }

@@ -7,20 +7,18 @@ import {
   Users, UserPlus, Shield, Clock, X, 
   Stethoscope, Activity, HeartHandshake, ShieldCheck,
   Search, ExternalLink, Trash2, Check, AlertCircle,
-  Loader2, Mail, Send
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Textarea } from '../../components/ui/textarea';
-import { addToCareTeam, removeFromCareTeam, sendMessage } from '../../services/clinicalFirestoreService';
+import { addToCareTeam, removeFromCareTeam } from '../../services/clinicalFirestoreService';
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { CareTeamMember, UserRole, AlliedHealthSpecialty } from '../../types';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useQueryModel } from '../../store/eventStore';
 
 const SPECIALTIES: AlliedHealthSpecialty[] = [
   'Physiotherapist', 'Psychologist', 'Physical Therapist', 
@@ -30,8 +28,6 @@ const SPECIALTIES: AlliedHealthSpecialty[] = [
 
 export function CareTeamManager({ patientId }: { patientId: string }) {
   const [members, setMembers] = useState<CareTeamMember[]>([]);
-  const { patients } = useQueryModel();
-  const patient = patients[patientId];
   const { userProfile } = useCurrentUser();
   const isAdminUser = userProfile?.role === 'admin';
   const isPatient = userProfile?.role === 'patient';
@@ -40,7 +36,6 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [isMessageOpen, setIsMessageOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -49,37 +44,6 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
   const [inviteRole, setInviteRole] = useState<UserRole>('allied_health');
   const [inviteSpecialty, setInviteSpecialty] = useState<string>('');
   const [inviteAccess, setInviteAccess] = useState<'clinical_full' | 'clinical_limited' | 'administrative'>('clinical_limited');
-
-  // Message state
-  const [messageForm, setMessageForm] = useState({
-    recipientId: '',
-    recipientName: '',
-    subject: '',
-    body: '',
-  });
-
-  const handleSendMessage = async () => {
-    if (!messageForm.recipientId || !messageForm.body) return;
-    setActionLoading('message');
-    try {
-      await sendMessage({
-        ...messageForm,
-        patientId,
-        patientName: patient?.name || 'Assigned Patient'
-      });
-      setIsMessageOpen(false);
-      setMessageForm({ recipientId: '', recipientName: '', subject: '', body: '' });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const openMessageWith = (userId: string, userName: string) => {
-    setMessageForm(prev => ({ ...prev, recipientId: userId, recipientName: userName }));
-    setIsMessageOpen(true);
-  };
 
   useEffect(() => {
     const q = query(collection(db, `patients/${patientId}/care_teams`), where('status', '==', 'active'));
@@ -319,21 +283,9 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
                       </div>
                       
                       <div className="space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-[13px] font-black text-[#242424] truncate">
-                            {member.userSpecialty || member.userRole.replace('_', ' ').toUpperCase()}
-                          </h4>
-                          {!isPatient && member.userId !== userProfile?.id && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-[#0078D4] hover:bg-[#F3F9FD] rounded-lg"
-                              onClick={() => openMessageWith(member.userId, member.userSpecialty || member.userRole)}
-                            >
-                              <Mail className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
+                        <h4 className="text-[13px] font-black text-[#242424] truncate">
+                          {member.userSpecialty || member.userRole.replace('_', ' ').toUpperCase()}
+                        </h4>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold text-[#A19F9D] uppercase tracking-tight">Active Team Member</span>
                           <div className="h-1 w-1 rounded-full bg-[#107C10]" />
@@ -375,63 +327,6 @@ export function CareTeamManager({ patientId }: { patientId: string }) {
           </div>
         </ScrollArea>
       </CardContent>
-
-      <Dialog open={isMessageOpen} onOpenChange={setIsMessageOpen}>
-        <DialogContent className="sm:max-w-[425px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black">Compose Message</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="p-3 bg-[#F3F9FD] rounded-xl border border-[#DEECF9] flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center border border-[#DEECF9]">
-                <Mail className="h-5 w-5 text-[#0078D4]" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase text-[#0078D4]">To Representative</p>
-                <p className="text-sm font-bold text-[#242424]">{messageForm.recipientName}</p>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-[#616161] uppercase tracking-widest">Subject</Label>
-              <Input 
-                placeholder="re: Clinical query..." 
-                value={messageForm.subject} 
-                onChange={(e) => setMessageForm(prev => ({ ...prev, subject: e.target.value }))}
-                className="rounded-xl border-[#EDEBE9] bg-[#FAFAFA]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-[#616161] uppercase tracking-widest">Message Body</Label>
-              <Textarea 
-                placeholder="Your secure message here..." 
-                value={messageForm.body} 
-                onChange={(e) => setMessageForm(prev => ({ ...prev, body: e.target.value }))}
-                className="rounded-xl border-[#EDEBE9] bg-[#FAFAFA] min-h-[150px]"
-              />
-            </div>
-
-            {patient && (
-              <div className="flex items-center gap-2 p-2 bg-[#FAFAFA] rounded-lg border border-[#EDEBE9]">
-                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-wider bg-white">Attached Patient</Badge>
-                <span className="text-[11px] font-bold text-[#616161] truncate">{patient.name}</span>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setIsMessageOpen(false)} className="font-bold">Discard</Button>
-            <Button 
-               onClick={handleSendMessage} 
-               disabled={actionLoading === 'message' || !messageForm.body}
-               className="bg-[#0078D4] hover:bg-[#005A9E] text-white font-black uppercase tracking-widest text-[11px] px-8 rounded-xl gap-2 shadow-lg shadow-[#0078D4]/20"
-            >
-              {actionLoading === 'message' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {actionLoading === 'message' ? 'Sending...' : 'Send Message'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }

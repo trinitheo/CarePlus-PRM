@@ -1,12 +1,4 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  serverTimestamp,
-  doc,
-  updateDoc
-} from 'firebase/firestore';
-import { db, auth } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -30,6 +22,5 @@ export async function summarizeClinicalNote(noteContent: string) {
 }
 
 export async function getTemplates() {
-  const snap = await getDocs(collection(db, 'clinical_templates'));
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return mockDbService.getCollection('clinical_templates');
 }

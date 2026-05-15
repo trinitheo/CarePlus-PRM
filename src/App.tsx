@@ -3,62 +3,32 @@ import { EventStoreProvider } from './store/eventStore';
 import { HIPAAMonitorProvider } from './hooks/useHIPAAMonitor';
 import { Shell } from './components/Layout';
 import { ClinicalRecords } from './domains/clinical-records/ClinicalRecords';
-import { doc, getDocFromServer } from 'firebase/firestore';
-import { db, auth } from './lib/firebase';
 import { PatientExplorer } from './domains/patient-management/PatientExplorer';
 import { PatientIntake } from './domains/patient-intake/PatientIntake';
 import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
-import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
-import { AppointmentScheduler } from './modules/scheduling/AppointmentScheduler';
-import { InvestigationWorkflow } from './modules/clinical/investigations/InvestigationWorkflow';
 import { FrontDeskConsole } from './modules/frontdesk/FrontDeskConsole';
-import { GovernanceRepository } from './modules/admin/governance/GovernanceRepository';
-import { InventoryManager } from './modules/inventory/InventoryManager';
-import { PatientSupportEcosystem } from './domains/patient-management/PatientSupportEcosystem';
+import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
+import { AppointmentsDashboard } from './modules/scheduling/AppointmentsDashboard';
 import { RoleDashboard } from './domains/dashboard/RoleDashboard';
+import { BillingDashboard } from './modules/billing/BillingDashboard';
 import { Activity, ChevronRight, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
 import { DemoLogin } from './components/DemoLogin';
 import { useCurrentUser } from './hooks/useCurrentUser';
-import { savePatient, provisionDemoPatients } from './services/clinicalFirestoreService';
+import { savePatient } from './services/clinicalFirestoreService';
+
+import { Welcome } from './components/Welcome';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
   const { userProfile, loading } = useCurrentUser();
   const [currentModule, setCurrentModule] = useState('dashboard');
-
-    useEffect(() => {
-      async function seedPatients() {
-        if (!userProfile?.id) return;
-        
-        try {
-          const p1Ref = doc(db, 'patients', 'p-1');
-          const p1Snap = await getDocFromServer(p1Ref);
-          
-          if (!p1Snap.exists()) {
-            await provisionDemoPatients();
-          }
-        } catch (e) {
-          // Fail silently or report to a monitoring service
-        }
-      }
-
-      seedPatients();
-    }, [userProfile?.id]);
-
-    useEffect(() => {
-      async function testFirestoreConnection() {
-        try {
-          // Diagnostic ping
-          await getDocFromServer(doc(db, '_diagnostics', 'connection'));
-        } catch (error: any) {
-          // Connection test failed
-        }
-      }
-      testFirestoreConnection();
-    }, []);
+  const [hasStarted, setHasStarted] = useState(() => {
+    // Check if we've already "started" in this session to avoid showing landing repeatedly
+    return typeof window !== 'undefined' ? sessionStorage.getItem('careplus_started') === 'true' : false;
+  });
 
   const [viewState, setViewState] = useState<{
     subView: 'explorer' | 'detail' | 'onboarding';
@@ -83,6 +53,13 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (!hasStarted && !userProfile) {
+    return <Welcome onStart={() => {
+      setHasStarted(true);
+      sessionStorage.setItem('careplus_started', 'true');
+    }} />;
   }
 
   if (!userProfile) {
@@ -220,54 +197,28 @@ export default function App() {
         
         {currentModule === 'scheduling' && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <AppointmentScheduler />
+            <AppointmentsDashboard />
           </div>
         )}
 
-        {currentModule === 'front-desk' && (
+        {currentModule === 'billing' && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <FrontDeskConsole />
-          </div>
-        )}
-
-        {currentModule === 'investigations' && (
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <InvestigationWorkflow />
-          </div>
-        )}
-
-        {currentModule === 'governance' && (
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <GovernanceRepository />
-          </div>
-        )}
-        
-        {currentModule === 'inventory' && (
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <InventoryManager />
-          </div>
-        )}
-
-        {/* Module Sandbox Placeholder */}
-        {['billing'].includes(currentModule) && (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-12">
-            <div className="h-24 w-24 rounded-full bg-primary/5 flex items-center justify-center mb-8">
-              <Activity className="h-12 w-12 text-primary/20" />
-            </div>
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Module Sandbox</h2>
-            <p className="text-sm mt-2 max-w-sm text-center opacity-60 leading-relaxed">
-              The <span className="font-bold text-foreground">{currentModule.replace('-', ' ')}</span> module is part of the next development phase in the Precision Health roadmap.
-            </p>
+            <BillingDashboard />
           </div>
         )}
 
         {currentModule === 'care-team' && (
           <div className="flex-1 min-h-0 overflow-hidden">
-            {userProfile?.role === 'patient' ? (
-              <PatientSupportEcosystem />
-            ) : (
-              <NurseWorkflow />
-            )}
+            <NurseWorkflow />
+          </div>
+        )}
+
+        {currentModule === 'frontdesk' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <FrontDeskConsole onRegisterPatient={() => {
+              setCurrentModule('patients');
+              startOnboarding();
+            }} />
           </div>
         )}
       </Shell>

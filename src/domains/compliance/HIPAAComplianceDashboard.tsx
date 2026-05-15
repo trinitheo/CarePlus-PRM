@@ -9,14 +9,12 @@ interface HIPAAComplianceDashboardProps {
 }
 
 export function HIPAAComplianceDashboard({ isOpen, onClose }: HIPAAComplianceDashboardProps) {
-  const { auditTrail, isLocked, logAccess, lockSession } = useHIPAAMonitor();
+  const { auditTrail, isLocked, logAccess } = useHIPAAMonitor();
 
   const handleTestLock = () => {
-    // Log a manual security check
+    // We can't directly lock the screen from here easily without a new context method,
+    // but we can log a manual security check
     logAccess('MANUAL_SECURITY_AUDIT', 'System', 'Audit Dashboard');
-    // Lock the session
-    lockSession();
-    onClose();
   };
 
   if (!isOpen) return null;

@@ -58,19 +58,19 @@ export const DEFAULT_DASHBOARD_SETTINGS: Record<UserRole, Record<'compact' | 'me
   },
   admin: {
     compact: {
-      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'calls'],
-      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, calls: true },
-      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '1x1', queue: '1x1', calls: '1x1' }
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '1x1', queue: '1x1', audit: '1x1', schedule: '1x1' }
     },
     medium: {
-      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'calls'],
-      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, calls: true },
-      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', calls: '2x1' }
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', audit: '2x1', schedule: '2x1' }
     },
     expanded: {
-      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'calls'],
-      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, calls: true },
-      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', calls: '2x1' }
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', audit: '2x1', schedule: '2x1' }
     }
   },
   billing: {
@@ -88,40 +88,6 @@ export const DEFAULT_DASHBOARD_SETTINGS: Record<UserRole, Record<'compact' | 'me
       order: ['billing', 'messages', 'reminders', 'schedule', 'patients', 'calls'],
       visibility: { billing: true, messages: true, reminders: true, schedule: true, patients: true, calls: true },
       sizes: { billing: '2x2', messages: '2x2', reminders: '2x2', schedule: '2x1', patients: '2x1', calls: '2x1' }
-    }
-  },
-  manager: {
-    compact: {
-      order: ['overview', 'messages', 'reminders', 'directory', 'billing', 'queue'],
-      visibility: { overview: true, messages: true, reminders: true, directory: true, billing: true, queue: true },
-      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '1x1', billing: '1x1', queue: '1x1' }
-    },
-    medium: {
-      order: ['overview', 'messages', 'reminders', 'directory', 'billing', 'queue'],
-      visibility: { overview: true, messages: true, reminders: true, directory: true, billing: true, queue: true },
-      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', billing: '2x1', queue: '2x1' }
-    },
-    expanded: {
-      order: ['overview', 'messages', 'reminders', 'directory', 'billing', 'queue'],
-      visibility: { overview: true, messages: true, reminders: true, directory: true, billing: true, queue: true },
-      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', billing: '2x1', queue: '2x1' }
-    }
-  },
-  front_desk: {
-    compact: {
-      order: ['queue', 'schedule', 'messages', 'reminders', 'billing', 'calls'],
-      visibility: { queue: true, schedule: true, messages: true, reminders: true, billing: true, calls: true },
-      sizes: { queue: '2x2', schedule: '2x2', messages: '2x2', reminders: '1x1', billing: '1x1', calls: '1x1' }
-    },
-    medium: {
-      order: ['queue', 'schedule', 'messages', 'reminders', 'billing', 'calls'],
-      visibility: { queue: true, schedule: true, messages: true, reminders: true, billing: true, calls: true },
-      sizes: { queue: '2x2', schedule: '2x2', messages: '2x2', reminders: '2x1', billing: '2x1', calls: '2x1' }
-    },
-    expanded: {
-      order: ['queue', 'schedule', 'messages', 'reminders', 'billing', 'calls'],
-      visibility: { queue: true, schedule: true, messages: true, reminders: true, billing: true, calls: true },
-      sizes: { queue: '2x2', schedule: '2x2', messages: '2x2', reminders: '2x1', billing: '2x1', calls: '2x1' }
     }
   },
   patient: {

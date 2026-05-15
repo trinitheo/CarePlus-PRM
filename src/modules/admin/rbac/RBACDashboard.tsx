@@ -10,7 +10,6 @@ import { updateUserRole, AppRole } from '../../../services/rbacService';
 import { Shield, User, Search, Save, History, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
-import { ROLE_GROUPS, RoleCategory } from '../../../types';
 
 interface UserData {
   id: string;
@@ -147,21 +146,14 @@ export function RBACDashboard() {
                       value={user.currentRole}
                       disabled={isUpdating === user.id}
                       onChange={(e) => handleRoleChange(user.id, e.target.value as AppRole)}
-                      className="bg-[#FAFAFA] border border-[#EDEBE9] rounded-lg px-3 py-1.5 text-xs font-bold text-[#242424] focus:ring-2 focus:ring-[#0078D4]/20 outline-none cursor-pointer w-full"
+                      className="bg-[#FAFAFA] border border-[#EDEBE9] rounded-lg px-3 py-1.5 text-xs font-bold text-[#242424] focus:ring-2 focus:ring-[#0078D4]/20 outline-none cursor-pointer"
                     >
-                      {Object.entries(ROLE_GROUPS).map(([category, roles]) => (
-                        <optgroup label={category} key={category} className="text-[10px] uppercase text-[#616161]">
-                          {roles.map(role => (
-                            <option key={role} value={role}>
-                              {role.replace('_', ' ').charAt(0).toUpperCase() + role.replace('_', ' ').slice(1)}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                      <optgroup label="Other" className="text-[10px] uppercase text-[#616161]">
-                        <option value="read_only">Read-Only Staff</option>
-                        <option value="patient">Patient</option>
-                      </optgroup>
+                      <option value="admin">Administrator</option>
+                      <option value="clinician">Clinician</option>
+                      <option value="nurse">Nurse</option>
+                      <option value="billing">Billing Specialist</option>
+                      <option value="allied_health">Allied Health</option>
+                      <option value="read_only">Read-Only Staff</option>
                     </select>
                   </td>
                   <td className="px-6 py-5 text-right">

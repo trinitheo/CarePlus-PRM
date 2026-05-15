@@ -1,22 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
-const FLASH_MODEL = "gemini-2.0-flash";
-let aiClient: GoogleGenAI | null = null;
-
-function getAiClient() {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined in environment. Please add it in Settings > Secrets.");
-    }
-    aiClient = new GoogleGenAI({ apiKey });
-  }
-  return aiClient;
-}
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function generateFriendlyInstructions(medication: string, dosage: string, frequency: string) {
   try {
-    const ai = getAiClient();
     const prompt = `Convert the following medical prescription into clear, friendly, and easy-to-understand instructions for a patient. 
     Medication: ${medication}
     Dosage: ${dosage}
@@ -25,8 +12,8 @@ export async function generateFriendlyInstructions(medication: string, dosage: s
     The instructions should be encouraging, explain how to take it simply, and mention any common simple precautions (like taking with food or water). Keep it concise (2-3 sentences).`;
 
     const response = await ai.models.generateContent({
-      model: FLASH_MODEL,
-      contents: prompt
+      model: "gemini-flash-latest",
+      contents: prompt,
     });
 
     return response.text;
@@ -38,7 +25,6 @@ export async function generateFriendlyInstructions(medication: string, dosage: s
 
 export async function checkDrugInteractions(medications: string[], context?: string) {
   try {
-    const ai = getAiClient();
     const prompt = `Act as a senior clinical pharmacist. Analyze the following list of medications for potential drug-drug interactions or contraindications.
     Medications: ${medications.join(", ")}
     ${context ? `Patient Context: ${context}` : ""}
@@ -51,8 +37,8 @@ export async function checkDrugInteractions(medications: string[], context?: str
     Be precise and evidence-based. If no major interactions are found, state that the combination appears safe under standard monitoring.`;
 
     const response = await ai.models.generateContent({
-      model: FLASH_MODEL,
-      contents: prompt
+      model: "gemini-flash-latest",
+      contents: prompt,
     });
 
     return response.text;
@@ -62,63 +48,8 @@ export async function checkDrugInteractions(medications: string[], context?: str
   }
 }
 
-export interface TranscriptionResult {
-  title: string;
-  subjective: string;
-  objective: string;
-  assessment: string;
-  plan: string;
-  workingDiagnoses: string[];
-}
-
-export async function processMedicalConversation(transcript: string): Promise<TranscriptionResult> {
-  try {
-    const ai = getAiClient();
-    const prompt = `Act as a Google Health AI clinical documentation and Transcription assistant.
-    
-    Task: Convert the provided medical conversation transcript into a professionally structured SOAP note.
-    
-    Conversation:
-    """
-    ${transcript}
-    """
-    
-    Requirements:
-    1. Extract clinical findings into Subjective, Objective, Assessment, and Plan (SOAP) sections.
-    2. Suggest a concise, descriptive title for the note.
-    3. Identify potential ICD-10 working diagnoses based on the encounter.
-    
-    Respond STRICTLY with a JSON object in this format:
-    {
-      "title": "Short title",
-      "subjective": "Detailed subjective findings",
-      "objective": "Measured objective findings (vitals, exam)",
-      "assessment": "Clinical assessment and reasoning",
-      "plan": "Follow-up, medications, and next steps",
-      "workingDiagnoses": ["Diagnosis Name 1", "Diagnosis Name 2"]
-    }
-    
-    Return ONLY the JSON.`;
-
-    const response = await ai.models.generateContent({ 
-      model: FLASH_MODEL,
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    
-    const text = response.text;
-    if (!text) throw new Error("No response from AI model");
-    
-    return JSON.parse(text);
-  } catch (error) {
-    console.error("Transcription Processing Error:", error);
-    throw error;
-  }
-}
-
 export async function generateClinicalMedicationReview(medications: string[], conditions: string[]) {
   try {
-    const ai = getAiClient();
     const prompt = `Provide a high-level clinical review for a patient with the following conditions and medication regimen.
     Conditions: ${conditions.join(", ")}
     Medications: ${medications.join(", ")}
@@ -131,8 +62,8 @@ export async function generateClinicalMedicationReview(medications: string[], co
     Output format: 2-3 concise clinical bullet points.`;
 
     const response = await ai.models.generateContent({
-      model: FLASH_MODEL,
-      contents: prompt
+      model: "gemini-flash-latest",
+      contents: prompt,
     });
 
     return response.text;
@@ -144,7 +75,6 @@ export async function generateClinicalMedicationReview(medications: string[], co
 
 export async function checkLabMonitoringRequirements(medicationName: string) {
   try {
-    const ai = getAiClient();
     const prompt = `As a clinical decision support system, identify if the medication "${medicationName}" requires specific periodic laboratory monitoring (e.g., Warfarin requires INR, Statins require LFTs, Lithium requires serum levels).
     
     If monitoring is required, respond with a JSON object:
@@ -161,16 +91,15 @@ export async function checkLabMonitoringRequirements(medicationName: string) {
     Return ONLY the JSON.`;
 
     const response = await ai.models.generateContent({
-      model: FLASH_MODEL,
-      contents: prompt
+      model: "gemini-flash-latest",
+      contents: prompt,
     });
 
     try {
-      const text = response.text;
-      const cleanedText = text.replace(/```json|```/g, "").trim();
+      const cleanedText = response.text.replace(/```json|```/g, "").trim();
       return JSON.parse(cleanedText);
     } catch (e) {
-      console.error("Failed to parse Lab Correlation JSON");
+      console.error("Failed to parse Lab Correlation JSON:", response.text);
       return { required: false };
     }
   } catch (error) {

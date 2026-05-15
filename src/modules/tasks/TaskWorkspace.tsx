@@ -14,8 +14,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
-import { db } from '../../services/clinicalFirestoreService';
+import { subscribeToCollection } from '../../services/clinicalFirestoreService';
 import { updateTaskStatus, InternalTask } from '../../services/taskService';
 
 export function TaskWorkspace() {
@@ -23,15 +22,9 @@ export function TaskWorkspace() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   useEffect(() => {
-    const q = query(collection(db, 'tasks'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const list: InternalTask[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as InternalTask);
-      });
-      setTasks(list);
+    return subscribeToCollection('tasks', (data) => {
+      setTasks(data);
     });
-    return unsub;
   }, []);
 
   const getPriorityColor = (priority: InternalTask['priority']) => {

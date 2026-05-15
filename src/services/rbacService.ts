@@ -1,15 +1,7 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  serverTimestamp, 
-  collection, 
-  addDoc 
-} from 'firebase/firestore';
 import { db, auth } from './clinicalFirestoreService';
-import { UserRole } from '../types';
+import { mockDbService } from '../lib/mockDatabase';
 
-export type AppRole = UserRole | 'read_only';
+export type AppRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient';
 
 export interface UserRoleRecord {
   userId: string;
@@ -19,33 +11,25 @@ export interface UserRoleRecord {
 }
 
 export async function updateUserRole(userId: string, role: AppRole) {
-  const adminId = auth.currentUser?.uid;
-  if (!adminId) throw new Error("Unauthorized");
-
-  const roleRef = doc(db, 'roles', userId);
+  const adminId = auth.currentUser?.uid || 'system';
   
-  await setDoc(roleRef, {
+  mockDbService.updateItem('roles', userId, {
     userId,
     role,
-    assignedBy: adminId,
-    updatedAt: serverTimestamp()
+    assignedBy: adminId
   });
 
   // Log to Audit
-  await addDoc(collection(db, 'audit_logs'), {
+  mockDbService.addItem('audit_logs' as any, {
     action: 'ROLE_UPDATE',
     performedBy: adminId,
     resourceId: userId,
     resourceType: 'user_role',
-    timestamp: serverTimestamp(),
     details: { newRole: role }
   });
 }
 
 export async function getUserRole(userId: string): Promise<AppRole | null> {
-  const docSnap = await getDoc(doc(db, 'roles', userId));
-  if (docSnap.exists()) {
-    return docSnap.data().role as AppRole;
-  }
-  return null;
+  const role = mockDbService.getDoc('roles', userId);
+  return (role?.role as AppRole) || null;
 }

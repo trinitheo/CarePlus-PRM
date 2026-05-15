@@ -1,30 +1,20 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  serverTimestamp,
-  doc,
-  updateDoc 
-} from 'firebase/firestore';
-import { db, auth } from './clinicalFirestoreService';
+import { auth } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 
 export async function uploadSOP(title: string, content: string, version: string) {
-  return await addDoc(collection(db, 'sops'), {
+  return mockDbService.addItem('sops', {
     title,
     content,
     version,
-    status: 'active',
-    updatedAt: serverTimestamp()
+    status: 'active'
   });
 }
 
 export async function acknowledgeSOP(sopId: string) {
-  const userId = auth.currentUser?.uid;
-  if (!userId) return;
-
-  await addDoc(collection(db, 'sop_acknowledgments'), {
+  const userId = auth.currentUser?.uid || 'system';
+  mockDbService.addItem('sop_acknowledgments' as any, {
     sopId,
     userId,
-    witnessedAt: serverTimestamp()
+    witnessedAt: { seconds: Math.floor(Date.now() / 1000) }
   });
 }

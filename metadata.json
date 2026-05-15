@@ -1,6 +1,6 @@
 {
-  "name": "CarePlus PRM",
-  "description": "Healthcare Patient Relationship Management System featuring high-density clinical UI, strict RBAC, and CQRS event-driven architecture.",
+  "name": "Aequanimitas PRM",
+  "description": "Next-gen Precision Patient Relationship Management Platform featuring high-density clinical UI, strict RBAC, and CQRS event-driven architecture.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

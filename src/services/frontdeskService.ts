@@ -1,37 +1,24 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp 
-} from 'firebase/firestore';
-import { db } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 
 export async function checkInPatient(patientId: string, appointmentId: string) {
-  // 1. Create check-in record
-  await addDoc(collection(db, 'checkins'), {
+  mockDbService.addItem('checkins', {
     patientId,
     appointmentId,
-    arrivalTime: serverTimestamp(),
+    arrivalTime: { seconds: Math.floor(Date.now() / 1000) },
     insuranceVerified: false,
-    status: 'arrived',
-    createdAt: serverTimestamp()
+    status: 'arrived'
   });
 
-  // 2. Update appointment status
-  const apptRef = doc(db, 'appointments', appointmentId);
-  await updateDoc(apptRef, {
-    status: 'checked_in',
-    updatedAt: serverTimestamp()
+  mockDbService.updateItem('appointments', appointmentId, {
+    status: 'checked_in'
   });
 }
 
 export async function signConsent(patientId: string, type: string, documentUrl?: string) {
-  await addDoc(collection(db, 'consents'), {
+  mockDbService.addItem('consents', {
     patientId,
     type,
-    signedAt: serverTimestamp(),
-    documentUrl: documentUrl || '',
-    createdAt: serverTimestamp()
+    signedAt: { seconds: Math.floor(Date.now() / 1000) },
+    documentUrl: documentUrl || ''
   });
 }

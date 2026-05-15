@@ -1,13 +1,4 @@
-import { 
-  collection, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp,
-  increment 
-} from 'firebase/firestore';
-import { db } from './clinicalFirestoreService';
+import { mockDbService } from '../lib/mockDatabase';
 
 export interface InventoryItem {
   id: string;
@@ -19,29 +10,27 @@ export interface InventoryItem {
   expiryDate?: string;
   location: string;
   lastRestockedAt?: any;
-  dependencies?: string[]; // IDs of related items
-  supplier?: string;
-  riskScore?: number; // 0-1 based on criticality/lead time
 }
 
 export async function getInventory() {
-  const snap = await getDocs(collection(db, 'inventory'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem));
+  return mockDbService.getCollection('inventory');
 }
 
 export async function updateStock(itemId: string, delta: number) {
-  const ref = doc(db, 'inventory', itemId);
-  await updateDoc(ref, {
-    stockLevel: increment(delta),
-    updatedAt: serverTimestamp()
-  });
+  const item = mockDbService.getDoc('inventory', itemId);
+  if (item) {
+    mockDbService.updateItem('inventory', itemId, {
+      stockLevel: (item.stockLevel || 0) + delta
+    });
+  }
 }
 
 export async function restockItem(itemId: string, amount: number) {
-  const ref = doc(db, 'inventory', itemId);
-  await updateDoc(ref, {
-    stockLevel: increment(amount),
-    lastRestockedAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+  const item = mockDbService.getDoc('inventory', itemId);
+  if (item) {
+    mockDbService.updateItem('inventory', itemId, {
+      stockLevel: (item.stockLevel || 0) + amount,
+      lastRestockedAt: { seconds: Math.floor(Date.now() / 1000) }
+    });
+  }
 }

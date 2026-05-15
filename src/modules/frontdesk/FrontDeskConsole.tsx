@@ -16,7 +16,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
 
-export function FrontDeskConsole() {
+export function FrontDeskConsole({ onRegisterPatient }: { onRegisterPatient: () => void }) {
   const [activeQueue, setActiveQueue] = useState<'appointments' | 'walk-ins'>('appointments');
 
   const incoming = [
@@ -40,7 +40,10 @@ export function FrontDeskConsole() {
               <LayoutGrid className="h-4 w-4 mr-2" />
               Queue View
            </Button>
-           <Button className="bg-[#242424] hover:bg-black text-white px-6 h-12 rounded-xl flex gap-2 font-black">
+           <Button 
+             onClick={onRegisterPatient}
+             className="bg-[#242424] hover:bg-black text-white px-6 h-12 rounded-xl flex gap-2 font-black"
+           >
               <UserPlus className="h-5 w-5" />
               Register Patient
            </Button>

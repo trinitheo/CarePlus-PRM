@@ -232,24 +232,43 @@ export function PatientNotesFeed({
     return status;
   };
 
-  const processedNotes = (clinicalData.clinical_records as any[]).map(record => {
-    const rawDate = record.createdAt?.seconds ? new Date(record.createdAt.seconds * 1000) : new Date();
-    return {
-      id: record.id,
-      title: record.title || 'Clinical SOAP Note',
-      author: record.authorName || 'Clinical Staff',
-      specialty: record.specialty || 'General Medicine',
-      date: rawDate.toLocaleDateString(),
-      time: rawDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      content: record.content || '',
-      subjective: record.subjective,
-      objective: record.objective,
-      assessment: record.assessment,
-      plan: record.plan,
-      tags: record.tags || [],
-      status: getMappedStatus(record.status),
-      priority: record.priority || 'routine'
-    };
+  const processedNotes = [
+    ...(clinicalData.clinical_records as any[]).map(record => {
+      const rawDate = record.createdAt?.seconds ? new Date(record.createdAt.seconds * 1000) : new Date();
+      return {
+        id: record.id,
+        title: record.title || 'Clinical SOAP Note',
+        author: record.authorName || 'Clinical Staff',
+        specialty: record.specialty || 'General Medicine',
+        date: rawDate.toLocaleDateString(),
+        time: rawDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: record.content || '',
+        subjective: record.subjective,
+        objective: record.objective,
+        assessment: record.assessment,
+        plan: record.plan,
+        tags: record.tags || [],
+        status: getMappedStatus(record.status),
+        priority: record.priority || 'routine'
+      };
+    }),
+    ...(clinicalData.clinical_intakes as any[]).map(intake => {
+      const rawDate = intake.createdAt?.seconds ? new Date(intake.createdAt.seconds * 1000) : (intake.timestamp ? new Date(intake.timestamp) : new Date());
+      return {
+        id: intake.id,
+        title: 'Initial Clinical Intake',
+        author: 'System / Onboarding',
+        specialty: 'Clinical Intake',
+        date: rawDate.toLocaleDateString(),
+        time: rawDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: `Chief Complaint: ${intake.chiefComplaint || 'N/A'}\nHPI: ${intake.historyOfPresentIllness || 'N/A'}\nMedical History: ${intake.medicalHistory || 'N/A'}\nMedications: ${intake.medications || 'N/A'}`,
+        tags: ['Intake', 'History'],
+        status: 'signed' as 'signed',
+        priority: 'routine' as 'routine'
+      };
+    })
+  ].sort((a, b) => {
+    return new Date(b.date + ' ' + b.time).getTime() - new Date(a.date + ' ' + a.time).getTime();
   });
 
   const toggleExpand = (noteId: string) => {

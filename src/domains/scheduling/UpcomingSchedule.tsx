@@ -7,7 +7,7 @@ import {
   Clock, Calendar, User, ChevronRight, Search, 
   Filter, Video, MapPin, MoreHorizontal, CheckCircle2,
   AlertCircle, ArrowUpCircle, Info, Phone, Mail,
-  Activity, FileText, History, Plus
+  Activity, FileText, History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '../../components/ui/badge';
@@ -18,9 +18,7 @@ import {
 } from '../../components/ui/dialog';
 import { calculatePriority } from '../../lib/triageLogic';
 import { transition } from '../../lib/motion';
-import { updateAppointmentStatus, saveAppointment } from '../../services/clinicalFirestoreService';
-
-const VISIT_TYPES = ['in_clinic', 'telehealth', 'home_visit'];
+import { updateAppointmentStatus } from '../../services/clinicalFirestoreService';
 
 export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?: (id: string) => void }) {
   const { appointments, patients } = useQueryModel();
@@ -28,16 +26,6 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedApptId, setSelectedApptId] = useState<string | null>(null);
-  const [isBookingOpen, setIsBookingOpen] = useState(false);
-
-  // New Appointment State
-  const [newAppt, setNewAppt] = useState({
-    patientId: '',
-    time: new Date().toISOString().slice(0, 16), // datetime-local format
-    reason: '',
-    visitType: 'in_clinic' as any
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Selected appointment details lookup
   const selectedAppt = useMemo(() => {
@@ -47,34 +35,6 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
     const patient = patients[appt.patientId];
     return { ...appt, patient };
   }, [selectedApptId, appointments, patients]);
-
-  // Simulate loading state for "State Awareness" (Point 6)
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleBookAppointment = async () => {
-    if (!newAppt.patientId || !newAppt.reason) return;
-    setIsSubmitting(true);
-    try {
-      await saveAppointment({
-        ...newAppt,
-        time: new Date(newAppt.time).toISOString()
-      });
-      setIsBookingOpen(false);
-      setNewAppt({
-        patientId: '',
-        time: new Date().toISOString().slice(0, 16),
-        reason: '',
-        visitType: 'in_clinic'
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Simulate loading state for "State Awareness" (Point 6)
   useEffect(() => {
@@ -142,13 +102,6 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
         </div>
 
         <div className="flex items-center gap-2">
-          <Button 
-            onClick={() => setIsBookingOpen(true)}
-            className="rounded-xl shadow-sm flex gap-2 h-11 px-4 bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Book Appointment</span>
-          </Button>
           <div className="relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A19F9D] group-focus-within:text-[#0078D4] transition-colors" />
             <input 
@@ -156,88 +109,15 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
               placeholder="Search patients, MRN or symptoms..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-white border border-[#EDEBE9] rounded-xl text-[13px] font-medium focus:outline-none focus:ring-4 focus:ring-[#0078D4]/10 focus:border-[#0078D4] transition-all w-64 shadow-sm"
+              className="pl-10 pr-4 py-2.5 bg-white border border-[#EDEBE9] rounded-xl text-[13px] font-medium focus:outline-none focus:ring-4 focus:ring-[#0078D4]/10 focus:border-[#0078D4] transition-all w-80 shadow-sm"
             />
           </div>
           <Button variant="outline" className="rounded-xl border-[#EDEBE9] shadow-sm flex gap-2 h-11 px-4 bg-white hover:bg-[#FAFAFA]">
             <Filter className="h-4 w-4 text-[#616161]" />
-            <span className="text-xs font-bold text-[#242424]">Filter</span>
+            <span className="text-xs font-bold text-[#242424]">Filter By</span>
           </Button>
         </div>
       </div>
-
-      {/* Book Appointment Modal */}
-      <Dialog open={isBookingOpen} onOpenChange={setIsBookingOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black">Book New Appointment</DialogTitle>
-            <DialogDescription className="text-xs font-bold text-[#616161] uppercase tracking-wider">
-              Clinical Encounter Scheduling
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-[11px] font-black uppercase text-[#A19F9D]">Select Patient</label>
-              <select 
-                value={newAppt.patientId}
-                onChange={(e) => setNewAppt(prev => ({ ...prev, patientId: e.target.value }))}
-                className="w-full p-3 bg-[#FAFAFA] border border-[#EDEBE9] rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0078D4] outline-none"
-              >
-                <option value="">Choose a patient...</option>
-                {Object.values(patients).map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} (MRN: {p.mrn})</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase text-[#A19F9D]">Date & Time</label>
-                <input 
-                  type="datetime-local"
-                  value={newAppt.time}
-                  onChange={(e) => setNewAppt(prev => ({ ...prev, time: e.target.value }))}
-                  className="w-full p-3 bg-[#FAFAFA] border border-[#EDEBE9] rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0078D4] outline-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase text-[#A19F9D]">Visit Type</label>
-                <select 
-                  value={newAppt.visitType}
-                  onChange={(e) => setNewAppt(prev => ({ ...prev, visitType: e.target.value }))}
-                  className="w-full p-3 bg-[#FAFAFA] border border-[#EDEBE9] rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0078D4] outline-none"
-                >
-                  {VISIT_TYPES.map(type => (
-                    <option key={type} value={type}>{type.replace('_', ' ').toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] font-black uppercase text-[#A19F9D]">Reason for Visit</label>
-              <textarea 
-                value={newAppt.reason}
-                onChange={(e) => setNewAppt(prev => ({ ...prev, reason: e.target.value }))}
-                placeholder="Chief complaint or symptoms..."
-                className="w-full p-3 bg-[#FAFAFA] border border-[#EDEBE9] rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0078D4] outline-none min-h-[100px]"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setIsBookingOpen(false)} className="font-bold">Cancel</Button>
-            <Button 
-              onClick={handleBookAppointment} 
-              disabled={isSubmitting || !newAppt.patientId || !newAppt.reason}
-              className="bg-[#0078D4] hover:bg-[#005A9E] text-white font-black uppercase tracking-widest text-[11px] px-8 rounded-xl"
-            >
-              {isSubmitting ? 'Booking...' : 'Confirm Appointment'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4">
         {/* Main List Area - Point 6 */}
