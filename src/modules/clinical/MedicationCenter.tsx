@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { checkDrugInteractions } from '../../services/aiService';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { deletePrescription, updatePrescriptionStatus, updatePrescriptionAdherence } from '../../services/clinicalFirestoreService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import Markdown from 'react-markdown';
@@ -62,6 +63,7 @@ interface MedicationCenterProps {
 }
 
 export function MedicationCenter({ patientId, medications, conditions, canWrite }: MedicationCenterProps) {
+  const { userProfile } = useCurrentUser();
   const [searchTerm, setSearchTerm] = useState('');
   const [isCheckingInteractions, setIsCheckingInteractions] = useState(false);
   const [interactionResult, setInteractionResult] = useState<string | null>(null);
@@ -396,6 +398,28 @@ export function MedicationCenter({ patientId, medications, conditions, canWrite 
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )
+                        )}
+
+                        {userProfile?.role === 'patient' && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 rounded-lg border-[#0078D4] text-[#0078D4] text-[10px] font-black uppercase px-3 hover:bg-[#F3F9FD]"
+                            onClick={async () => {
+                              if (!med.id) return;
+                              setActionLoading(`refill-${med.id}`);
+                              try {
+                                await updatePrescriptionStatus(patientId, med.id, 'active', 'Patient requested refill via portal');
+                                alert("Refill request sent to your care team.");
+                              } finally {
+                                setActionLoading(null);
+                              }
+                            }}
+                            disabled={actionLoading === `refill-${med.id}`}
+                          >
+                            {actionLoading === `refill-${med.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3 mr-2" />}
+                            Request Refill
+                          </Button>
                         )}
                     </div>
                   </motion.div>

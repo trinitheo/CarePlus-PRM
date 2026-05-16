@@ -9,7 +9,9 @@ import {
   Database,
   ChevronLeft,
   ChevronRight,
-  Pill
+  Pill,
+  Loader2,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '../../components/ui/badge';
@@ -19,6 +21,82 @@ import { transition } from '../../lib/motion';
 import { SOAPNoteModal } from './SOAPNoteModal';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { saveSOAPNote } from '../../services/clinicalFirestoreService';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { GoogleGenAI } from '@google/genai';
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+function NoteSummary({ notes }: { notes: any[] }) {
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const generateSummary = async () => {
+    if (notes.length === 0) return;
+    setLoading(true);
+    try {
+      const prompt = `You are a clinical assistant. Summarize the following clinical notes into a patient-friendly, easy-to-understand summary.
+      Focus on:
+      1. Overall health status
+      2. Key medical conditions mentioned
+      3. Next steps and plan items for the patient to follow
+      4. Any upcoming follow-ups
+      
+      Keep it professional but accessible. Use clear headings.
+      NOTES:
+      ${notes.map(n => `Date: ${n.date}, Title: ${n.title}, Content: ${n.content}`).join('\n\n')}
+      `;
+
+      const result = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt
+      });
+      
+      setSummary(result.text || "Summary generated successfully.");
+    } catch (e) {
+      console.error('Failed to generate summary:', e);
+      setSummary("Unable to generate summary at this time.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-3xl border border-[#DEECF9] shadow-sm overflow-hidden mb-6">
+      <div className="p-6 flex items-center justify-between bg-gradient-to-r from-[#F0F7FF] to-white">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 bg-[#0078D4] rounded-xl flex items-center justify-center text-white shadow-lg shadow-[#0078D4]/20">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-md font-black text-[#1A1A1A] tracking-tight uppercase">Health Journey Summary</h3>
+            <p className="text-[10px] font-bold text-[#0078D4] uppercase tracking-widest">AI-Generated Patient Portal Summary</p>
+          </div>
+        </div>
+        {!summary && !loading && (
+          <Button onClick={generateSummary} className="h-9 rounded-full bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-[11px] uppercase tracking-widest px-6 shadow-md">
+            Generate Insight
+          </Button>
+        )}
+      </div>
+      {(loading || summary) && (
+        <div className="p-6 pt-2 border-t border-[#F3F2F1]">
+          {loading ? (
+            <div className="py-8 flex flex-col items-center gap-4">
+              <Loader2 className="h-6 w-6 animate-spin text-[#0078D4]" />
+              <p className="text-[10px] font-black uppercase text-[#616161] tracking-widest animate-pulse">Analyzing Longitudinal Metadata...</p>
+            </div>
+          ) : (
+            <div className="prose prose-sm max-w-none">
+               <div className="text-[13px] text-[#242424] leading-relaxed whitespace-pre-wrap font-medium">
+                {summary}
+               </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Note {
   id: string;
@@ -218,6 +296,7 @@ export function PatientNotesFeed({
   onViewMedications,
   canWrite
 }: PatientNotesFeedProps) {
+  const { userProfile } = useCurrentUser();
   const patientId = patient?.id || 'p-1';
   const clinicalData = usePatientClinicalData(patientId);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
@@ -390,6 +469,11 @@ export function PatientNotesFeed({
                   </select>
                 </div>
               </div>
+
+              {/* AI Summary for Patients/Allied Health */}
+              {(userProfile?.role === 'patient' || userProfile?.role === 'allied_health') && (
+                <NoteSummary notes={filteredNotes} />
+              )}
 
               {/* Notes Feed */}
               <div className="space-y-3">

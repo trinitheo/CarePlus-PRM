@@ -12,7 +12,7 @@ export async function generateFriendlyInstructions(medication: string, dosage: s
     The instructions should be encouraging, explain how to take it simply, and mention any common simple precautions (like taking with food or water). Keep it concise (2-3 sentences).`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
 
@@ -37,7 +37,7 @@ export async function checkDrugInteractions(medications: string[], context?: str
     Be precise and evidence-based. If no major interactions are found, state that the combination appears safe under standard monitoring.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
 
@@ -62,7 +62,7 @@ export async function generateClinicalMedicationReview(medications: string[], co
     Output format: 2-3 concise clinical bullet points.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
 
@@ -91,7 +91,7 @@ export async function checkLabMonitoringRequirements(medicationName: string) {
     Return ONLY the JSON.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
 

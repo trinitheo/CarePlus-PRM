@@ -27,6 +27,7 @@ export interface MockDb {
   clinical_templates: any[];
   results: any[];
   referrals: Record<string, any[]>;
+  care_teams: Record<string, any[]>;
 }
 
 const INITIAL_DB: MockDb = {
@@ -168,7 +169,8 @@ const INITIAL_DB: MockDb = {
   consents: [],
   clinical_templates: [],
   results: [],
-  referrals: {}
+  referrals: {},
+  care_teams: {}
 };
 
 // Global singleton for the mock DB in development

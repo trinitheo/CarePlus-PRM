@@ -1,4 +1,19 @@
 import { db, auth } from '../lib/firebase';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  query, 
+  where, 
+  getDocs, 
+  orderBy, 
+  limit, 
+  onSnapshot,
+  serverTimestamp,
+  deleteDoc
+} from 'firebase/firestore';
 import { mockDbService, MockDb } from '../lib/mockDatabase';
 export { db, auth };
 
@@ -15,8 +30,47 @@ export async function getPatientById(patientId: string) {
   return mockDbService.getDoc('patients', patientId);
 }
 
+/**
+ * Sanitizes data for Firestore by removing undefined values and ensuring nested objects are handled.
+ */
+function sanitizeData(data: any): any {
+  if (data === null || data === undefined) return null;
+  
+  // Handle Date objects explicitly if they are used
+  if (data instanceof Date) return data.toISOString();
+  
+  if (typeof data !== 'object') return data;
+  
+  if (Array.isArray(data)) return data.map(v => sanitizeData(v));
+  
+  // Handle plain objects
+  const sanitized: any = {};
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      const value = data[key];
+      if (value !== undefined) {
+        const sanitizedValue = sanitizeData(value);
+        if (sanitizedValue !== undefined) {
+          sanitized[key] = sanitizedValue;
+        }
+      }
+    }
+  }
+  return sanitized;
+}
+
 // User Management
 export async function saveUserProfile(userId: string, data: any) {
+  // Sync to real Firestore so security rules can see the user's role
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'users', userId), {
+      ...sanitized,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error('Failed to sync user profile to Firestore:', e);
+  }
   return mockDbService.updateItem('users', userId, data);
 }
 
@@ -26,7 +80,19 @@ export async function getUserProfile(userId: string) {
 
 // Care Team Management
 export async function addToCareTeam(patientId: string, userId: string, data: any) {
-  // Logic simplified for mock
+  // Sync to real Firestore to enable isCareTeamMember rules
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'patients', patientId, 'care_teams', userId), {
+      ...sanitized,
+      userId,
+      patientId,
+      status: 'active',
+      joinedAt: serverTimestamp()
+    });
+  } catch (e) {
+    console.error('Failed to sync care team member to Firestore:', e);
+  }
   return mockDbService.addItem('care_teams' as any, { ...data, userId, patientId }, patientId);
 }
 
@@ -36,6 +102,15 @@ export async function removeFromCareTeam(patientId: string, userId: string) {
 
 // SOAP Notes
 export async function saveSOAPNote(patientId: string, data: any) {
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'patients', patientId, 'clinical_records', data.id || `soap-${Date.now()}`), {
+      ...sanitized,
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    console.error('Failed to sync SOAP note:', e);
+  }
   return mockDbService.addItem('clinical_records', data, patientId);
 }
 
@@ -54,6 +129,15 @@ export async function updateSOAPNote(patientId: string, noteId: string, data: an
 
 // Prescriptions
 export async function savePrescription(patientId: string, data: any) {
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'patients', patientId, 'prescriptions', data.id || `rx-${Date.now()}`), {
+      ...sanitized,
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    console.error('Failed to sync prescription:', e);
+  }
   return mockDbService.addItem('prescriptions', data, patientId);
 }
 
@@ -71,6 +155,15 @@ export async function updatePrescriptionAdherence(patientId: string, prescriptio
 
 // Investigations
 export async function saveInvestigation(patientId: string, data: any) {
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'patients', patientId, 'investigations', data.id || `inv-${Date.now()}`), {
+      ...sanitized,
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    console.error('Failed to sync investigation:', e);
+  }
   return mockDbService.addItem('investigations', data, patientId);
 }
 
@@ -80,6 +173,15 @@ export async function updateInvestigation(patientId: string, investigationId: st
 
 // Procedures
 export async function saveProcedure(patientId: string, data: any) {
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'patients', patientId, 'procedures', data.id || `proc-${Date.now()}`), {
+      ...sanitized,
+      updatedAt: serverTimestamp()
+    });
+  } catch (e) {
+    console.error('Failed to sync procedure:', e);
+  }
   return mockDbService.addItem('procedures', data, patientId);
 }
 
@@ -101,6 +203,18 @@ export async function savePatient(patientId: string, data: any) {
       createdAt: data.createdAt || new Date().toISOString()
     });
   }
+  
+  // Sync to real Firestore
+  try {
+    const sanitized = sanitizeData(data);
+    await setDoc(doc(db, 'patients', patientId), {
+      ...sanitized,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error('Patient sync error:', e);
+  }
+  
   return mockDbService.updateItem('patients', patientId, data);
 }
 
@@ -109,7 +223,23 @@ export async function savePatient(patientId: string, data: any) {
  * Already in mockDb, so just returns ID
  */
 export async function provisionSarahMitchell() {
-  return 'sarah-mitchell-42';
+  const patientId = 'sarah-mitchell-42';
+  try {
+    const existing = await getDoc(doc(db, 'patients', patientId));
+    if (!existing.exists()) {
+      const patientData = mockDbService.getDoc('patients', patientId);
+      if (patientData) {
+        const sanitized = sanitizeData(patientData);
+        await setDoc(doc(db, 'patients', patientId), {
+          ...sanitized,
+          createdAt: serverTimestamp()
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Failed to provision Sarah Mitchell in Firestore:', e);
+  }
+  return patientId;
 }
 
 // Clinical Intake
@@ -160,6 +290,26 @@ export async function completeCourtesyCall(taskId: string, notes: string) {
 
 export async function markMessageRead(messageId: string) {
   // Mock logic
+}
+
+export async function createMessage(data: any) {
+  return mockDbService.addItem('messages' as any, {
+    ...data,
+    createdAt: new Date().toISOString(),
+    status: 'sent'
+  });
+}
+
+export async function createRefillRequest(patientId: string, data: any) {
+  return mockDbService.addItem('messages' as any, {
+    ...data,
+    patientId,
+    type: 'refill_request',
+    title: 'Medication Refill Request',
+    createdAt: new Date().toISOString(),
+    status: 'sent',
+    priority: 'medium'
+  });
 }
 
 export async function createReminder(data: any) {

@@ -90,6 +90,40 @@ export const DEFAULT_DASHBOARD_SETTINGS: Record<UserRole, Record<'compact' | 'me
       sizes: { billing: '2x2', messages: '2x2', reminders: '2x2', schedule: '2x1', patients: '2x1', calls: '2x1' }
     }
   },
+  manager: {
+    compact: {
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '1x1', queue: '1x1', audit: '1x1', schedule: '1x1' }
+    },
+    medium: {
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', audit: '2x1', schedule: '2x1' }
+    },
+    expanded: {
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', audit: '2x1', schedule: '2x1' }
+    }
+  },
+  front_desk: {
+    compact: {
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '1x1', queue: '1x1', audit: '1x1', schedule: '1x1' }
+    },
+    medium: {
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', audit: '2x1', schedule: '2x1' }
+    },
+    expanded: {
+      order: ['overview', 'messages', 'reminders', 'directory', 'queue', 'audit', 'schedule'],
+      visibility: { overview: true, messages: true, reminders: true, directory: true, queue: true, audit: true, schedule: true },
+      sizes: { overview: '2x2', messages: '2x2', reminders: '2x2', directory: '2x1', queue: '2x1', audit: '2x1', schedule: '2x1' }
+    }
+  },
   patient: {
     compact: {
       order: ['vitals', 'medications', 'messages', 'reminders', 'schedule', 'health_sync'],

@@ -1,44 +1,63 @@
 import { useState, useEffect } from 'react';
 import { auth } from '../lib/firebase';
-import { mockDbService } from '../lib/mockDatabase';
-import { User } from '../types';
+import { authService, CurrentUser } from '../services/authService';
 
 export function useCurrentUser() {
-  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshProfile = () => {
+    const demoUser = authService.getCurrentUser();
+    if (demoUser) {
+      setUserProfile(demoUser);
+    } else {
+      setUserProfile(null);
+    }
+  };
+
   useEffect(() => {
+    // Check local storage first
+    refreshProfile();
+    
+    let unsubDoc: (() => void) | null = null;
+
+    // Then listen to Firebase Auth for real logins
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        // Fallback for development if no user is signed in
-        const mockUser = mockDbService.getDoc('users', 'system');
-        if (mockUser) {
-          setUserProfile({ id: 'system', ...mockUser } as User);
-        } else {
-          setUserProfile(null);
-        }
-        setLoading(false);
-        return;
+      // Cleanup previous doc listener if any
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
       }
 
-      const profile = mockDbService.getDoc('users', user.uid);
-      if (profile) {
-        setUserProfile({ id: user.uid, ...profile } as User);
+      if (user) {
+        // Listen to the real Firestore document for role and other synced data
+        unsubDoc = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            setUserProfile({
+              id: user.uid,
+              ...docSnap.data()
+            } as CurrentUser);
+          } else {
+            // Fallback to local storage if doc doesn't exist yet
+            const demoUser = authService.getCurrentUser();
+            if (demoUser) {
+              setUserProfile(demoUser);
+            }
+          }
+          setLoading(false);
+        });
       } else {
-        // Create basic profile if missing in mock
-        const basicProfile = {
-          email: user.email,
-          displayName: user.displayName,
-          role: 'admin' // Default to admin for mock/poc
-        };
-        mockDbService.updateItem('users', user.uid, basicProfile);
-        setUserProfile({ id: user.uid, ...basicProfile } as User);
+        // If not logged into Firebase, refresh from local storage (demo)
+        refreshProfile();
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubDoc) unsubDoc();
+    };
   }, []);
 
-  return { userProfile, loading, authUser: auth.currentUser };
+  return { userProfile, loading, authUser: auth.currentUser, refreshProfile };
 }

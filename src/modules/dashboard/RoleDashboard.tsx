@@ -16,7 +16,8 @@ import {
   Users, Building2, Shield, CreditCard, TrendingUp, AlertTriangle,
   Zap, Phone, ArrowRight, Clock, User, MoreHorizontal, Bell, Plus,
   GripVertical, Settings2, Save, Eye, EyeOff, Maximize2, Minimize2,
-  Wind, Droplets, Scale, Smartphone, Apple, Share2, Link2, ShieldCheck, History
+  Wind, Droplets, Scale, Smartphone, Apple, Share2, Link2, ShieldCheck, History,
+  RefreshCcw
 } from 'lucide-react';
 import { 
   completeCourtesyCall, 
@@ -49,8 +50,9 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { useWindowSizeClass } from '../../hooks/useAdaptiveWidth';
 import { subscribeToAuditLogs } from '../../services/auditService';
-import { VitalsCard } from '../clinical-records/VitalsCard';
-import { HealthConnectManager } from '../clinical-records/HealthConnectManager';
+import { VitalsCard } from '../clinical/VitalsCard';
+import { HealthConnectManager } from '../clinical/HealthConnectManager';
+import { ComposeMessageModal } from './ComposeMessageModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts: any): string {
@@ -392,6 +394,7 @@ function RemindersWidget({ reminders, onComplete, onCreate }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: string) => void }) {
   const [selected, setSelected] = useState<any | null>(null);
+  const [isReplying, setIsReplying] = useState(false);
   const unreadCount = messages.filter(m => !m.read).length;
 
   const handleSelect = (msg: any) => {
@@ -406,7 +409,10 @@ function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: st
 
   return (
     <DashCard>
-      <SectionHeader icon={MessageSquare} label="Messages" count={unreadCount} color="bg-[#DEECF9] text-[#0078D4]" />
+      <div className="flex items-center justify-between pr-4">
+        <SectionHeader icon={MessageSquare} label="Messages" count={unreadCount} color="bg-[#DEECF9] text-[#0078D4]" />
+        <ComposeMessageModal />
+      </div>
       <div className="flex flex-1 min-h-0">
         {/* List pane */}
         <ScrollArea 
@@ -474,6 +480,22 @@ function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: st
                 )}
                 <p className="text-[13px] text-[#444441] leading-relaxed">{selected.body}</p>
               </ScrollArea>
+              <div className="p-4 bg-white border-t border-[#EDEBE9] flex justify-end">
+                <ComposeMessageModal 
+                  replyTo={selected}
+                  isOpen={isReplying}
+                  onOpenChange={setIsReplying}
+                  trigger={
+                    <Button 
+                      size="sm" 
+                      className="rounded-full bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-[11px] uppercase tracking-widest px-6"
+                      onClick={() => setIsReplying(true)}
+                    >
+                      Reply
+                    </Button>
+                  }
+                />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1240,14 +1262,19 @@ function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSi
   const getSizeClasses = (id: string) => {
     const size = sizes[id] || '1x1';
     const isCompact = viewClass === 'compact';
+    const isExpanded = viewClass === 'expanded';
+    
+    // In expanded mode (8-cols), we double the spans to maintain the same relative size
+    // but with higher granularity slots.
+    const mult = isExpanded ? 2 : 1;
     
     switch (size) {
-      case '1x1': return 'col-span-1 row-span-1';
-      case '1x2': return 'col-span-1 row-span-2';
-      case '2x1': return 'col-span-2 row-span-1';
-      case '2x2': return 'col-span-2 row-span-2';
-      case '2x3': return 'col-span-2 row-span-3';
-      case '4x2': return isCompact ? 'col-span-2 row-span-2' : 'col-span-4 row-span-2';
+      case '1x1': return isExpanded ? 'col-span-2 row-span-2' : 'col-span-1 row-span-1';
+      case '1x2': return isExpanded ? 'col-span-2 row-span-4' : 'col-span-1 row-span-2';
+      case '2x1': return isExpanded ? 'col-span-4 row-span-2' : 'col-span-2 row-span-1';
+      case '2x2': return isExpanded ? 'col-span-4 row-span-4' : 'col-span-2 row-span-2';
+      case '2x3': return isExpanded ? 'col-span-4 row-span-6' : 'col-span-2 row-span-3';
+      case '4x2': return isCompact ? 'col-span-2 row-span-2' : (isExpanded ? 'col-span-8 row-span-4' : 'col-span-4 row-span-2');
       default: return 'col-span-1 row-span-1';
     }
   };
@@ -1257,8 +1284,8 @@ function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSi
       items={displayOrder}
       strategy={verticalListSortingStrategy}
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 flex-1 min-h-0"
-        style={{ gridAutoRows: '150px' }}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${viewClass === 'expanded' ? 'lg:grid-cols-8' : 'lg:grid-cols-4'} gap-4 flex-1 min-h-0`}
+        style={{ gridAutoRows: viewClass === 'expanded' ? '75px' : '150px' }}>
         {displayOrder.map((id, i) => {
           const currentSize = sizes[id] || '1x1';
           return (
@@ -1566,49 +1593,53 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
              <h1 className="text-[26px] font-black text-[#1A1A1A] tracking-tight leading-none">
               {greeting}, <span style={{ color: meta.accentColor }}>{firstName}</span>
             </h1>
-            <Button 
-               size="sm" 
-               variant="ghost" 
-               onClick={() => isEditing ? saveSettings() : setIsEditing(true)}
-               className={`h-9 px-4 rounded-full font-black text-[11px] uppercase tracking-widest gap-2 ${isEditing ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' : 'bg-[#FAFAFA] border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1]'}`}
-            >
-              {isEditing ? <><Save className="h-3.5 w-3.5" /> Save Layout</> : <><Settings2 className="h-3.5 w-3.5" /> Customize</>}
-            </Button>
-            {isEditing && (
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                onClick={() => setIsEditing(false)}
-                className="h-9 px-4 rounded-full font-black text-[11px] uppercase tracking-widest text-[#D13438] hover:bg-red-50"
-              >
-                Cancel
-              </Button>
-            )}
-            {isEditing && (
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                onClick={async () => {
-                  if (userProfile?.id) {
-                    await updateUserDashboardSettings(userProfile.id, null);
-                    // Refresh view
-                    window.location.reload();
-                  }
-                }}
-                className="h-9 px-4 rounded-full font-black text-[11px] uppercase tracking-widest text-[#616161] hover:bg-[#F3F2F1]"
-              >
-                Reset to Defaults
-              </Button>
-            )}
           </div>
           <p className="text-[13px] text-[#757370] font-medium mt-1.5">
             {isEditing ? 'Drag handles to reorder, use eye icon to toggle visibility' : meta.sub}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            {isEditing && (
+              <>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={async () => {
+                    if (userProfile?.id) {
+                      await updateUserDashboardSettings(userProfile.id, null);
+                      window.location.reload();
+                    }
+                  }}
+                  title="Reset to Defaults"
+                  className="h-9 w-9 p-0 rounded-full bg-[#FAFAFA] border border-[#EDEBE9] text-[#616161] hover:bg-[#F3F2F1]"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setIsEditing(false)}
+                  title="Cancel Changes"
+                  className="h-9 w-9 p-0 rounded-full bg-red-50 text-[#D13438] border border-red-100 hover:bg-red-100"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            <Button 
+               size="sm" 
+               variant="ghost" 
+               onClick={() => isEditing ? saveSettings() : setIsEditing(true)}
+               title={isEditing ? "Save Layout" : "Customize Layout"}
+               className={`h-9 w-9 p-0 rounded-full shadow-sm transition-all ${isEditing ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' : 'bg-white border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1] hover:text-[#0078D4]'}`}
+            >
+              {isEditing ? <Save className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+            </Button>
+          </div>
           <div
-            className="h-10 px-4 rounded-full flex items-center gap-2 text-[11px] font-black uppercase tracking-widest"
-            style={{ background: `${meta.accentColor}14`, color: meta.accentColor }}
+            className="h-10 px-4 rounded-full flex items-center gap-2 text-[11px] font-black uppercase tracking-widest shadow-sm border border-transparent"
+            style={{ background: `${meta.accentColor}14`, color: meta.accentColor, borderColor: `${meta.accentColor}20` }}
           >
             {role.replace('_', ' ')}
           </div>

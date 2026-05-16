@@ -1,18 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Default Deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // --- Helper functions ---
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'anonymous');
     }
 
     function isValidId(id) {
@@ -27,56 +22,23 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function getRole() {
+      return exists(/databases/$(database)/documents/roles/$(request.auth.uid)) 
+        ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role 
+        : (exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+            ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role 
+            : 'none');
+    }
+
     function hasRole(role) {
-      return isSignedIn() && (
-        (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == role) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role)
-      );
+      return isSignedIn() && getRole() == role;
     }
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == "karlanwartheodore@gmail.com" ||
+        (request.auth.token.email == "karlanwartheodore@gmail.com" && request.auth.token.email_verified == true) ||
         hasRole('admin')
       );
-    }
-
-    function isManager() {
-      return isAdmin() || hasRole('manager');
-    }
-
-    function isClinician() {
-      return isManager() || hasRole('clinician');
-    }
-
-    function isFrontDesk() {
-      return isManager() || hasRole('front_desk');
-    }
-
-    function isStaff() {
-      return isSignedIn() && (
-        isAdmin() || 
-        isManager() || 
-        isClinician() || 
-        isFrontDesk() ||
-        hasRole('read_only') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['nurse', 'allied_health', 'billing'])
-      );
-    }
-
-    function isCareTeamMember(patientId) {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)) ||
-        isAdmin() ||
-        isClinician()
-      );
-    }
-
-    function getCareTeamAccess(patientId) {
-      return get(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid)).data.accessLevel;
     }
 
     function isAuthor(data) {
@@ -86,7 +48,27 @@ service cloud.firestore {
       );
     }
 
-    // Global Admin Bypass
+    function isManager() { return isAdmin() || hasRole('manager'); }
+
+    function isStaff() {
+      return isSignedIn() && (getRole() in ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'read_only']);
+    }
+
+    // Role-specific staff helpers
+    function isClinician() { return isAdmin() || hasRole('manager') || hasRole('clinician'); }
+    function isNurse() { return isClinician() || hasRole('nurse'); }
+    function isAlliedHealth() { return isClinician() || hasRole('allied_health'); }
+    function isFinancialStaff() { return isAdmin() || hasRole('billing'); }
+
+    function isCareTeamMember(patientId) {
+      return isSignedIn() && (
+        request.auth.uid == patientId ||
+        isAdmin() ||
+        exists(/databases/$(database)/documents/patients/$(patientId)/care_teams/$(request.auth.uid))
+      );
+    }
+
+    // --- Global Admin Bypass ---
     match /{document=**} {
       allow read, write: if isAdmin();
     }
@@ -94,25 +76,16 @@ service cloud.firestore {
     // --- Entity Validations ---
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
-             (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
-             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'billing', 'patient'] &&
-             (!('updatedAt' in data) || (data.updatedAt is timestamp));
-    }
-
-    function isValidPatient(data) {
-      return data.keys().hasAll(['firstName', 'lastName']) &&
-             data.firstName is string && data.firstName.size() <= 100 &&
-             data.lastName is string && data.lastName.size() <= 100;
+             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'billing', 'patient'];
     }
 
     // --- Collection Rules ---
 
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
-      allow list: if isStaff();
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
-      allow update: if (isSignedIn() && request.auth.uid == userId) && 
-                     isValidUser(incoming());
+      allow list: if isAdmin(); 
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
     }
 
@@ -122,24 +95,28 @@ service cloud.firestore {
     }
 
     match /patients/{patientId} {
-      allow get, list: if isSignedIn(); 
-      allow create: if (isSignedIn() || (incoming().get('authorId', '') == 'anonymous-entry')) && isValidPatient(incoming());
-      allow update: if (isAuthor(existing()) || isStaff()) && isValidPatient(incoming());
+      // Allow signed in users to see the demo record for provisioning/demo discovery
+      allow get: if isSignedIn() && (isStaff() || request.auth.uid == patientId || patientId == 'sarah-mitchell-42' || patientId == 'p-1');
+      allow list: if isSignedIn() && isStaff();
+      allow create: if isSignedIn() && (isStaff() || request.auth.uid == patientId || patientId == 'sarah-mitchell-42' || patientId == 'p-1');
+      allow update: if isSignedIn() && (isStaff() || request.auth.uid == patientId || patientId == 'sarah-mitchell-42' || patientId == 'p-1');
       
       match /care_teams/{memberId} {
         allow read: if isSignedIn();
-        allow write: if isStaff();
+        allow write: if isSignedIn() && (isStaff() || request.auth.uid == memberId || patientId == 'p-1' || patientId == 'sarah-mitchell-42');
       }
 
       match /clinical_records/{recordId} {
         allow read: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId) && (isClinician() || isAdmin()) && isValidId(recordId);
-        allow write: if isAuthor(existing()) || isAdmin();
+        allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse() || isAlliedHealth());
+        allow update: if isAdmin() || (isAuthor(existing()) && !existing().get('isFinalized', false));
       }
 
       match /prescriptions/{prescriptionId} {
         allow read: if isCareTeamMember(patientId);
-        allow write: if isCareTeamMember(patientId) && (isClinician() || isAdmin());
+        // Patients can create refill requests (refillRequested: true)
+        allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse() || request.auth.uid == patientId);
+        allow update: if isCareTeamMember(patientId) && (isClinician() || isNurse());
       }
 
       match /investigations/{investigationId} {
@@ -149,12 +126,18 @@ service cloud.firestore {
 
       match /procedures/{procedureId} {
         allow read: if isCareTeamMember(patientId);
-        allow write: if isCareTeamMember(patientId) && (isClinician() || isAdmin());
+        allow write: if isCareTeamMember(patientId) && (isClinician() || isNurse());
       }
 
       match /vitals/{vitalId} {
         allow read: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId);
+        allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse() || isAlliedHealth());
+        allow update: if isCareTeamMember(patientId) && (isClinician() || isNurse());
+      }
+
+      match /referrals/{referralId} {
+        allow read: if isCareTeamMember(patientId) && !isNurse(); // Nurses cannot see referrals
+        allow write: if isCareTeamMember(patientId) && (isClinician() || isAlliedHealth());
       }
 
       match /interactions/{interactionId} {
@@ -171,6 +154,14 @@ service cloud.firestore {
         allow read: if isCareTeamMember(patientId);
         allow write: if isCareTeamMember(patientId) || isStaff();
       }
+    }
+
+    match /charges/{chargeId} {
+      allow read, write: if isFinancialStaff();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read, write: if isFinancialStaff();
     }
 
     match /appointments/{appointmentId} {
@@ -218,16 +209,6 @@ service cloud.firestore {
       allow write: if isAdmin() || isManager();
     }
 
-    match /charges/{chargeId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
-    }
-
-    match /invoices/{invoiceId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
-    }
-
     match /clinical_templates/{templateId} {
       allow read: if isStaff();
       allow write: if isAdmin();
@@ -247,7 +228,6 @@ service cloud.firestore {
       allow read: if isStaff();
       allow write: if isStaff();
     }
-
   }
 }
 

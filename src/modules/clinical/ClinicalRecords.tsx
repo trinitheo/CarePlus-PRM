@@ -8,10 +8,10 @@ import { KnowledgeGraph } from './KnowledgeGraph';
 import { Button } from '../../components/ui/button';
 import { SOAPNoteModal } from './SOAPNoteModal';
 import { PrescriptionPadModal } from './PrescriptionPadModal';
-import { InvestigationOrderModal } from '../investigations/InvestigationOrderModal';
+import { InvestigationOrderModal } from './investigations/InvestigationOrderModal';
 import { NewProcedureModal } from './NewProcedureModal';
 import { NewReferralModal } from './NewReferralModal';
-import { InvestigationWorkflow } from '../investigations/InvestigationWorkflow';
+import { InvestigationWorkflow } from './investigations/InvestigationWorkflow';
 import { ProceduresList } from './ProceduresList';
 import { ReferralsList } from './ReferralsList';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
@@ -73,9 +73,9 @@ export function ClinicalRecords({
     return { accessLevel: membership.accessLevel, role: membership.userRole };
   }, [clinicalData.care_teams, userProfile]);
 
-  const canReadClinical = myAccess?.accessLevel === 'clinical_full' || myAccess?.accessLevel === 'clinical_limited' || userProfile?.role === 'patient';
-  const canWriteClinical = myAccess?.accessLevel === 'clinical_full' && userProfile?.role !== 'patient';
-  const isAuthorized = !!myAccess || userProfile?.role === 'admin' || userProfile?.role === 'patient';
+  const canReadClinical = myAccess?.accessLevel === 'clinical_full' || myAccess?.accessLevel === 'clinical_limited' || userProfile?.role === 'patient' || userProfile?.role === 'allied_health';
+  const canWriteClinical = (myAccess?.accessLevel === 'clinical_full' || userProfile?.role === 'nurse' || userProfile?.role === 'allied_health') && userProfile?.role !== 'patient';
+  const isAuthorized = !!myAccess || userProfile?.role === 'admin' || userProfile?.role === 'patient' || userProfile?.role === 'allied_health';
 
   useEffect(() => {
     if (patientId && isAuthorized) {
@@ -453,13 +453,15 @@ export function ClinicalRecords({
                         <Stethoscope className="h-4 w-4" />
                         Procedures
                       </TabsTrigger>
-                      <TabsTrigger 
-                        value="referrals" 
-                        className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        Referrals
-                      </TabsTrigger>
+                      {userProfile?.role !== 'nurse' && (
+                        <TabsTrigger 
+                          value="referrals" 
+                          className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          Referrals
+                        </TabsTrigger>
+                      )}
                     </>
                   )}
                   
@@ -480,32 +482,46 @@ export function ClinicalRecords({
                       <FileText style={{ color: '#0078D4' }} className="h-5 w-5" />
                     </Button>
                   </SOAPNoteModal>
-                  <div className="w-[1px] h-5 bg-[#EDEBE9]" />
-                  <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
-                      title="Issue Prescription"
-                      onClick={() => setIsPrescriptionPadOpen(true)}
-                  >
-                      <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
-                  </Button>
+                  {(userProfile?.role === 'clinician' || userProfile?.role === 'nurse' || userProfile?.role === 'admin') && (
+                    <>
+                      <div className="w-[1px] h-5 bg-[#EDEBE9]" />
+                      <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" 
+                          title="Issue Prescription"
+                          onClick={() => setIsPrescriptionPadOpen(true)}
+                      >
+                          <Pill style={{ color: '#107C10' }} className="h-5 w-5" />
+                      </Button>
+                    </>
+                  )}
                   <div className="w-[1px] h-5 bg-[#EDEBE9]" />
                   <InvestigationOrderModal patientId={patientId} canWrite={canWriteClinical}>
                     <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Investigation">
                       <Microscope style={{ color: '#845701' }} className="h-5 w-5" />
                     </Button>
                   </InvestigationOrderModal>
-                  <NewProcedureModal patientId={patientId} canWrite={canWriteClinical}>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Procedure">
-                      <Stethoscope style={{ color: '#5C2D91' }} className="h-5 w-5" />
-                    </Button>
-                  </NewProcedureModal>
-                  <NewReferralModal patientId={patientId} canWrite={canWriteClinical}>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Referral">
-                      <UserPlus style={{ color: '#A4262C' }} className="h-5 w-5" />
-                    </Button>
-                  </NewReferralModal>
+                  {(userProfile?.role === 'clinician' || userProfile?.role === 'nurse' || userProfile?.role === 'admin') && (
+                    <>
+                      <div className="w-[1px] h-5 bg-[#EDEBE9]" />
+                      <NewProcedureModal patientId={patientId} canWrite={canWriteClinical}>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Procedure">
+                          <Stethoscope style={{ color: '#5C2D91' }} className="h-5 w-5" />
+                        </Button>
+                      </NewProcedureModal>
+                    </>
+                  )}
+                  {userProfile?.role !== 'nurse' && (
+                    <>
+                      <div className="w-[1px] h-5 bg-[#EDEBE9]" />
+                      <NewReferralModal patientId={patientId} canWrite={canWriteClinical}>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-[#F3F2F1]" title="Referral">
+                          <UserPlus style={{ color: '#A4262C' }} className="h-5 w-5" />
+                        </Button>
+                      </NewReferralModal>
+                    </>
+                  )}
                 </div>
               )}
             </div>

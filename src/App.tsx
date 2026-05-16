@@ -2,33 +2,28 @@ import { useState, useEffect } from 'react';
 import { EventStoreProvider } from './store/eventStore';
 import { HIPAAMonitorProvider } from './hooks/useHIPAAMonitor';
 import { Shell } from './components/Layout';
-import { ClinicalRecords } from './domains/clinical-records/ClinicalRecords';
-import { PatientExplorer } from './domains/patient-management/PatientExplorer';
-import { PatientIntake } from './domains/patient-intake/PatientIntake';
-import { NurseWorkflow } from './domains/nurse-workflow/NurseWorkflow';
+import { ClinicalRecords } from './modules/clinical/ClinicalRecords';
+import { PatientExplorer } from './modules/clinical/management/PatientExplorer';
+import { PatientIntake } from './modules/frontdesk/intake/PatientIntake';
+import { NurseWorkflow } from './modules/nurse/NurseWorkflow';
 import { FrontDeskConsole } from './modules/frontdesk/FrontDeskConsole';
-import { UpcomingSchedule } from './domains/scheduling/UpcomingSchedule';
+import { UpcomingSchedule } from './modules/scheduling/UpcomingSchedule';
 import { AppointmentsDashboard } from './modules/scheduling/AppointmentsDashboard';
-import { RoleDashboard } from './domains/dashboard/RoleDashboard';
+import { RoleDashboard } from './modules/dashboard/RoleDashboard';
 import { BillingDashboard } from './modules/billing/BillingDashboard';
+import { CareNetworkGraph } from './modules/admin/rbac/CareNetworkGraph';
 import { Activity, ChevronRight, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
-import { DemoLogin } from './components/DemoLogin';
+import { LoginScreen } from './components/LoginScreen';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { savePatient } from './services/clinicalFirestoreService';
 
-import { Welcome } from './components/Welcome';
-
 export default function App() {
   const sizeClass = useWindowSizeClass();
-  const { userProfile, loading } = useCurrentUser();
+  const { userProfile, loading, refreshProfile } = useCurrentUser();
   const [currentModule, setCurrentModule] = useState('dashboard');
-  const [hasStarted, setHasStarted] = useState(() => {
-    // Check if we've already "started" in this session to avoid showing landing repeatedly
-    return typeof window !== 'undefined' ? sessionStorage.getItem('careplus_started') === 'true' : false;
-  });
 
   const [viewState, setViewState] = useState<{
     subView: 'explorer' | 'detail' | 'onboarding';
@@ -55,15 +50,8 @@ export default function App() {
     );
   }
 
-  if (!hasStarted && !userProfile) {
-    return <Welcome onStart={() => {
-      setHasStarted(true);
-      sessionStorage.setItem('careplus_started', 'true');
-    }} />;
-  }
-
   if (!userProfile) {
-    return <DemoLogin />;
+    return <LoginScreen onLoginSuccess={refreshProfile} />;
   }
 
   const handleNavigate = (module: string) => {
@@ -198,6 +186,12 @@ export default function App() {
         {currentModule === 'scheduling' && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <AppointmentsDashboard />
+          </div>
+        )}
+
+        {currentModule === 'care-network' && (
+          <div className="flex-1 min-h-0 overflow-hidden h-full">
+            <CareNetworkGraph />
           </div>
         )}
 

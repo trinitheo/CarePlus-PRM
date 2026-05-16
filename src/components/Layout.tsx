@@ -1,22 +1,23 @@
 import { 
   Activity, Calendar, FileText, Settings, LayoutDashboard,
   Users, CreditCard, ShieldCheck, User,
-  RefreshCcw, Signature
+  RefreshCcw, Signature, Share2
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HIPAAComplianceDashboard } from '../domains/compliance/HIPAAComplianceDashboard';
+import { HIPAAComplianceDashboard } from '../modules/compliance/HIPAAComplianceDashboard';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { db, auth } from '../lib/firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { auth } from '../lib/firebase';
+import { authService } from '../services/authService';
 
 const ALL_NAV_ITEMS = [
-  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing'] },
-  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing'] },
-  { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'front_desk'] }, // Providers/Nurses don't create appts
-  { id: 'frontdesk', icon: Signature, label: 'Access', roles: ['admin', 'manager', 'front_desk'] }, // Administrator is front desk
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient'] },
+  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health'] },
+  { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'front_desk'] }, 
+  { id: 'care-network', icon: Share2, label: 'Networks', roles: ['admin', 'manager', 'clinician'] },
   { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'billing'] },
-  { id: 'care-team', icon: FileText, label: 'Collab', roles: ['admin', 'manager', 'clinician', 'nurse'] },
+  { id: 'care-team', icon: FileText, label: 'Workflows', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health'] },
+  { id: 'frontdesk', icon: Signature, label: 'Access', roles: ['admin', 'manager', 'front_desk'] },
 ];
 
 function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
@@ -26,14 +27,8 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
     !item.roles || (userProfile?.role && item.roles.includes(userProfile.role))
   );
 
-  const handleSwitchProfile = async () => {
-    if (userProfile && auth.currentUser) {
-      await deleteDoc(doc(db, 'users', auth.currentUser.uid));
-      window.location.reload();
-    }
-  };
-
   const handleLogout = async () => {
+    authService.logout();
     await auth.signOut();
     sessionStorage.removeItem('careplus_started');
     sessionStorage.removeItem('precison_health_view_state');
@@ -86,18 +81,7 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
           <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-emerald-50">
             <ShieldCheck className="h-6 w-6" />
           </div>
-          <span className="hidden lg:block text-[9px] font-bold uppercase">SECURE</span>
-        </button>
-
-        <button 
-          className="flex flex-col items-center gap-1 text-[#616161] hover:opacity-80 transition-opacity"
-          onClick={handleSwitchProfile}
-          title="Switch role by resetting user document"
-        >
-          <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-[#F3F2F1]">
-            <RefreshCcw className="h-5 w-5" />
-          </div>
-          <span className="text-[9px] font-bold uppercase">ROLE</span>
+          <span className="hidden lg:block text-[9px] font-bold uppercase tracking-widest text-center">SECURE</span>
         </button>
 
         <button 
@@ -108,7 +92,7 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
           <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-red-50">
             <User className="h-5 w-5" />
           </div>
-          <span className="text-[9px] font-bold uppercase">LOGOUT</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-center">LOGOUT</span>
         </button>
 
         <div className="h-10 w-10 rounded-full border-2 border-[#EDEBE9] p-0.5 shadow-sm overflow-hidden bg-white group cursor-pointer hover:border-[#0078D4] transition-colors">
@@ -128,14 +112,8 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
     !item.roles || (userProfile?.role && item.roles.includes(userProfile.role))
   );
 
-  const handleSwitchProfile = async () => {
-    if (userProfile && auth.currentUser) {
-      await deleteDoc(doc(db, 'users', auth.currentUser.uid));
-      window.location.reload();
-    }
-  };
-
   const handleLogout = async () => {
+    authService.logout();
     await auth.signOut();
     sessionStorage.removeItem('careplus_started');
     sessionStorage.removeItem('precison_health_view_state');
@@ -163,16 +141,6 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
         );
       })}
       
-      <button 
-        className="flex flex-col items-center gap-1 text-[#616161] hover:opacity-80 transition-opacity"
-        onClick={handleSwitchProfile}
-      >
-        <div className="p-1.5 rounded-full transition-colors h-8 w-8 flex items-center justify-center">
-          <RefreshCcw className="h-5 w-5" />
-        </div>
-        <span className="text-[10px] font-bold uppercase tracking-tight">ROLE</span>
-      </button>
-
       <button 
         className="flex flex-col items-center gap-1 text-red-600 hover:opacity-80 transition-opacity"
         onClick={handleLogout}

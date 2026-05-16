@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../../components/ui/dialog';
-import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../../../components/ui/dialog';
+import { Button } from '../../../components/ui/button';
 import { X, ArrowLeft, Loader2, Send, ClipboardCheck, AlertCircle, Lock } from 'lucide-react';
-import { saveInvestigation } from '../../services/clinicalFirestoreService';
+import { saveInvestigation } from '../../../services/clinicalFirestoreService';
 import { OrderCategorySelection } from './components/OrderCategorySelection';
 import { InvestigationOrderForm, OrderCategory, validateInvestigationOrder, isFormValid } from './components/InvestigationOrderForm';
 import { RequisitionPreview } from './components/RequisitionPreview';
-import { useQueryModel } from '../../store/eventStore';
+import { useQueryModel } from '../../../store/eventStore';
 
 interface InvestigationOrderModalProps {
   patientId: string;

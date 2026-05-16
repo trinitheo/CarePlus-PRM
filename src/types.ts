@@ -1,4 +1,4 @@
-export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient';
+export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient' | 'manager' | 'front_desk';
 
 export type AlliedHealthSpecialty = 
   | 'Physiotherapist' 
@@ -51,6 +51,7 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  avatar?: string;
   role: UserRole;
   specialty?: string | AlliedHealthSpecialty;
   organizationId?: string;

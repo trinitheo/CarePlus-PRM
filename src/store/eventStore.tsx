@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy, getDoc, doc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 
 import { UserRole } from '../types';
 
@@ -249,57 +249,88 @@ const EventContext = createContext<{
 export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(eventReducer, initialState);
 
-  // Firestore Listener for Patients
+  // Master Firestore Sync Lifecycle
   useEffect(() => {
-    const q = query(
-      collection(db, 'patients')
-    );
+    let unsubs: (() => void)[] = [];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const data = change.doc.data();
-          const patient = { 
-            id: change.doc.id, 
-            ...data,
-            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
-          } as Patient;
-          
-          dispatch({
-            type: 'PATIENT_REGISTERED',
-            payload: patient
+    const unsubscribeAuth = auth.onAuthStateChanged((firebaseUser) => {
+      // Clear existing listeners on auth change
+      unsubs.forEach(u => u());
+      unsubs = [];
+
+      if (!firebaseUser) return;
+
+      // 1. Listen to the user's document to get their current role
+      const userRef = doc(db, 'users', firebaseUser.uid);
+      const unsubUser = onSnapshot(userRef, (userSnap) => {
+        const userData = userSnap.data();
+        // Wait for profile to be synced by the LoginScreen
+        if (!userData?.role) return; 
+
+        const role = userData.role;
+        const isStaffRole = ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'read_only'].includes(role);
+
+        // Clear existing collection-level syncs before starting new ones (avoids duplicates if role updates)
+        unsubs.slice(1).forEach(u => u());
+        unsubs = [unsubUser];
+
+        // 2. Sync Appointments (Staff and verified users have access)
+        const apptsQ = query(
+          collection(db, 'appointments'),
+          orderBy('time', 'asc')
+        );
+
+        const unsubAppts = onSnapshot(apptsQ, (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const appt = { id: change.doc.id, ...change.doc.data() } as Appointment;
+              dispatch({
+                type: 'APPOINTMENT_SCHEDULED',
+                payload: appt
+              });
+            }
           });
+        }, (error) => {
+          if (error.code !== 'permission-denied') {
+            console.error("Schedule sync error:", error);
+          }
+        });
+        unsubs.push(unsubAppts);
+
+        // 3. Sync Patients (Only for Staff roles)
+        if (isStaffRole) {
+          const patientsQ = query(collection(db, 'patients'));
+          const unsubPatients = onSnapshot(patientsQ, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added' || change.type === 'modified') {
+                const data = change.doc.data();
+                dispatch({
+                  type: 'PATIENT_REGISTERED',
+                  payload: { 
+                    id: change.doc.id, 
+                    ...data,
+                    name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim()
+                  } as Patient
+                });
+              }
+            });
+          }, (error) => {
+            if (error.code !== 'permission-denied') {
+              console.error("Patient sync error:", error);
+            }
+          });
+          unsubs.push(unsubPatients);
         }
+      }, (error) => {
+        console.error("User profile sync error:", error);
       });
-    }, (error) => {
-      console.error("Patient sync error:", error);
+      unsubs.push(unsubUser);
     });
 
-    return () => unsubscribe();
-  }, []);
-
-  // Firestore Listener for Appointments (Point 2)
-  useEffect(() => {
-    const q = query(
-      collection(db, 'appointments'),
-      orderBy('time', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added' || change.type === 'modified') {
-          const appt = { id: change.doc.id, ...change.doc.data() } as Appointment;
-          dispatch({
-            type: 'APPOINTMENT_SCHEDULED',
-            payload: appt
-          });
-        }
-      });
-    }, (error) => {
-      console.error("Schedule sync error:", error);
-    });
-
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      unsubs.forEach(u => u());
+    };
   }, []);
 
   // Simulate SSE/WebSocket incoming events (Health Connect updates every 5 mins)

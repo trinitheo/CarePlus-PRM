@@ -153,6 +153,7 @@ export function RBACDashboard() {
                       <option value="nurse">Nurse</option>
                       <option value="billing">Billing Specialist</option>
                       <option value="allied_health">Allied Health</option>
+                      <option value="patient">Patient</option>
                       <option value="read_only">Read-Only Staff</option>
                     </select>
                   </td>

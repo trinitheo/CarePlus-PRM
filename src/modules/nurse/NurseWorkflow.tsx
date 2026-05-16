@@ -11,7 +11,7 @@ import {
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from '../../lib/motion';
-import { UpdateVitalsModal } from '../clinical-records/UpdateVitalsModal';
+import { UpdateVitalsModal } from '../clinical/UpdateVitalsModal';
 import { updatePatientStatus } from '../../services/clinicalFirestoreService';
 
 export function NurseWorkflow() {

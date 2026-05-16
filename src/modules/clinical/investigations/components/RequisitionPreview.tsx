@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileText, Printer, Send, ShoppingCart, User, Building2, Calendar, FileType } from 'lucide-react';
-import { Card } from '../../../components/ui/card';
+import { Card } from '../../../../components/ui/card';
 import { OrderCategory } from './InvestigationOrderForm';
 
 interface RequisitionPreviewProps {

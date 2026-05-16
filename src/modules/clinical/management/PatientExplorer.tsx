@@ -1,12 +1,12 @@
-import { useQueryModel, Patient } from '../../store/eventStore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
-import { Button } from '../../components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { useQueryModel, Patient } from '../../../store/eventStore';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
 import { useState } from 'react';
 import { Search, UserPlus, ArrowRight, User, Users, Activity, FileText } from 'lucide-react';
-import { Badge } from '../../components/ui/badge';
-import { ScrollArea } from '../../components/ui/scroll-area';
+import { Badge } from '../../../components/ui/badge';
+import { ScrollArea } from '../../../components/ui/scroll-area';
 
 interface PatientExplorerProps {
   onSelectPatient: (id: string) => void;

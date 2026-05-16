@@ -14,13 +14,19 @@ import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestor
 import { db } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+
 export function BillingDashboard() {
+  const { userProfile } = useCurrentUser();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [recentCharges, setRecentCharges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid'>('all');
 
   useEffect(() => {
+    if (!userProfile || !['admin', 'manager', 'billing'].includes(userProfile.role)) {
+      return;
+    }
     const invoicesQ = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'), limit(10));
     const chargesQ = query(collection(db, 'charges'), orderBy('createdAt', 'desc'), limit(10));
 
@@ -45,6 +51,19 @@ export function BillingDashboard() {
     { label: 'Insurance Outstand.', value: '$45,800', change: '-2.1%', icon: Landmark, color: '#8764B8' },
     { label: 'Denial Rate', value: '4.2%', change: '-0.5%', icon: Activity, color: '#D13438' },
   ];
+
+  if (userProfile && !['admin', 'manager', 'billing'].includes(userProfile.role)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8">
+        <ShieldCheck className="h-12 w-12 text-[#D13438] mb-4" />
+        <h2 className="text-xl font-black text-[#242424] uppercase tracking-tight">Access Restricted</h2>
+        <p className="text-sm text-[#616161] mt-2 max-w-md">
+          Financial data access is restricted to billing specialists and administrators. 
+          Clinicians and other medical staff do not have access to practice revenue or patient invoicing.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">
