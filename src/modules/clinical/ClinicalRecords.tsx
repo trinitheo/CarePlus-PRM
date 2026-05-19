@@ -2,7 +2,7 @@ import { useQueryModel } from '../../store/eventStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { LayoutDashboard, ShieldAlert, Lock, UserCheck, Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle, Network, HardDrive, Workflow, Pill, Microscope, Activity, FileText, User } from 'lucide-react';
+import { Settings2, LayoutDashboard, ShieldAlert, Lock, UserCheck, Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle, Network, HardDrive, Workflow, Pill, Microscope, Activity, FileText, User } from 'lucide-react';
 import { HealthConnectManager } from './HealthConnectManager';
 import { KnowledgeGraph } from './KnowledgeGraph';
 import { Button } from '../../components/ui/button';
@@ -53,6 +53,7 @@ export function ClinicalRecords({
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false);
   const [isCareEcosystemModalOpen, setIsCareEcosystemModalOpen] = useState(false);
   const [isHealthConnectModalOpen, setIsHealthConnectModalOpen] = useState(false);
+  const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [isPrescriptionPadOpen, setIsPrescriptionPadOpen] = useState(false);
   const { logAccess } = useHIPAAMonitor();
   const [activeTab, setActiveTab] = useState('overview');
@@ -287,8 +288,24 @@ export function ClinicalRecords({
       variants={containerVariants}
       className="flex flex-col h-full space-y-4"
     >
-      {/* Top Controls - Sync Status */}
-      <div className="flex items-center justify-end px-2 mb-2">
+      {/* Top Controls - Sync Status & Customize */}
+      <div className="flex items-center justify-end px-2 mb-2 gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsEditingLayout(!isEditingLayout)}
+          className={`h-7 px-3 rounded-full flex items-center gap-1.5 transition-all ${
+            isEditingLayout 
+              ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' 
+              : 'bg-white border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1]'
+          }`}
+        >
+          <Settings2 className={`h-3 w-3 ${isEditingLayout ? 'text-white' : 'text-[#757370]'}`} />
+          <span className="text-[10px] font-black uppercase tracking-wider">
+            {isEditingLayout ? 'Save Layout' : 'Customize Layout'}
+          </span>
+        </Button>
+
         <button 
           onClick={() => setIsHealthConnectModalOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1 bg-[#F3F9FD] border border-[#DEECF9] rounded-full scale-90 origin-right cursor-pointer hover:bg-[#DEECF9] transition-colors"
@@ -318,12 +335,15 @@ export function ClinicalRecords({
         canWrite={canWriteClinical}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-2 flex-1 min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-8 gap-3 flex-1 min-h-0">
         {/* LEFT: Patient Detail Card (Fixed Sidebar) */}
         {!isNotesExpanded && (
-          <div className="xl:col-span-3 flex flex-col min-h-0">
+          <div className="xl:col-span-2 flex flex-col min-h-0 relative group">
+            {isEditingLayout && (
+              <div className="absolute inset-0 bg-primary/5 border-2 border-dashed border-primary/20 rounded-lg z-10 pointer-events-none animate-pulse" />
+            )}
             <motion.div variants={itemVariants} className="flex-1">
-              <Card className="h-full border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white">
+              <Card className={`h-full border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white transition-all ${isEditingLayout ? 'scale-[0.98] ring-2 ring-primary/20' : ''}`}>
                   <div className="p-4 xl:p-6">
                     <div className="flex items-start gap-5 mb-8">
                       <div className="h-20 w-20 rounded-2xl bg-[#F3F3F3] border border-[#EDEBE9] shadow-sm overflow-hidden shrink-0">
@@ -403,7 +423,7 @@ export function ClinicalRecords({
         )}
 
         {/* RIGHT: Tabbed Content Area */}
-        <div className={`${isNotesExpanded ? 'xl:col-span-12' : 'xl:col-span-9'} flex flex-col min-h-0`}>
+        <div className={`${isNotesExpanded ? 'xl:col-span-8' : 'xl:col-span-6'} flex flex-col min-h-0`}>
           <Tabs 
             value={activeTab} 
             onValueChange={(value) => {
@@ -527,25 +547,45 @@ export function ClinicalRecords({
             </div>
 
             <TabsContent value="overview" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 flex-1 min-h-0">
+              <div className="grid grid-cols-1 xl:grid-cols-6 gap-3 flex-1 min-h-0">
                 {/* MIDDLE COLUMN */}
-                <div className="flex flex-col min-h-0 gap-2">
-                   <div className="flex-initial min-h-0 transition-all duration-300">
+                <div className="flex flex-col min-h-0 gap-3 xl:col-span-3">
+                   <div className="flex-initial min-h-0 transition-all duration-300 relative group">
+                      {isEditingLayout && (
+                        <div className="absolute -top-2 -left-2 z-20 h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
+                          <LayoutDashboard className="h-3 w-3" />
+                        </div>
+                      )}
                       <VitalsCard vitals={patientVitals} patientId={patientId} canWrite={canWriteClinical} />
                    </div>
                    <div 
-                      className="flex-1 min-h-[300px]"
+                      className="flex-1 min-h-[300px] relative group"
                    >
+                      {isEditingLayout && (
+                        <div className="absolute -top-2 -left-2 z-20 h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
+                          <LayoutDashboard className="h-3 w-3" />
+                        </div>
+                      )}
                       <UpcomingAppointments patientId={patientId} />
                    </div>
                 </div>
 
                 {/* RIGHT COLUMN */}
-                <div className="flex flex-col min-h-0 gap-2">
-                   <div className="flex-1 min-h-0">
+                <div className="flex flex-col min-h-0 gap-3 xl:col-span-3">
+                   <div className="flex-1 min-h-0 relative group">
+                      {isEditingLayout && (
+                        <div className="absolute -top-2 -left-2 z-20 h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
+                          <LayoutDashboard className="h-3 w-3" />
+                        </div>
+                      )}
                       <CareEcosystem patientId={patientId} />
                    </div>
-                   <div className="flex-1 min-h-0">
+                   <div className="flex-1 min-h-0 relative group">
+                      {isEditingLayout && (
+                        <div className="absolute -top-2 -left-2 z-20 h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
+                          <LayoutDashboard className="h-3 w-3" />
+                        </div>
+                      )}
                       <CareTeamManager patientId={patientId} />
                    </div>
                 </div>

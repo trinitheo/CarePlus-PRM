@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { authService, CurrentUser } from '../services/authService';
+import { onSnapshot, doc } from 'firebase/firestore';
 
 export function useCurrentUser() {
   const [userProfile, setUserProfile] = useState<CurrentUser | null>(null);
@@ -45,6 +46,14 @@ export function useCurrentUser() {
             }
           }
           setLoading(false);
+        }, (error) => {
+          console.error("User profile snapshot error (permission or network):", error);
+          setLoading(false);
+          // Fallback to local storage on error
+          const demoUser = authService.getCurrentUser();
+          if (demoUser) {
+            setUserProfile(demoUser);
+          }
         });
       } else {
         // If not logged into Firebase, refresh from local storage (demo)

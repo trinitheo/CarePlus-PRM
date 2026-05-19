@@ -3,7 +3,7 @@ import { UserRole } from './types';
 export const DEFAULT_DASHBOARD_SETTINGS: Record<UserRole, Record<'compact' | 'medium' | 'expanded', {
   order: string[];
   visibility: Record<string, boolean>;
-  sizes: Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2'>;
+  sizes: Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2' | '0.5x0.5'>;
 }>> = {
   clinician: {
     compact: {

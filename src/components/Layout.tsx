@@ -1,7 +1,7 @@
 import { 
   Activity, Calendar, FileText, Settings, LayoutDashboard,
   Users, CreditCard, ShieldCheck, User,
-  RefreshCcw, Signature, Share2
+  RefreshCcw, Signature, Share2, Zap
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,7 +16,7 @@ const ALL_NAV_ITEMS = [
   { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'front_desk'] }, 
   { id: 'care-network', icon: Share2, label: 'Networks', roles: ['admin', 'manager', 'clinician'] },
   { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'billing'] },
-  { id: 'care-team', icon: FileText, label: 'Workflows', roles: ['admin', 'manager', 'clinician', 'nurse', 'allied_health'] },
+  { id: 'care-team', icon: FileText, label: 'Workflows', roles: ['admin', 'manager', 'nurse', 'allied_health'] },
   { id: 'frontdesk', icon: Signature, label: 'Access', roles: ['admin', 'manager', 'front_desk'] },
 ];
 

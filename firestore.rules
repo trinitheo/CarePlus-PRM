@@ -36,7 +36,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        (request.auth.token.email == "karlanwartheodore@gmail.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email.toLowerCase() == "karlanwartheodore@gmail.com") ||
         hasRole('admin')
       );
     }

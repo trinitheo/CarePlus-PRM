@@ -15,6 +15,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { mockDbService, MockDb } from '../lib/mockDatabase';
+
 export { db, auth };
 
 export enum OperationType {
@@ -24,6 +25,44 @@ export enum OperationType {
   LIST = 'list',
   GET = 'get',
   WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }
 
 export async function getPatientById(patientId: string) {
@@ -320,6 +359,17 @@ export async function completeReminder(reminderId: string) {
   // Mock logic
 }
 
-export async function updateUserDashboardSettings(userId: string, settings: any) {
-  return mockDbService.updateItem('users', userId, { dashboardSettings: settings });
+export async function updateUserDashboardSettings(userId: string, settings: any, field: string = 'dashboardSettings') {
+  try {
+    const userRef = doc(db, 'users', userId);
+    // Use setDoc with merge: true to ensure the document exists
+    await setDoc(userRef, {
+      [field]: settings,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error(`Failed to update ${field} in Firestore:`, error);
+    handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+  }
+  return mockDbService.updateItem('users', userId, { [field]: settings });
 }

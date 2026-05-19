@@ -130,7 +130,7 @@ function DashCard({ children, className = '', isEditing, onToggleVisibility, onT
   onToggleVisibility?: () => void;
   onToggleSize?: () => void;
   visible?: boolean;
-  size?: '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2';
+  size?: '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2' | '0.5x0.5';
 }) {
   return (
     <div className={`
@@ -172,7 +172,7 @@ function SortableWidget({ id, children, isEditing, onToggleVisibility, onToggleS
   onToggleVisibility: () => void;
   onToggleSize: () => void;
   visible: boolean;
-  size: '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2';
+  size: '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2' | '0.5x0.5';
 }) {
   const {
     attributes,
@@ -660,7 +660,9 @@ function MedicationFlagsWidget({ onNavigate }: { onNavigate?: (id: string) => vo
           .map(d => ({ id: d.id, patientId: pid, patientName: (patients as any)[pid]?.name, ...d.data() }))
           .filter((m: any) => m.adherenceStatus && m.adherenceStatus !== 'optimal');
         setFlagged(prev => [...prev.filter(m => m.patientId !== pid), ...meds]);
-      }, () => {}));
+      }, (error) => {
+        console.error(`Medication Flags error for patient ${pid}:`, error);
+      }));
     });
     return () => unsubs.forEach(u => u());
   }, []);
@@ -807,7 +809,9 @@ function PendingResultsWidget({ onNavigate }: { onNavigate?: (id: string) => voi
           ...d.data()
         }));
         setResults(prev => [...prev.filter(r => r.patientId !== pid), ...items]);
-      }, () => {}));
+      }, (error) => {
+        console.error(`Pending Results error for patient ${pid}:`, error);
+      }));
     });
     return () => unsubs.forEach(u => u());
   }, [patients]);
@@ -864,7 +868,9 @@ function MyPatientsWidget({ userId, onNavigate }: { userId: string; onNavigate?:
       unsubs.push(onSnapshot(q, snap => {
         if (!snap.empty) setAssigned(prev => new Set([...prev, pid]));
         else setAssigned(prev => { const n = new Set(prev); n.delete(pid); return n; });
-      }, () => {}));
+      }, (error) => {
+        console.error(`My Patients error for patient ${pid}:`, error);
+      }));
     });
     return () => unsubs.forEach(u => u());
   }, [userId]);
@@ -1254,7 +1260,7 @@ function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSi
   onToggleVisibility: (id: string) => void;
   onToggleSize: (id: string) => void;
   visibility: Record<string, boolean>;
-  sizes: Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2'>;
+  sizes: Record<string, '1x1' | '1x2' | '2x1' | '2x2' | '2x3' | '4x2' | '0.5x0.5'>;
   viewClass: 'compact' | 'medium' | 'expanded';
 }) {
   const displayOrder = isEditing ? order : order.filter(id => visibility[id]);
@@ -1269,7 +1275,8 @@ function WidgetGrid({ children, isEditing, order, onToggleVisibility, onToggleSi
     const mult = isExpanded ? 2 : 1;
     
     switch (size) {
-      case '1x1': return isExpanded ? 'col-span-2 row-span-2' : 'col-span-1 row-span-1';
+    case '1x1': return isExpanded ? 'col-span-2 row-span-2' : 'col-span-1 row-span-1';
+      case '0.5x0.5': return isExpanded ? 'col-span-1 row-span-1' : 'col-span-1 row-span-1';
       case '1x2': return isExpanded ? 'col-span-2 row-span-4' : 'col-span-1 row-span-2';
       case '2x1': return isExpanded ? 'col-span-4 row-span-2' : 'col-span-2 row-span-1';
       case '2x2': return isExpanded ? 'col-span-4 row-span-4' : 'col-span-2 row-span-2';
@@ -1365,7 +1372,9 @@ function AdministratorAuditWidget() {
   );
 }
 
-export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (id: string) => void }) {
+export function RoleDashboard({ onNavigateToPatient }: { 
+  onNavigateToPatient?: (id: string) => void
+}) {
   const { userProfile } = useCurrentUser();
   const { messages, courtesyCalls, reminders } = useDashboard(userProfile);
   const viewClass = useWindowSizeClass(); // 'compact' | 'medium' | 'expanded'
@@ -1629,12 +1638,14 @@ export function RoleDashboard({ onNavigateToPatient }: { onNavigateToPatient?: (
             )}
             <Button 
                size="sm" 
-               variant="ghost" 
+               variant="outline" 
                onClick={() => isEditing ? saveSettings() : setIsEditing(true)}
-               title={isEditing ? "Save Layout" : "Customize Layout"}
-               className={`h-9 w-9 p-0 rounded-full shadow-sm transition-all ${isEditing ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' : 'bg-white border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1] hover:text-[#0078D4]'}`}
+               className={`h-9 px-4 rounded-full shadow-sm transition-all flex items-center gap-2 ${isEditing ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' : 'bg-white border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1] hover:text-[#0078D4]'}`}
             >
               {isEditing ? <Save className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+              <span className="text-[11px] font-black uppercase tracking-wider">
+                {isEditing ? "Save Layout" : "Customize"}
+              </span>
             </Button>
           </div>
           <div

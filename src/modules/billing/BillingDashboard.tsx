@@ -12,12 +12,13 @@ import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { motion, AnimatePresence } from 'motion/react';
-
+import { useWindowSizeClass } from '../../hooks/useAdaptiveWidth';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function BillingDashboard() {
   const { userProfile } = useCurrentUser();
+  const sizeClass = useWindowSizeClass();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [recentCharges, setRecentCharges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,10 +34,15 @@ export function BillingDashboard() {
     const unsubInvoices = onSnapshot(invoicesQ, snap => {
       setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
+    }, (error) => {
+      console.error("Billing Dashboard invoices error:", error);
+      setLoading(false);
     });
 
     const unsubCharges = onSnapshot(chargesQ, snap => {
       setRecentCharges(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Billing Dashboard charges error:", error);
     });
 
     return () => {
@@ -89,13 +95,14 @@ export function BillingDashboard() {
       </div>
 
       {/* Grid Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${sizeClass === 'expanded' ? 'lg:grid-cols-8' : 'lg:grid-cols-4'} gap-4`}>
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
+            className={sizeClass === 'expanded' ? 'col-span-2' : ''}
           >
             <Card className="border-none shadow-sm bg-white overflow-hidden group">
               <CardContent className="p-6 relative">
