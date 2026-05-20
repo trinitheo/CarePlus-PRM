@@ -39,6 +39,10 @@ export interface ClinicalIntake {
   reviewOfSystems: string;
   medications: string;
   allergies: string;
+  womensHealth?: string;
+  birthHistory?: string;
+  developmentalHistory?: string;
+  environmentalHistory?: string;
   timestamp: number;
 }
 

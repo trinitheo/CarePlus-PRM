@@ -10,8 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '../../../components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../../../components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
-import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X, Loader2 } from 'lucide-react';
+import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X, Loader2, Baby, School } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function calculateAge(dob: string): number {
+  if (!dob) return 0;
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
 
 interface RegistrationFlowProps {
   onComplete: (id: string) => void;
@@ -64,6 +77,21 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     alcoholConsumption: '',
     occupation: '',
     livingSituation: ''
+  });
+
+  const [pediatricHistory, setPediatricHistory] = useState({
+    birthWeight: '',
+    gestationalAge: '',
+    deliveryMethod: '',
+    nicuStay: '',
+    developmentalConcerns: '',
+    milestones: {
+      walking: '',
+      talking: '',
+      socializing: ''
+    },
+    schoolPerformance: '',
+    daycare: ''
   });
 
   const [rosData, setRosData] = useState<Record<string, string[]>>({
@@ -142,9 +170,30 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     }
   }, [vitalsData.weight, vitalsData.height, vitalsData.bmi]);
 
+  const age = calculateAge(formData.dob || '');
   const isFemale = formData.gender === 'Female';
+  const isPediatric = formData.dob ? age < 18 : false;
+  const isPubescentFemale = isFemale && age >= 10;
+
   const pgError = getPGError(womensHealth.gravidity || '', womensHealth.parity || '');
   const pgLabel = !pgError ? getPGLabel(womensHealth.gravidity || '', womensHealth.parity || '') : null;
+
+  const steps = [
+    { title: 'Identity', icon: User, id: 'identity' },
+    { title: 'Contact', icon: Phone, id: 'contact' },
+    { title: 'Symptom', icon: Stethoscope, id: 'symptom' },
+    { title: 'Medical', icon: Activity, id: 'medical' },
+    ...(isPediatric ? [{ title: 'Pediatric History', icon: Baby, id: 'pediatric' }] : []),
+    ...(isPubescentFemale ? [{ title: "Women's Health", icon: Heart, id: 'womens' }] : []),
+    { title: 'Clinical', icon: ClipboardList, id: 'clinical' },
+    { title: 'History', icon: Home, id: 'history' },
+    { title: 'ROS', icon: FileText, id: 'ros' },
+    { title: 'Vitals', icon: Activity, id: 'vitals' },
+    { title: 'Confirm', icon: CheckCircle2, id: 'confirm' }
+  ];
+
+  const currentStepId = steps[step - 1]?.id;
+  const totalSteps = steps.length;
 
   const handleWomensHealthChange = (field: keyof typeof womensHealth, value: string) => {
     setWomensHealth(prev => ({ ...prev, [field]: value }));
@@ -227,10 +276,10 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
-  // Block Next on step 5 (women's health) if there's a P&G error
+  // Block Next on identity step if core info missing, or women's health if there's a P&G error
   const isNextDisabled =
-    (step === 1 && (!formData.firstName || !formData.lastName)) ||
-    (step === 5 && isFemale && !!pgError);
+    (currentStepId === 'identity' && (!formData.firstName || !formData.lastName)) ||
+    (currentStepId === 'womens' && !!pgError);
 
   const handleSubmit = async () => {
     console.log("Committing to graph...");
@@ -248,7 +297,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
       name: `${formData.firstName || ''} ${formData.lastName || ''}`.trim()
     } as Patient;
     
-    const womensHealthSummary = isFemale
+    const womensHealthSummary = isPubescentFemale
       ? `LMP: ${womensHealth.lmp || 'N/A'} | Periods regular: ${womensHealth.periodsRegular || 'N/A'} | ${pgLabel || `G${womensHealth.gravidity || '?'}P${womensHealth.parity || '?'}`} | Pregnancy possible: ${womensHealth.possibilityOfPregnancy || 'N/A'} | Pap smear: ${womensHealth.lastPapSmearDate || 'N/A'} (${womensHealth.lastPapSmearResult || 'N/A'}) | Mammogram: ${womensHealth.lastMammogramDate || 'N/A'} (${womensHealth.lastMammogramResult || 'N/A'})`
       : '';
 
@@ -268,6 +317,9 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
         .map(([cat, symptoms]) => `${cat}: ${symptoms.join(', ')}`)
         .join(' | '),
       womensHealth: womensHealthSummary,
+      birthHistory: isPediatric ? `Birth: ${pediatricHistory.gestationalAge}w, ${pediatricHistory.birthWeight}g, Delivery: ${pediatricHistory.deliveryMethod}, NICU: ${pediatricHistory.nicuStay}` : undefined,
+      developmentalHistory: isPediatric ? `Concerns: ${pediatricHistory.developmentalConcerns}, Milestones: Walking(${pediatricHistory.milestones.walking}), Talking(${pediatricHistory.milestones.talking})` : undefined,
+      environmentalHistory: isPediatric ? `School: ${pediatricHistory.schoolPerformance}, Daycare: ${pediatricHistory.daycare}` : undefined,
       timestamp: Date.now()
     } as ClinicalIntake;
     
@@ -328,32 +380,6 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
     }
   };
 
-  const steps = [
-    { title: 'Identity', icon: User },
-    { title: 'Contact', icon: Phone },
-    { title: 'Symptom', icon: Stethoscope },
-    { title: 'Medical', icon: Activity },
-    ...(isFemale ? [{ title: "Women's Health", icon: Heart }] : []),
-    { title: 'Clinical', icon: ClipboardList },
-    { title: 'History', icon: Home },
-    { title: 'ROS', icon: FileText },
-    { title: 'Vitals', icon: Activity },
-    { title: 'Confirm', icon: CheckCircle2 }
-  ];
-
-  const screenId = (() => {
-    if (step <= 4) return step;
-    if (isFemale) {
-      if (step === 5) return 'womens';
-      if (step === 9) return 'vitals';
-      return step - 1;
-    }
-    if (step === 8) return 'vitals';
-    return step;
-  })();
-
-  const totalSteps = steps.length;
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       {/* Step Tracker */}
@@ -393,7 +419,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
           exit={{ opacity: 0, x: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {screenId === 1 && (
+          {currentStepId === 'identity' && (
             <Card className="border-border shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -456,19 +482,33 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                       </label>
                     ))}
                   </div>
-                  {/* Hint badge — appears when Female is selected */}
-                  {isFemale && (
-                    <div className="flex items-center gap-2 mt-2 text-xs text-pink-700 bg-pink-50 border border-pink-200 rounded-lg px-3 py-2">
-                      <Heart className="h-3.5 w-3.5 flex-shrink-0" />
-                      A Women's Health section will be included in the intake flow.
-                    </div>
-                  )}
+                  {/* Hint badges — responsive to age and gender */}
+                  <div className="flex flex-col gap-2 mt-3">
+                    {isPediatric && (
+                      <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 animate-in fade-in slide-in-from-top-1">
+                        <Baby className="h-3.5 w-3.5 flex-shrink-0" />
+                        Patient is &lt; 18 years old. A Pediatric History section will be included.
+                      </div>
+                    )}
+                    {isPubescentFemale && (
+                      <div className="flex items-center gap-2 text-xs text-pink-700 bg-pink-50 border border-pink-200 rounded-lg px-3 py-2 animate-in fade-in slide-in-from-top-1">
+                        <Heart className="h-3.5 w-3.5 flex-shrink-0" />
+                        A Women's Health (OB/GYN) section will be included in the intake.
+                      </div>
+                    )}
+                    {isFemale && !isPubescentFemale && age > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 border border-border/50 rounded-lg px-3 py-2 italic font-medium">
+                        <Heart className="h-3.5 w-3.5 flex-shrink-0 opacity-40" />
+                        Women's Health section suppressed for pre-pubescent age range.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {screenId === 2 && (
+          {currentStepId === 'contact' && (
             <Card className="border-border shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -510,7 +550,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {screenId === 3 && (
+          {currentStepId === 'symptom' && (
             <Card className="border-border shadow-md">
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div>
@@ -601,8 +641,115 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </DialogContent>
           </Dialog>
 
-          {/* ── Step 4 (female only): Women's Health ── */}
-          {screenId === 'womens' && (
+          {/* ── Pediatric History Section ── */}
+          {currentStepId === 'pediatric' && (
+            <Card className="border-border shadow-md">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Baby className="h-5 w-5 text-primary" />
+                  Pediatric & Development History
+                </CardTitle>
+                <CardDescription>Birth history and developmental tracking for pediatric patients.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border pb-2 mb-4">Birth History</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Gestational Age (weeks)</Label>
+                      <Input 
+                        placeholder="e.g. 39" 
+                        value={pediatricHistory.gestationalAge}
+                        onChange={e => setPediatricHistory({...pediatricHistory, gestationalAge: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Birth Weight (grams)</Label>
+                      <Input 
+                        placeholder="e.g. 3200" 
+                        value={pediatricHistory.birthWeight}
+                        onChange={e => setPediatricHistory({...pediatricHistory, birthWeight: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Delivery Method</Label>
+                      <Select value={pediatricHistory.deliveryMethod} onValueChange={v => setPediatricHistory({...pediatricHistory, deliveryMethod: v})}>
+                        <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Vaginal">Vaginal</SelectItem>
+                          <SelectItem value="C-Section">C-Section</SelectItem>
+                          <SelectItem value="Assisted">Assisted (Forceps/Vacuum)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>NICU Stay?</Label>
+                      <Input 
+                        placeholder="e.g. No, or 3 days for jaundice" 
+                        value={pediatricHistory.nicuStay}
+                        onChange={e => setPediatricHistory({...pediatricHistory, nicuStay: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border pb-2 mb-4">Developmental Milestones</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Walking (months)</Label>
+                      <Input 
+                        placeholder="e.g. 12" 
+                        value={pediatricHistory.milestones.walking}
+                        onChange={e => setPediatricHistory({...pediatricHistory, milestones: {...pediatricHistory.milestones, walking: e.target.value}})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Talking (months)</Label>
+                      <Input 
+                        placeholder="e.g. 18" 
+                        value={pediatricHistory.milestones.talking}
+                        onChange={e => setPediatricHistory({...pediatricHistory, milestones: {...pediatricHistory.milestones, talking: e.target.value}})}
+                      />
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <Label>Developmental Concerns</Label>
+                      <Textarea 
+                        placeholder="Describe any concerns about milestones, behavior, or learning..."
+                        value={pediatricHistory.developmentalConcerns}
+                        onChange={e => setPediatricHistory({...pediatricHistory, developmentalConcerns: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border pb-2 mb-4">Social & Education</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>School/Grade Level</Label>
+                      <Input 
+                        placeholder="e.g. 2nd Grade" 
+                        value={pediatricHistory.schoolPerformance}
+                        onChange={e => setPediatricHistory({...pediatricHistory, schoolPerformance: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2"><School className="h-3 w-3" /> Daycare/Preschool</Label>
+                      <Input 
+                        placeholder="e.g. Sunny Days Care" 
+                        value={pediatricHistory.daycare}
+                        onChange={e => setPediatricHistory({...pediatricHistory, daycare: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Step: Women's Health ── */}
+          {currentStepId === 'womens' && (
             <Card className="border-border shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -727,7 +874,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {screenId === 4 && (
+          {currentStepId === 'medical' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
               <Card className="border-border shadow-md h-full flex flex-col">
                 <CardHeader>
@@ -825,7 +972,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </div>
           )}
 
-          {screenId === 5 && (
+          {currentStepId === 'clinical' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-border shadow-md flex flex-col">
                 <CardHeader>
@@ -944,7 +1091,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </div>
           )}
 
-          {screenId === 6 && (
+          {currentStepId === 'history' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-border shadow-md flex flex-col">
                 <CardHeader>
@@ -1061,7 +1208,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </div>
           )}
 
-          {screenId === 7 && (
+          {currentStepId === 'ros' && (
             <Card className="border-border shadow-xl overflow-hidden rounded-2xl border-2">
               <CardHeader className="bg-primary/5 border-b border-border pb-6">
                 <CardTitle className="text-2xl flex items-center gap-3">
@@ -1105,7 +1252,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {screenId === 'vitals' && (
+          {currentStepId === 'vitals' && (
             <Card className="border-border shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -1260,7 +1407,7 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
             </Card>
           )}
 
-          {screenId === 9 && (
+          {currentStepId === 'confirm' && (
             <Card className="border-border shadow-md bg-muted/5">
               <CardHeader>
                 <CardTitle className="text-xl">Knowledge Graph Projection</CardTitle>
@@ -1285,11 +1432,18 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
                       <span className="text-muted-foreground uppercase text-[9px]">COMPLAINT</span>
                       <span className="truncate max-w-[180px]">{intakeData.chiefComplaint || 'UNDEFINED'}</span>
                     </div>
-                    {/* Women's health summary row — only for female patients */}
-                    {isFemale && (
+                    {/* Women's health summary row — only for pubescent female patients */}
+                    {isPubescentFemale && (
                       <div className="flex justify-between border-b border-border/30 pb-1">
                         <span className="text-muted-foreground uppercase text-[9px]">OB_PROFILE</span>
                         <span className="text-pink-600 font-bold">{pgLabel || '—'} · LMP {womensHealth.lmp || 'N/A'}</span>
+                      </div>
+                    )}
+                    {/* Pediatric summary row */}
+                    {isPediatric && (
+                      <div className="flex justify-between border-b border-border/30 pb-1">
+                        <span className="text-muted-foreground uppercase text-[9px]">PED_GROWTH</span>
+                        <span className="text-blue-600 font-bold">{pediatricHistory.gestationalAge}w · {pediatricHistory.birthWeight}g</span>
                       </div>
                     )}
                     <div className="flex justify-between border-b border-border/30 pb-1">
