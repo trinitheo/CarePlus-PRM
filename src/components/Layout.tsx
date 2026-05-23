@@ -1,6 +1,6 @@
 import { 
   Activity, Calendar, FileText, Settings, LayoutDashboard,
-  Users, CreditCard, ShieldCheck, User,
+  Users, CreditCard, ShieldCheck, User, LogOut,
   RefreshCcw, Signature, Share2, Zap
 } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -18,6 +18,7 @@ const ALL_NAV_ITEMS = [
   { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'billing'] },
   { id: 'care-team', icon: FileText, label: 'Workflows', roles: ['admin', 'manager', 'nurse', 'allied_health'] },
   { id: 'frontdesk', icon: Signature, label: 'Access', roles: ['admin', 'manager', 'front_desk'] },
+  { id: 'governance', icon: ShieldCheck, label: 'Control', roles: ['admin', 'manager'] },
 ];
 
 function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
@@ -90,16 +91,22 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
           title="Log out and return to landing page"
         >
           <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-red-50">
-            <User className="h-5 w-5" />
+            <LogOut className="h-5 w-5" />
           </div>
           <span className="text-[9px] font-bold uppercase tracking-widest text-center">LOGOUT</span>
         </button>
 
-        <div className="h-10 w-10 rounded-full border-2 border-[#EDEBE9] p-0.5 shadow-sm overflow-hidden bg-white group cursor-pointer hover:border-[#0078D4] transition-colors">
+        <button
+          onClick={() => onNavigate('profile')}
+          title="Edit Profile"
+          className={`h-10 w-10 rounded-full border-2 p-0.5 shadow-sm overflow-hidden bg-white group cursor-pointer transition-all duration-200 ${
+            currentModule === 'profile' ? 'border-[#0078D4] ring-4 ring-[#0078D4]/10' : 'border-[#EDEBE9] hover:border-[#0078D4]'
+          }`}
+        >
           <div className="w-full h-full rounded-full bg-[#F3F2F1] flex items-center justify-center font-black text-[#0078D4] text-[10px]">
             {userProfile?.displayName?.[0] || 'U'}
           </div>
-        </div>
+        </button>
       </div>
     </aside>
   );
@@ -142,11 +149,23 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
       })}
       
       <button 
+        onClick={() => onNavigate('profile')}
+        className={`flex flex-col items-center gap-1 transition-all duration-150 ${
+          currentModule === 'profile' ? 'text-[#0078D4]' : 'text-[#616161]'
+        }`}
+      >
+        <div className={`p-1.5 rounded-full transition-colors ${currentModule === 'profile' ? 'bg-[#0078D4]/10' : ''}`}>
+          <User className="h-5 w-5" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-tight">Profile</span>
+      </button>
+
+      <button 
         className="flex flex-col items-center gap-1 text-red-600 hover:opacity-80 transition-opacity"
         onClick={handleLogout}
       >
         <div className="p-1.5 rounded-full transition-colors h-8 w-8 flex items-center justify-center hover:bg-red-50">
-          <User className="h-5 w-5" />
+          <LogOut className="h-5 w-5" />
         </div>
         <span className="text-[10px] font-bold uppercase tracking-tight">LOGOUT</span>
       </button>

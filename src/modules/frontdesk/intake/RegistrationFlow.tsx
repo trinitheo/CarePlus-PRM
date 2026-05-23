@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useCommandDispatcher, Patient, ClinicalIntake } from '../../../store/eventStore';
 import { savePatient, saveClinicalIntake } from '../../../services/clinicalFirestoreService';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '../../../components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../../../components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
-import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X, Loader2, Baby, School } from 'lucide-react';
+import { CheckCircle2, User, Phone, Mail, MapPin, Database, ChevronRight, ChevronLeft, Save, ClipboardList, Stethoscope, FileText, Heart, Home, Activity, PlusCircle, Search, Trash2, Calendar as CalendarIcon, X, Loader2, Baby, School, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -52,6 +53,9 @@ function getPGLabel(gravidity: string, parity: string): string | null {
 
 export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps) {
   const dispatch = useCommandDispatcher();
+  const { userProfile } = useCurrentUser();
+  const isAdminUser = userProfile?.role === 'admin';
+
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<Partial<Patient>>({
     firstName: '',
@@ -178,19 +182,25 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
   const pgError = getPGError(womensHealth.gravidity || '', womensHealth.parity || '');
   const pgLabel = !pgError ? getPGLabel(womensHealth.gravidity || '', womensHealth.parity || '') : null;
 
-  const steps = [
-    { title: 'Identity', icon: User, id: 'identity' },
-    { title: 'Contact', icon: Phone, id: 'contact' },
-    { title: 'Symptom', icon: Stethoscope, id: 'symptom' },
-    { title: 'Medical', icon: Activity, id: 'medical' },
-    ...(isPediatric ? [{ title: 'Pediatric History', icon: Baby, id: 'pediatric' }] : []),
-    ...(isPubescentFemale ? [{ title: "Women's Health", icon: Heart, id: 'womens' }] : []),
-    { title: 'Clinical', icon: ClipboardList, id: 'clinical' },
-    { title: 'History', icon: Home, id: 'history' },
-    { title: 'ROS', icon: FileText, id: 'ros' },
-    { title: 'Vitals', icon: Activity, id: 'vitals' },
-    { title: 'Confirm', icon: CheckCircle2, id: 'confirm' }
-  ];
+  const steps = isAdminUser
+    ? [
+        { title: 'Identity', icon: User, id: 'identity' },
+        { title: 'Contact', icon: Phone, id: 'contact' },
+        { title: 'Confirm', icon: CheckCircle2, id: 'confirm' }
+      ]
+    : [
+        { title: 'Identity', icon: User, id: 'identity' },
+        { title: 'Contact', icon: Phone, id: 'contact' },
+        { title: 'Symptom', icon: Stethoscope, id: 'symptom' },
+        { title: 'Medical', icon: Activity, id: 'medical' },
+        ...(isPediatric ? [{ title: 'Pediatric History', icon: Baby, id: 'pediatric' }] : []),
+        ...(isPubescentFemale ? [{ title: "Women's Health", icon: Heart, id: 'womens' }] : []),
+        { title: 'Clinical', icon: ClipboardList, id: 'clinical' },
+        { title: 'History', icon: Home, id: 'history' },
+        { title: 'ROS', icon: FileText, id: 'ros' },
+        { title: 'Vitals', icon: Activity, id: 'vitals' },
+        { title: 'Confirm', icon: CheckCircle2, id: 'confirm' }
+      ];
 
   const currentStepId = steps[step - 1]?.id;
   const totalSteps = steps.length;
@@ -294,7 +304,8 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
       ...formData, 
       id: newId, 
       mrn: cleanMrn,
-      name: `${formData.firstName || ''} ${formData.lastName || ''}`.trim()
+      name: `${formData.firstName || ''} ${formData.lastName || ''}`.trim(),
+      isDraft: isAdminUser
     } as Patient;
     
     const womensHealthSummary = isPubescentFemale
@@ -327,33 +338,36 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
       console.log("Saving patient to Firestore...");
       // Save to Firestore
       await savePatient(newId, patientRecord);
-      await saveClinicalIntake(newId, intakeId, formattedIntake);
 
-      // Save Initial Vitals if provided
-      if (vitalsData.hr || vitalsData.bp || vitalsData.temp) {
-        const gcsTotal = Number(vitalsData.gcs_e) + Number(vitalsData.gcs_v) + Number(vitalsData.gcs_m);
-        const vitalsPayload = {
-          ...vitalsData,
-          hr: vitalsData.hr ? Number(vitalsData.hr) : 0,
-          temp: vitalsData.temp ? Number(vitalsData.temp) : 0,
-          rr: vitalsData.rr ? Number(vitalsData.rr) : 16,
-          spo2: vitalsData.spo2 ? Number(vitalsData.spo2) : 98,
-          glucose: vitalsData.glucose ? Number(vitalsData.glucose) : 0,
-          weight: vitalsData.weight ? Number(vitalsData.weight) : 0,
-          height: vitalsData.height ? Number(vitalsData.height) : 0,
-          bmi: vitalsData.bmi ? Number(vitalsData.bmi) : 0,
-          hba1c: vitalsData.hba1c ? Number(vitalsData.hba1c) : 0,
-          gcs: `${gcsTotal}/15`,
-          timestamp: Date.now(),
-          patientId: newId
-        };
-        const { updatePatientVitals } = await import('../../../services/clinicalFirestoreService');
-        await updatePatientVitals(newId, vitalsPayload);
-        
-        dispatch({
-          type: 'VITALS_RECORDED',
-          payload: vitalsPayload
-        });
+      if (!isAdminUser) {
+        await saveClinicalIntake(newId, intakeId, formattedIntake);
+
+        // Save Initial Vitals if provided
+        if (vitalsData.hr || vitalsData.bp || vitalsData.temp) {
+          const gcsTotal = Number(vitalsData.gcs_e) + Number(vitalsData.gcs_v) + Number(vitalsData.gcs_m);
+          const vitalsPayload = {
+            ...vitalsData,
+            hr: vitalsData.hr ? Number(vitalsData.hr) : 0,
+            temp: vitalsData.temp ? Number(vitalsData.temp) : 0,
+            rr: vitalsData.rr ? Number(vitalsData.rr) : 16,
+            spo2: vitalsData.spo2 ? Number(vitalsData.spo2) : 98,
+            glucose: vitalsData.glucose ? Number(vitalsData.glucose) : 0,
+            weight: vitalsData.weight ? Number(vitalsData.weight) : 0,
+            height: vitalsData.height ? Number(vitalsData.height) : 0,
+            bmi: vitalsData.bmi ? Number(vitalsData.bmi) : 0,
+            hba1c: vitalsData.hba1c ? Number(vitalsData.hba1c) : 0,
+            gcs: `${gcsTotal}/15`,
+            timestamp: Date.now(),
+            patientId: newId
+          };
+          const { updatePatientVitals } = await import('../../../services/clinicalFirestoreService');
+          await updatePatientVitals(newId, vitalsPayload);
+          
+          dispatch({
+            type: 'VITALS_RECORDED',
+            payload: vitalsPayload
+          });
+        }
       }
 
       console.log("Dispatching events...");
@@ -363,11 +377,13 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
         payload: patientRecord
       });
 
-      // Emit Clinical Intake
-      dispatch({
-        type: 'CLINICAL_INTAKE_RECORDED',
-        payload: formattedIntake
-      });
+      if (!isAdminUser) {
+        // Emit Clinical Intake
+        dispatch({
+          type: 'CLINICAL_INTAKE_RECORDED',
+          payload: formattedIntake
+        });
+      }
       
       console.log("Onboarding complete, navigating...");
       onComplete(newId);
@@ -382,6 +398,17 @@ export function RegistrationFlow({ onComplete, onCancel }: RegistrationFlowProps
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
+      {isAdminUser && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 text-xs flex gap-3 shadow-sm items-start">
+          <Shield className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-extrabold text-amber-900 leading-none">Administrative Draft Registration Mode Enabled</p>
+            <p className="text-amber-800 mt-1.5 font-medium leading-relaxed">
+              As an Administrator, you are registering this patient with **demographical data only**. Once submitted, a temporary draft record will begin. Full clinical histories, review of systems, and baseline vitals will be completed and solidified upon examination by a healthcare provider.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Step Tracker */}
       <div className="flex items-center justify-between px-4 mb-10 overflow-hidden">
         {steps.map((s, i) => {

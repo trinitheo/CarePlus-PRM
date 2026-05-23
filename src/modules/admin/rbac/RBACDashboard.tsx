@@ -7,9 +7,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../../services/clinicalFirestoreService';
 import { updateUserRole, AppRole } from '../../../services/rbacService';
-import { Shield, User, Search, Save, History, Loader2, CheckCircle2 } from 'lucide-react';
+import { Shield, User, Search, Save, History, Loader2, CheckCircle2, Database, Zap } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
+import { SeedService, SeedProgress } from '../../../services/seedService';
+import { toast } from 'sonner';
 
 interface UserData {
   id: string;
@@ -23,40 +25,61 @@ export function RBACDashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [seedProgress, setSeedProgress] = useState<SeedProgress | null>(null);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const rolesSnap = await getDocs(collection(db, 'roles'));
+      
+      const rolesMap = new Map();
+      rolesSnap.forEach(doc => {
+        rolesMap.set(doc.id, doc.data().role);
+      });
+
+      const usersList: UserData[] = [];
+      usersSnap.forEach(doc => {
+        const data = doc.data();
+        usersList.push({
+          id: doc.id,
+          email: data.email || '',
+          displayName: data.displayName || 'Unknown User',
+          currentRole: rolesMap.get(doc.id) || data.role || 'read_only'
+        });
+      });
+      
+      setUsers(usersList);
+    } catch (err) {
+      console.error("Failed to fetch RBAC data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // 1. Fetch all users from /users
-    const fetchUsers = async () => {
-      try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const rolesSnap = await getDocs(collection(db, 'roles'));
-        
-        const rolesMap = new Map();
-        rolesSnap.forEach(doc => {
-          rolesMap.set(doc.id, doc.data().role);
-        });
-
-        const usersList: UserData[] = [];
-        usersSnap.forEach(doc => {
-          const data = doc.data();
-          usersList.push({
-            id: doc.id,
-            email: data.email || '',
-            displayName: data.displayName || 'Unknown User',
-            currentRole: rolesMap.get(doc.id) || data.role || 'read_only'
-          });
-        });
-        
-        setUsers(usersList);
-      } catch (err) {
-        console.error("Failed to fetch RBAC data", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchUsers();
   }, []);
+
+  const handleRunSeed = async () => {
+    if (!window.confirm("This will generate a neurosurgical clinical graph with 3 providers and 10 patients. Continue?")) return;
+    
+    setIsSeeding(true);
+    try {
+      await SeedService.seedCareNetwork((progress) => {
+        setSeedProgress(progress);
+      });
+      toast.success("Graph Seeding Complete");
+      await fetchUsers(); // Refresh the directory
+    } catch (err) {
+      console.error("Seeding failed", err);
+      toast.error("Seeding operation failed");
+    } finally {
+      setIsSeeding(false);
+      setSeedProgress(null);
+    }
+  };
 
   const handleRoleChange = async (userId: string, newRole: AppRole) => {
     setIsUpdating(userId);
@@ -88,13 +111,33 @@ export function RBACDashboard() {
             Maintain security integrity through centralized Role-Based Access Control
           </p>
         </div>
-        <div className="bg-[#DEECF9] px-4 py-2 rounded-xl flex items-center gap-3 border border-[#CFE4FA]">
-          <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
-            <User className="h-4 w-4 text-[#0078D4]" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#0078D4]">Directory Size</p>
-            <p className="text-sm font-black text-[#242424]">{users.length} Active Principals</p>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            className="rounded-xl border-[#EDEBE9] bg-white text-xs font-black uppercase tracking-wider h-11 px-6 hover:bg-[#F3F2F1] transition-all flex items-center gap-2"
+            onClick={handleRunSeed}
+            disabled={isSeeding}
+          >
+            {isSeeding ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-[#0078D4]" />
+                {seedProgress ? `${seedProgress.step} (${seedProgress.count}/${seedProgress.total})` : 'Initializing...'}
+              </>
+            ) : (
+              <>
+                <Database className="h-4 w-4 text-[#0078D4]" />
+                Seed Graph Data
+              </>
+            )}
+          </Button>
+          <div className="bg-[#DEECF9] px-4 py-2 rounded-xl flex items-center gap-3 border border-[#CFE4FA]">
+            <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
+              <User className="h-4 w-4 text-[#0078D4]" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#0078D4]">Directory Size</p>
+              <p className="text-sm font-black text-[#242424]">{users.length} Active Principals</p>
+            </div>
           </div>
         </div>
       </div>

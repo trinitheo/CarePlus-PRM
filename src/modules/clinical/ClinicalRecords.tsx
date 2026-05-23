@@ -1,8 +1,8 @@
-import { useQueryModel } from '../../store/eventStore';
+import { useQueryModel, Patient } from '../../store/eventStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Settings2, LayoutDashboard, ShieldAlert, Lock, UserCheck, Stethoscope, UserPlus, Clock, ChevronRight, AlertCircle, Network, HardDrive, Workflow, Pill, Microscope, Activity, FileText, User } from 'lucide-react';
+import { Settings2, LayoutDashboard, ShieldAlert, Lock, UserCheck, Stethoscope, UserPlus, Clock, ChevronRight, ChevronLeft, AlertCircle, Network, HardDrive, Workflow, Pill, Microscope, Activity, FileText, User } from 'lucide-react';
 import { HealthConnectManager } from './HealthConnectManager';
 import { KnowledgeGraph } from './KnowledgeGraph';
 import { Button } from '../../components/ui/button';
@@ -15,11 +15,14 @@ import { InvestigationWorkflow } from './investigations/InvestigationWorkflow';
 import { ProceduresList } from './ProceduresList';
 import { ReferralsList } from './ReferralsList';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
+import { SolidificationModal } from './SolidificationModal';
 import { VitalsCard } from './VitalsCard';
 import { InteractionEntryModal } from './InteractionEntryModal';
 import { ClinicalTimelineCard } from './ClinicalTimelineCard';
 import { CareTeamManager } from './CareTeamManager';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { savePatient } from '../../services/clinicalFirestoreService';
+import { Input } from '../../components/ui/input';
 import { 
   Dialog, 
   DialogContent, 
@@ -30,6 +33,7 @@ import { CareEcosystem } from './CareEcosystem';
 import { UpcomingAppointments } from './UpcomingAppointments';
 import { PatientNotesFeed } from './PatientNotesFeed';
 import { MedicationCenter } from './MedicationCenter';
+import { RestrictedDemographicsView } from './RestrictedDemographicsView';
 import { motion } from 'motion/react';
 import { transition } from '../../lib/motion';
 import { useState, useMemo, useEffect } from 'react';
@@ -58,6 +62,46 @@ export function ClinicalRecords({
   const { logAccess } = useHIPAAMonitor();
   const [activeTab, setActiveTab] = useState('overview');
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+  const [isSolidificationOpen, setIsSolidificationOpen] = useState(false);
+  const [isEditingDemographics, setIsEditingDemographics] = useState(false);
+  const [demoFirstName, setDemoFirstName] = useState('');
+  const [demoLastName, setDemoLastName] = useState('');
+  const [demoDob, setDemoDob] = useState('');
+  const [demoGender, setDemoGender] = useState('');
+  const [demoBloodType, setDemoBloodType] = useState('');
+  const [demoPhone, setDemoPhone] = useState('');
+  const [demoEmail, setDemoEmail] = useState('');
+  const [demoAddress, setDemoAddress] = useState('');
+  const [isSavingDemographics, setIsSavingDemographics] = useState(false);
+
+  const canEditDemographics = useMemo(() => {
+    if (!userProfile) return false;
+    return ['patient', 'front_desk', 'clinician', 'admin'].includes(userProfile.role);
+  }, [userProfile]);
+
+  const handleSaveDemographics = async () => {
+    try {
+      setIsSavingDemographics(true);
+      const updatedData = {
+        firstName: demoFirstName,
+        lastName: demoLastName,
+        name: `${demoFirstName} ${demoLastName}`.trim(),
+        dob: demoDob,
+        gender: demoGender,
+        sex: demoGender, // Keep both fields in sync
+        bloodType: demoBloodType,
+        phone: demoPhone,
+        email: demoEmail,
+        address: demoAddress,
+      };
+      await savePatient(patientId, updatedData);
+      setIsEditingDemographics(false);
+    } catch (err) {
+      console.error("Error saving patient demographics", err);
+    } finally {
+      setIsSavingDemographics(false);
+    }
+  };
 
   // Authorization Check
   const myAccess = useMemo(() => {
@@ -77,6 +121,11 @@ export function ClinicalRecords({
   const canReadClinical = myAccess?.accessLevel === 'clinical_full' || myAccess?.accessLevel === 'clinical_limited' || userProfile?.role === 'patient' || userProfile?.role === 'allied_health';
   const canWriteClinical = (myAccess?.accessLevel === 'clinical_full' || userProfile?.role === 'nurse' || userProfile?.role === 'allied_health') && userProfile?.role !== 'patient';
   const isAuthorized = !!myAccess || userProfile?.role === 'admin' || userProfile?.role === 'patient' || userProfile?.role === 'allied_health';
+
+  const isHealthcareProvider = useMemo(() => {
+    if (!userProfile) return false;
+    return ['admin', 'clinician', 'nurse', 'allied_health'].includes(userProfile.role);
+  }, [userProfile]);
 
   useEffect(() => {
     if (patientId && isAuthorized) {
@@ -110,8 +159,21 @@ export function ClinicalRecords({
     // Ensure ID is set
     if (!merged.id) merged.id = patientId;
     
-    return merged;
+    return merged as Patient;
   }, [localPatient, clinicalData.patient, patientId]);
+
+  useEffect(() => {
+    if (patient) {
+      setDemoFirstName(patient.firstName || '');
+      setDemoLastName(patient.lastName || '');
+      setDemoDob(patient.dob || '');
+      setDemoGender(patient.gender || patient.sex || '');
+      setDemoBloodType(patient.bloodType || 'A+');
+      setDemoPhone(patient.phone || '');
+      setDemoEmail(patient.email || '');
+      setDemoAddress(patient.address || '');
+    }
+  }, [patient]);
 
   const localVitals = (vitals && vitals[patientId]) || [];
   
@@ -249,6 +311,54 @@ export function ClinicalRecords({
     }
   };
 
+  const restrictedPatientData = useMemo(() => {
+    return {
+      id: patient?.id || patientId,
+      firstName: patient?.firstName || '',
+      lastName: patient?.lastName || '',
+      dob: patient?.dob || '',
+      mrn: patient?.mrn || 'N/A',
+      gender: patient?.gender || patient?.sex || 'Other',
+      phone: patient?.phone || '',
+      email: patient?.email || '',
+      address: patient?.address || '',
+      bloodType: patient?.bloodType || 'A+',
+      lastVisit: (patient as any)?.lastVisit || 'N/A',
+    };
+  }, [patient, patientId]);
+
+  const handleSaveRestrictedDemographics = async (updatedData: any) => {
+    try {
+      const dataToSave = {
+        firstName: updatedData.firstName,
+        lastName: updatedData.lastName,
+        name: `${updatedData.firstName} ${updatedData.lastName}`.trim(),
+        dob: updatedData.dob,
+        gender: updatedData.gender,
+        sex: updatedData.gender,
+        bloodType: updatedData.bloodType,
+        phone: updatedData.phone,
+        email: updatedData.email,
+        address: updatedData.address,
+      };
+      await savePatient(patientId, dataToSave);
+    } catch (err) {
+      console.error("Error saving restricted demographics", err);
+      throw err;
+    }
+  };
+
+  if (userProfile && !isHealthcareProvider && !clinicalData.loading) {
+    return (
+      <RestrictedDemographicsView 
+        patient={restrictedPatientData}
+        userRole={userProfile.role}
+        onBackToRegistry={onBack}
+        onSaveDemographics={handleSaveRestrictedDemographics}
+      />
+    );
+  }
+
   if (!isAuthorized && !clinicalData.loading) {
     return (
       <div className="h-full flex items-center justify-center p-8">
@@ -288,31 +398,42 @@ export function ClinicalRecords({
       variants={containerVariants}
       className="flex flex-col h-full space-y-4"
     >
-      {/* Top Controls - Sync Status & Customize */}
-      <div className="flex items-center justify-end px-2 mb-2 gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsEditingLayout(!isEditingLayout)}
-          className={`h-7 px-3 rounded-full flex items-center gap-1.5 transition-all ${
-            isEditingLayout 
-              ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' 
-              : 'bg-white border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1]'
-          }`}
+      {/* Top Controls - Navigation & Actions */}
+      <div className="flex items-center justify-between px-2 mb-2 gap-2">
+        <Button 
+          variant="outline" 
+          onClick={onBack}
+          className="text-xs font-black text-slate-700 hover:text-[#242424] bg-white border border-[#EDEBE9] px-4 py-2 h-9 rounded-xl shadow-sm hover:bg-slate-50 transition-all uppercase tracking-widest flex items-center gap-2"
         >
-          <Settings2 className={`h-3 w-3 ${isEditingLayout ? 'text-white' : 'text-[#757370]'}`} />
-          <span className="text-[10px] font-black uppercase tracking-wider">
-            {isEditingLayout ? 'Save Layout' : 'Customize Layout'}
-          </span>
+          <ChevronLeft className="h-4 w-4" />
+          Back to Patient Registry
         </Button>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsEditingLayout(!isEditingLayout)}
+            className={`h-7 px-3 rounded-full flex items-center gap-1.5 transition-all ${
+              isEditingLayout 
+                ? 'bg-[#107C10] text-white hover:bg-[#0b5e0b]' 
+                : 'bg-white border border-[#EDEBE9] text-[#757370] hover:bg-[#F3F2F1]'
+            }`}
+          >
+            <Settings2 className={`h-3 w-3 ${isEditingLayout ? 'text-white' : 'text-[#757370]'}`} />
+            <span className="text-[10px] font-black uppercase tracking-wider">
+              {isEditingLayout ? 'Save Layout' : 'Customize Layout'}
+            </span>
+          </Button>
 
-        <button 
-          onClick={() => setIsHealthConnectModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 bg-[#F3F9FD] border border-[#DEECF9] rounded-full scale-90 origin-right cursor-pointer hover:bg-[#DEECF9] transition-colors"
-        >
-          <div className="h-2 w-2 rounded-full bg-[#107C10] animate-pulse" />
-          <div className="text-[10px] font-black text-[#107C10] uppercase tracking-wider">SYNC ACTIVE</div>
-        </button>
+          <button 
+            onClick={() => setIsHealthConnectModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#F3F9FD] border border-[#DEECF9] rounded-full scale-90 origin-right cursor-pointer hover:bg-[#DEECF9] transition-colors"
+          >
+            <div className="h-2 w-2 rounded-full bg-[#107C10] animate-pulse" />
+            <div className="text-[10px] font-black text-[#107C10] uppercase tracking-wider">SYNC ACTIVE</div>
+          </button>
+        </div>
       </div>
 
       <InteractionEntryModal 
@@ -334,6 +455,112 @@ export function ClinicalRecords({
         patientName={patient?.name || 'Patient'}
         canWrite={canWriteClinical}
       />
+
+      <Dialog open={isEditingDemographics && isHealthcareProvider} onOpenChange={setIsEditingDemographics}>
+        <DialogContent className="max-w-2xl bg-white rounded-2xl border border-[#EDEBE9] p-6 shadow-xl leading-normal">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-900 uppercase tracking-tight">Edit Patient Demographics</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 my-4">
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">First Name</span>
+              <Input 
+                value={demoFirstName}
+                onChange={(e) => setDemoFirstName(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 h-9 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Last Name</span>
+              <Input 
+                value={demoLastName}
+                onChange={(e) => setDemoLastName(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 h-9 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Date of Birth</span>
+              <Input 
+                value={demoDob}
+                onChange={(e) => setDemoDob(e.target.value)}
+                placeholder="YYYY-MM-DD"
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 h-9 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Gender / Sex</span>
+              <select 
+                value={demoGender}
+                onChange={(e) => setDemoGender(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 w-full h-9 focus:ring-2 focus:ring-sky-500/20 focus-visible:outline-none focus:border-sky-500"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Blood Type</span>
+              <select 
+                value={demoBloodType}
+                onChange={(e) => setDemoBloodType(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 w-full h-9 focus:ring-2 focus:ring-sky-500/20 focus-visible:outline-none focus:border-sky-500"
+              >
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Phone Number</span>
+              <Input 
+                value={demoPhone}
+                onChange={(e) => setDemoPhone(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 h-9 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Email Address</span>
+              <Input 
+                value={demoEmail}
+                type="email"
+                onChange={(e) => setDemoEmail(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 h-9 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <span className="text-[10px] text-[#828282] uppercase font-black tracking-widest block">Mailing / Physical Address</span>
+              <Input 
+                value={demoAddress}
+                onChange={(e) => setDemoAddress(e.target.value)}
+                className="text-xs font-semibold text-[#242424] bg-white border border-[#EDEBE9] rounded-xl px-3 py-2 h-9 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#F3F2F1]">
+            <Button
+              variant="outline"
+              onClick={() => setIsEditingDemographics(false)}
+              className="text-xs font-bold uppercase tracking-widest px-4 h-10 rounded-xl"
+              disabled={isSavingDemographics}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveDemographics}
+              className="bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold uppercase tracking-widest px-5 h-10 rounded-xl shadow-sm"
+              disabled={isSavingDemographics}
+            >
+              {isSavingDemographics ? 'Saving...' : 'Save Demographics'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 xl:grid-cols-8 gap-3 flex-1 min-h-0">
         {/* LEFT: Patient Detail Card (Fixed Sidebar) */}
@@ -374,6 +601,29 @@ export function ClinicalRecords({
                             <span className="text-[10px] text-[#616161] font-black uppercase tracking-widest leading-none mb-1">Blood Type</span>
                             <span className="text-sm font-bold text-[#D13438]">{patient?.bloodType || 'A+'}</span>
                           </div>
+                          {canEditDemographics && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (patient) {
+                                  setDemoFirstName(patient.firstName || '');
+                                  setDemoLastName(patient.lastName || '');
+                                  setDemoDob(patient.dob || '');
+                                  setDemoGender(patient.gender || patient.sex || '');
+                                  setDemoBloodType(patient.bloodType || 'A+');
+                                  setDemoPhone(patient.phone || '');
+                                  setDemoEmail(patient.email || '');
+                                  setDemoAddress(patient.address || '');
+                                }
+                                setIsEditingDemographics(true);
+                              }}
+                              className="mt-2 text-[10px] font-black uppercase tracking-widest text-[#005A9E] border-[#DEECF9] bg-[#F3F9FE] hover:bg-[#DEECF9] h-8 rounded-xl w-full flex items-center justify-center gap-1.5"
+                            >
+                              <Settings2 className="w-3 h-3" />
+                              Edit Profile
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -424,6 +674,28 @@ export function ClinicalRecords({
 
         {/* RIGHT: Tabbed Content Area */}
         <div className={`${isNotesExpanded ? 'xl:col-span-8' : 'xl:col-span-6'} flex flex-col min-h-0`}>
+          {patient?.isDraft && (
+            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex gap-3 items-start md:items-center">
+                <AlertCircle className="h-6 w-6 text-amber-600 shrink-0" />
+                <div>
+                  <h4 className="font-extrabold text-[#242424] text-sm tracking-tight leading-none">Draft Patient Record (No Clinical History)</h4>
+                  <p className="text-xs text-[#616161] font-medium mt-1.5 leading-relaxed">
+                    This patient was registered in Admin Draft mode with demographical data only. A healthcare provider must perform the initial clinical examination to record the chief complaint, history of present illness, ongoing conditions, and baseline vitals to solidify this record.
+                  </p>
+                </div>
+              </div>
+              {canWriteClinical && (
+                <Button 
+                  onClick={() => setIsSolidificationOpen(true)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl h-10 px-5 shrink-0 flex items-center gap-2 shadow-sm transition-all"
+                >
+                  <Stethoscope className="h-4 w-4" />
+                  Perform Intake & Solidify Record
+                </Button>
+              )}
+            </div>
+          )}
           <Tabs 
             value={activeTab} 
             onValueChange={(value) => {
@@ -689,6 +961,14 @@ export function ClinicalRecords({
           </Tabs>
         </div>
       </div>
+
+      {patient && (
+        <SolidificationModal 
+          isOpen={isSolidificationOpen} 
+          onClose={() => setIsSolidificationOpen(false)} 
+          patient={patient} 
+        />
+      )}
     </motion.div>
   );
 }

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { authService, CurrentUser } from '../services/authService';
 import { onSnapshot, doc } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
+import { saveUserProfile } from '../services/clinicalFirestoreService';
 
 export function useCurrentUser() {
   const [userProfile, setUserProfile] = useState<CurrentUser | null>(null);
@@ -43,6 +45,14 @@ export function useCurrentUser() {
             const demoUser = authService.getCurrentUser();
             if (demoUser) {
               setUserProfile(demoUser);
+              // CRITICAL: Auto-re-sync profile to real Firestore if it's missing in the cloud!
+              saveUserProfile(user.uid, {
+                ...demoUser,
+                id: user.uid,
+                originalId: demoUser.id
+              }).catch(err => {
+                console.warn("Failed to auto-resync user profile:", err);
+              });
             }
           }
           setLoading(false);
@@ -56,9 +66,24 @@ export function useCurrentUser() {
           }
         });
       } else {
-        // If not logged into Firebase, refresh from local storage (demo)
-        refreshProfile();
-        setLoading(false);
+        // If not logged into Firebase, check if there is a local session to restore
+        const demoUser = authService.getCurrentUser();
+        if (demoUser) {
+          setUserProfile(demoUser);
+          signInAnonymously(auth).then(async (cred) => {
+            await saveUserProfile(cred.user.uid, {
+              ...demoUser,
+              id: cred.user.uid,
+              originalId: demoUser.id
+            });
+          }).catch(err => {
+            console.warn("Auto-signin on session load failed:", err);
+            setLoading(false);
+          });
+        } else {
+          refreshProfile();
+          setLoading(false);
+        }
       }
     });
 

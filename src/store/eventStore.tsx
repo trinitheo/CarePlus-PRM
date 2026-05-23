@@ -65,6 +65,7 @@ export interface Patient {
   lastVisit?: string;
   chiefComplaint?: string;
   tags?: string[];
+  isDraft?: boolean;
 }
 
 export interface Vitals {

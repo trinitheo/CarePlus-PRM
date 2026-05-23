@@ -12,13 +12,15 @@ import { AppointmentsDashboard } from './modules/scheduling/AppointmentsDashboar
 import { RoleDashboard } from './modules/dashboard/RoleDashboard';
 import { BillingDashboard } from './modules/billing/BillingDashboard';
 import { CareNetworkGraph } from './modules/admin/rbac/CareNetworkGraph';
+import { AdminGovernanceConsole } from './modules/admin/AdminGovernanceConsole';
 import { Activity, ChevronRight, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
 import { transition } from './lib/motion';
 import { LoginScreen } from './components/LoginScreen';
 import { useCurrentUser } from './hooks/useCurrentUser';
-import { savePatient } from './services/clinicalFirestoreService';
+import { savePatient, saveUserProfile } from './services/clinicalFirestoreService';
+import { ProfileEditor } from './components/ProfileEditor';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
@@ -213,6 +215,39 @@ export default function App() {
               setCurrentModule('patients');
               startOnboarding();
             }} />
+          </div>
+        )}
+
+        {currentModule === 'governance' && (
+          <div className="flex-1 min-h-0 overflow-hidden h-full">
+            <AdminGovernanceConsole />
+          </div>
+        )}
+
+        {currentModule === 'profile' && userProfile && (
+          <div className="flex-1 min-h-0 overflow-auto h-full">
+            <ProfileEditor 
+              initialProfile={userProfile} 
+              onSave={async (updated) => {
+                await saveUserProfile(userProfile.id, updated);
+                // Also update local storage session to ensure sync
+                const currentSession = localStorage.getItem('careplus_current_user');
+                if (currentSession) {
+                  const parsed = JSON.parse(currentSession);
+                  localStorage.setItem('careplus_current_user', JSON.stringify({
+                    ...parsed,
+                    displayName: updated.displayName,
+                    email: updated.email,
+                    phone: updated.phone,
+                    department: updated.department,
+                    npiNumber: updated.npiNumber,
+                    bio: updated.bio
+                  }));
+                }
+                refreshProfile();
+              }}
+              onCancel={() => setCurrentModule('dashboard')}
+            />
           </div>
         )}
       </Shell>

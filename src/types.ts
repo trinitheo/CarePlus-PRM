@@ -25,6 +25,7 @@ export interface Patient {
   lastVisit?: string;
   tags?: string[];
   chiefComplaint?: string;
+  isDraft?: boolean;
   createdAt: any;
 }
 

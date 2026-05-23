@@ -35,13 +35,23 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       // 1. Log in to demo system (LocalStorage)
       const demoUser = await authService.loginWithDemo(email);
 
-      // 2. Sign in to Firebase Auth anonymously so firestore works
-      const cred = await signInAnonymously(auth);
+      let finalUid = demoUser.id;
+      try {
+        // 2. Sign in to Firebase Auth anonymously so firestore works
+        const cred = await signInAnonymously(auth);
+        finalUid = cred.user.uid;
+      } catch (authErr: any) {
+        console.warn(
+          'Firebase Auth anonymous sign-in failed (possibly sandbox, CORS, or network block). ' +
+          'Proceeding with offline-first demo user context.',
+          authErr
+        );
+      }
       
       // 3. Sync profile to Firestore so rules can see the role
-      await saveUserProfile(cred.user.uid, {
+      await saveUserProfile(finalUid, {
         ...demoUser,
-        id: cred.user.uid, // Override with real Firebase UID for rules to match
+        id: finalUid, // Override with real Firebase UID for rules to match
         originalId: demoUser.id
       });
 

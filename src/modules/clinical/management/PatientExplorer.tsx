@@ -102,7 +102,8 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
                           </div>
                           <div className="flex items-center gap-2 text-[10px] font-medium text-[#616161]">
                             <span className="tabular-nums">MRN-{p.mrn?.startsWith('MRN-') ? p.mrn.replace('MRN-', '') : p.mrn}</span>
-                            {isSelected && <Badge className="h-4 px-1 text-[8px] bg-[#0078D4] text-white border-none uppercase font-black tracking-widest">Active</Badge>}
+                            {p.isDraft && <Badge className="h-4 px-1 text-[8px] bg-amber-500 hover:bg-amber-600 text-white border-none uppercase font-black tracking-widest animate-pulse">Draft</Badge>}
+                            {isSelected && !p.isDraft && <Badge className="h-4 px-1 text-[8px] bg-[#0078D4] text-white border-none uppercase font-black tracking-widest">Active</Badge>}
                           </div>
                           {!compact && p.chiefComplaint && (
                             <p className="text-[11px] text-[#616161] mt-1 line-clamp-1 font-medium italic">
@@ -116,7 +117,9 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden sm:block">
                             <div className="text-[9px] font-bold text-[#A19F9D] uppercase tracking-tighter">Status</div>
-                            <div className="text-[10px] font-bold text-[#107C10] uppercase">Active</div>
+                            <div className={`text-[10px] font-bold uppercase ${p.isDraft ? 'text-amber-500 font-extrabold animate-pulse' : 'text-[#107C10]'}`}>
+                              {p.isDraft ? 'Draft' : 'Active'}
+                            </div>
                           </div>
                           <Button variant="ghost" size="icon" className="rounded-md h-8 w-8 text-[#BDBDBD] group-hover:text-[#0078D4] group-hover:bg-[#DEECF9]/50">
                             <ArrowRight className="h-4 w-4" />
