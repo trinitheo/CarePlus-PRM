@@ -552,7 +552,7 @@ export function PatientPortalDashboard() {
   }, [appointments, joinedEvents, userProfile]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gradient-to-br from-[#FAFCFB] to-[#F1F6F2] text-slate-900 font-sans p-6 md:p-12 select-none outline-none relative pb-16">
+    <div className="flex-1 overflow-y-auto bg-gradient-to-br from-[#FAFCFB] to-[#F1F6F2] text-slate-900 font-sans p-4 sm:p-6 md:p-12 select-none outline-none relative pb-16">
       
       {/* Toast Notification HUD */}
       <AnimatePresence>

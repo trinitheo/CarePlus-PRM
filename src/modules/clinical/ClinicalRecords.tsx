@@ -400,14 +400,18 @@ export function ClinicalRecords({
     >
       {/* Top Controls - Navigation & Actions */}
       <div className="flex items-center justify-between px-2 mb-2 gap-2">
-        <Button 
-          variant="outline" 
-          onClick={onBack}
-          className="text-xs font-black text-slate-700 hover:text-[#242424] bg-white border border-[#EDEBE9] px-4 py-2 h-9 rounded-xl shadow-sm hover:bg-slate-50 transition-all uppercase tracking-widest flex items-center gap-2"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Patient Registry
-        </Button>
+        {showBackButton !== false && onBack ? (
+          <Button 
+            variant="outline" 
+            onClick={onBack}
+            className="text-xs font-black text-slate-700 hover:text-[#242424] bg-white border border-[#EDEBE9] px-4 py-2 h-9 rounded-xl shadow-sm hover:bg-slate-50 transition-all uppercase tracking-widest flex items-center gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to Patient Registry
+          </Button>
+        ) : (
+          <div />
+        )}
         
         <div className="flex items-center gap-2">
           <Button
