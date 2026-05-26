@@ -348,7 +348,7 @@ export function ClinicalRecords({
     }
   };
 
-  if (userProfile && !isHealthcareProvider && !clinicalData.loading) {
+  if (userProfile && !isHealthcareProvider && userProfile.role !== 'patient' && !clinicalData.loading) {
     return (
       <RestrictedDemographicsView 
         patient={restrictedPatientData}

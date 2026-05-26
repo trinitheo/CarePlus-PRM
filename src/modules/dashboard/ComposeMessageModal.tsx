@@ -22,9 +22,10 @@ interface ComposeMessageModalProps {
   trigger?: React.ReactNode;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onSent?: () => void;
 }
 
-export function ComposeMessageModal({ replyTo, trigger, isOpen: controlledOpen, onOpenChange }: ComposeMessageModalProps) {
+export function ComposeMessageModal({ replyTo, trigger, isOpen: controlledOpen, onOpenChange, onSent }: ComposeMessageModalProps) {
   const { userProfile } = useCurrentUser();
   const { patients } = useQueryModel();
   const [isOpen, setIsOpen] = useState(false);
@@ -85,6 +86,7 @@ export function ComposeMessageModal({ replyTo, trigger, isOpen: controlledOpen, 
       setToUserId('');
       setPatientId('');
       actualSetOpen?.(false);
+      onSent?.();
     } catch (e) {
       console.error('Failed to send message:', e);
     } finally {

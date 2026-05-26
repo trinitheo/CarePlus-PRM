@@ -211,6 +211,12 @@ export const mockDbService = {
       if (index !== -1) {
         items[index] = { ...items[index], ...data, updatedAt: { seconds: Math.floor(Date.now() / 1000) } };
       }
+    } else if (Array.isArray(mockDb[path])) {
+      const items = mockDb[path] as any[];
+      const index = items.findIndex((i: any) => i.id === id);
+      if (index !== -1) {
+        items[index] = { ...items[index], ...data, updatedAt: { seconds: Math.floor(Date.now() / 1000) } };
+      }
     } else if (mockDb[path] && typeof mockDb[path] === 'object' && !Array.isArray(mockDb[path])) {
       (mockDb[path] as Record<string, any>)[id] = { ...(mockDb[path] as Record<string, any>)[id], ...data };
     }

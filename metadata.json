@@ -2,5 +2,5 @@
   "name": "Aequanimitas PRM",
   "description": "Next-gen Precision Patient Relationship Management Platform featuring high-density clinical UI, strict RBAC, and CQRS event-driven architecture.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

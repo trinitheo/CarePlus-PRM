@@ -324,11 +324,11 @@ export function subscribeToCollection(path: keyof MockDb, callback: (data: any[]
 
 // Dashboards & Operations
 export async function completeCourtesyCall(taskId: string, notes: string) {
-  // Mock logic
+  return mockDbService.updateItem('courtesy_calls' as any, taskId, { status: 'completed', completionNotes: notes });
 }
 
 export async function markMessageRead(messageId: string) {
-  // Mock logic
+  return mockDbService.updateItem('messages' as any, messageId, { read: true });
 }
 
 export async function createMessage(data: any) {

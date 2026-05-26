@@ -53,6 +53,7 @@ import { subscribeToAuditLogs } from '../../services/auditService';
 import { VitalsCard } from '../clinical/VitalsCard';
 import { HealthConnectManager } from '../clinical/HealthConnectManager';
 import { ComposeMessageModal } from './ComposeMessageModal';
+import { PatientPortalDashboard } from './PatientPortalDashboard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts: any): string {
@@ -390,17 +391,14 @@ function RemindersWidget({ reminders, onComplete, onCreate }: {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // WIDGET 1 — Messages (all roles)
-// M3 pattern: Messages feed with unread indicator dot + supporting pane on click
+// M3 pattern: Recent Messages list with unread markers and redirect inline button
 // ═══════════════════════════════════════════════════════════════════════════════
-function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: string) => void }) {
-  const [selected, setSelected] = useState<any | null>(null);
-  const [isReplying, setIsReplying] = useState(false);
+function MessagesWidget({ messages, onRead, onNavigate }: { 
+  messages: any[]; 
+  onRead: (id: string) => void;
+  onNavigate?: (module: string) => void;
+}) {
   const unreadCount = messages.filter(m => !m.read).length;
-
-  const handleSelect = (msg: any) => {
-    setSelected(msg);
-    if (!msg.read) onRead(msg.id);
-  };
 
   const roleColors: Record<string, string> = {
     clinician: '#107C10', nurse: '#0078D4', allied_health: '#5C2D91',
@@ -409,96 +407,59 @@ function MessagesWidget({ messages, onRead }: { messages: any[]; onRead: (id: st
 
   return (
     <DashCard>
-      <div className="flex items-center justify-between pr-4">
-        <SectionHeader icon={MessageSquare} label="Messages" count={unreadCount} color="bg-[#DEECF9] text-[#0078D4]" />
-        <ComposeMessageModal />
+      <div className="flex items-center justify-between pr-4 select-none shrink-0 border-b border-[#F3F2F1] pb-1">
+        <SectionHeader icon={MessageSquare} label="Recent Messages" count={unreadCount} color="bg-[#DEECF9] text-[#0078D4]" />
+        {onNavigate && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-[11px] font-black uppercase tracking-wider text-[#0078D4] hover:bg-[#DEECF9]/30 rounded-full shrink-0 flex items-center h-8"
+            onClick={() => onNavigate('messages')}
+          >
+            Open Inbox <ChevronRight className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
+      
       <div className="flex flex-1 min-h-0">
-        {/* List pane */}
-        <ScrollArea 
-          className={`${selected ? 'hidden md:flex md:w-2/5 md:border-r md:border-[#EDEBE9]' : 'flex-1'} flex-col h-[236px]`}
-          viewportClassName="h-[256px]"
-        >
+        <ScrollArea className="flex-1 h-[236px]" viewportClassName="h-[256px]">
           <div className="divide-y divide-[#F5F4F3]">
             {messages.length === 0 && <Empty message="No messages yet" />}
-            {messages.map(msg => (
+            {messages.slice(0, 5).map(msg => (
               <button
                 key={msg.id}
-                onClick={() => handleSelect(msg)}
-                className={`w-full text-left px-4 py-3 hover:bg-[#F5F4F3] transition-colors flex gap-3 items-start ${selected?.id === msg.id ? 'bg-[#F0F7FF]' : ''}`}
+                onClick={async () => {
+                  if (!msg.read) await onRead(msg.id);
+                  onNavigate?.('messages');
+                }}
+                className="w-full text-left px-4 py-3.5 hover:bg-[#F5F4F3] transition-colors flex gap-3 items-start group"
               >
                 <div className="relative shrink-0 mt-0.5">
                   <Avatar name={msg.fromUserName || '?'} color={roleColors[msg.fromRole] || '#616161'} size="sm" />
                   {!msg.read && (
-                    <div className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#0078D4] border-2 border-white" />
+                    <div className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#0078D4] border-2 border-white" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
                     <p className={`text-[12px] truncate ${!msg.read ? 'font-black text-[#242424]' : 'font-semibold text-[#616161]'}`}>
-                      {msg.fromUserName || 'Unknown'}
+                      {msg.fromUserName || 'Unknown'} 
+                      <span className="ml-1 px-1 py-0.2 rounded text-[7px] font-black uppercase tracking-wider bg-slate-100 text-slate-500">
+                        {msg.fromRole?.replace('_', ' ')}
+                      </span>
                     </p>
-                    <span className="text-[9px] text-[#A19F9D] shrink-0">{timeAgo(msg.createdAt)}</span>
+                    <span className="text-[9px] text-[#A19F9D] shrink-0 font-medium">{timeAgo(msg.createdAt)}</span>
                   </div>
-                  <p className="text-[11px] text-[#444441] font-medium truncate mt-0.5">{msg.subject}</p>
+                  <p className="text-[11px] text-[#444441] font-black truncate mt-1 group-hover:text-[#0078D4] transition-colors">{msg.subject}</p>
+                  <p className="text-[10px] text-[#757370] truncate mt-0.5 font-medium">{msg.body}</p>
                   {msg.patientName && (
-                    <p className="text-[10px] text-[#0078D4] font-semibold mt-0.5 truncate">Re: {msg.patientName}</p>
+                    <p className="text-[9px] text-[#0078D4] font-black mt-1 inline-flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.2 rounded-full">Re: {msg.patientName}</p>
                   )}
                 </div>
               </button>
             ))}
           </div>
         </ScrollArea>
-
-        {/* Supporting detail pane — M3 Supporting Pane pattern */}
-        <AnimatePresence>
-          {selected && (
-            <motion.div
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 16 }}
-              transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col min-h-0 bg-[#FAFAFA]"
-            >
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-[#EDEBE9] bg-white">
-                <button onClick={() => setSelected(null)} className="md:hidden p-1 rounded-lg hover:bg-[#F3F2F1]">
-                  <X className="h-4 w-4 text-[#616161]" />
-                </button>
-                <Avatar name={selected.fromUserName || '?'} color={roleColors[selected.fromRole] || '#616161'} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-black text-[#242424] truncate">{selected.fromUserName}</p>
-                  <p className="text-[10px] text-[#A19F9D] capitalize">{selected.fromRole?.replace('_', ' ')}</p>
-                </div>
-                <span className="text-[10px] text-[#A19F9D]">{timeAgo(selected.createdAt)}</span>
-              </div>
-              <ScrollArea className="flex-1 p-4">
-                <p className="text-[13px] font-black text-[#242424] mb-1">{selected.subject}</p>
-                {selected.patientName && (
-                  <Badge className="mb-3 bg-[#DEECF9] text-[#0078D4] border-none text-[10px] font-bold">
-                    Re: {selected.patientName}
-                  </Badge>
-                )}
-                <p className="text-[13px] text-[#444441] leading-relaxed">{selected.body}</p>
-              </ScrollArea>
-              <div className="p-4 bg-white border-t border-[#EDEBE9] flex justify-end">
-                <ComposeMessageModal 
-                  replyTo={selected}
-                  isOpen={isReplying}
-                  onOpenChange={setIsReplying}
-                  trigger={
-                    <Button 
-                      size="sm" 
-                      className="rounded-full bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-[11px] uppercase tracking-widest px-6"
-                      onClick={() => setIsReplying(true)}
-                    >
-                      Reply
-                    </Button>
-                  }
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </DashCard>
   );
@@ -1372,13 +1333,15 @@ function AdministratorAuditWidget() {
   );
 }
 
-export function RoleDashboard({ onNavigateToPatient }: { 
-  onNavigateToPatient?: (id: string) => void
+export function RoleDashboard({ onNavigateToPatient, onNavigate }: { 
+  onNavigateToPatient?: (id: string) => void;
+  onNavigate?: (module: string) => void;
 }) {
   const { userProfile } = useCurrentUser();
   const { messages, courtesyCalls, reminders } = useDashboard(userProfile);
   const viewClass = useWindowSizeClass(); // 'compact' | 'medium' | 'expanded'
   const role = userProfile?.role || 'clinician';
+
   const meta = ROLE_META[role] || ROLE_META.clinician;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -1411,7 +1374,7 @@ export function RoleDashboard({ onNavigateToPatient }: {
 
   const widgetDefinitions: Record<string, Record<string, React.ReactNode>> = {
     clinician: {
-      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
       results: <PendingResultsWidget onNavigate={onNavigateToPatient} />,
@@ -1419,7 +1382,7 @@ export function RoleDashboard({ onNavigateToPatient }: {
       calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
     },
     nurse: {
-      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       queue: <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
       med_flags: <MedicationFlagsWidget onNavigate={onNavigateToPatient} />,
@@ -1427,7 +1390,7 @@ export function RoleDashboard({ onNavigateToPatient }: {
       calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
     },
     allied_health: {
-      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />,
       referrals: <ReferralsWidget specialty={userProfile?.specialty as string} onNavigate={onNavigateToPatient} />,
@@ -1435,7 +1398,7 @@ export function RoleDashboard({ onNavigateToPatient }: {
       calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
     },
     admin: {
-      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       overview: <SystemOverviewWidget />,
       directory: <StaffDirectoryWidget />,
@@ -1445,14 +1408,14 @@ export function RoleDashboard({ onNavigateToPatient }: {
       audit: <AdministratorAuditWidget />,
     },
     billing: {
-      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       billing: <BillingWidget />,
       patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />, // For identifiers
       calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
     },
     patient: {
-      messages: <MessagesWidget messages={messages} onRead={handleRead} />,
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
       reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
       vitals: <MyVitalsWidget onNavigate={onNavigateToPatient} />,
       medications: <MyMedicationsWidget onNavigate={onNavigateToPatient} />,
@@ -1584,6 +1547,10 @@ export function RoleDashboard({ onNavigateToPatient }: {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+
+  if (role === 'patient') {
+    return <PatientPortalDashboard />;
+  }
 
   return (
     <div className="h-full flex flex-col gap-5 min-w-0 overflow-y-auto pb-6">

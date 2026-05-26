@@ -1,0 +1,298 @@
+{
+  "root": {
+    "id": "careplus_prm",
+    "label": "CarePlus-PRM",
+    "type": "platform",
+    "description": "High-Performance Patient Relationship Management (PRM) & Healthcare Administration Platform",
+    "techStack": {
+      "language": "TypeScript",
+      "bundler": "Vite",
+      "frontend": "React & Tailwind CSS",
+      "backend": "Firebase Firestore & Auth",
+      "ai": "Google Gemini API via TypeScript SDK"
+    },
+    "children": [
+      {
+        "id": "module_rbac",
+        "label": "Role-Based Access Control (RBAC)",
+        "type": "security_module",
+        "path": "/src/modules/admin/rbac/",
+        "collections": ["roles", "auditLogs"],
+        "description": "Enforces attribute and role-based data encryption and access boundaries.",
+        "children": [
+          {
+            "id": "rbac_roles",
+            "label": "System User Roles",
+            "type": "sub_feature",
+            "children": [
+              {
+                "id": "role_admin",
+                "label": "Administrator",
+                "type": "role",
+                "privileges": "Full global settings, patient deletion, role assignment, log auditing, clinic governance."
+              },
+              {
+                "id": "role_clinician",
+                "label": "Clinician",
+                "type": "role",
+                "privileges": "Clinical read/write, medical order creation, care team assignment, full SOAP templates, prescriptions."
+              },
+              {
+                "id": "role_nurse",
+                "label": "Nurse / Allied Health",
+                "type": "role",
+                "privileges": "Vitals capture, care feed edits, limited clinical logs, procedure execution."
+              },
+              {
+                "id": "role_front_desk",
+                "label": "Front Desk Operations",
+                "type": "role",
+                "privileges": "Check-ins, demographics edit, insurance verification, scheduling, clinical data blocked."
+              },
+              {
+                "id": "role_patient",
+                "label": "Patient Portal Users",
+                "type": "role",
+                "privileges": "Personal record view, billing payments, active care team overview, zero staff lookup."
+              }
+            ]
+          },
+          {
+            "id": "rbac_audit",
+            "label": "Encrypted Audit Logging",
+            "type": "security_feature",
+            "description": "Tamper-evident log of demographic modifications, role configuration updates, and medical records decryption actions."
+          }
+        ]
+      },
+      {
+        "id": "module_clinical",
+        "label": "Clinical Suite & EHR System",
+        "type": "clinical_module",
+        "path": "/src/modules/clinical/",
+        "collections": ["patients", "clinicalNotes", "investigations", "results"],
+        "description": "HIPAA-compliant interface for diagnostics, procedures, care sheets, and patient care timeline.",
+        "children": [
+          {
+            "id": "clinical_soap",
+            "label": "SOAP Clinical Notes Generator",
+            "type": "feature",
+            "description": "Structured capture of Subjective, Objective, Assessment, and Plan observations with responsive template builders."
+          },
+          {
+            "id": "clinical_network",
+            "label": "Active Care Network (ABAC)",
+            "type": "feature",
+            "description": "Dynamic mapping of provider links to patient files. Grants operational clinical keys strictly to assigned care members."
+          },
+          {
+            "id": "clinical_redaction",
+            "label": "Restricted HIPAA Demographics",
+            "type": "feature",
+            "description": "Sheds diagnostic feeds and displays a minimal-demographic contact screen for front-desk and patient views."
+          },
+          {
+            "id": "clinical_orders",
+            "label": "Investigations Workflow",
+            "type": "feature",
+            "description": "Generates diagnostic lab or imaging requests, supports medical result uploads, and tracks clinician sign-offs."
+          },
+          {
+            "id": "clinical_meds",
+            "label": "Medication Center & Rx",
+            "type": "feature",
+            "description": "Active prescription feeds, dose alerts, allergy flags, and compliance logs."
+          }
+        ]
+      },
+      {
+        "id": "module_scheduling",
+        "label": "Advanced Scheduling Engine",
+        "type": "workflow_module",
+        "path": "/src/modules/scheduling/",
+        "collections": ["appointments", "rooms"],
+        "description": "Dynamic visual scheduling matching clinic resources, specialized rooms, and practitioner calendars.",
+        "children": [
+          {
+            "id": "scheduling_calendar",
+            "label": "Interactive Provider Calendar",
+            "type": "feature",
+            "description": "Multi-resource timeline mapping, provider availability overrides, and vacation blocks."
+          },
+          {
+            "id": "scheduling_rooms",
+            "label": "Room & Resource Allocation",
+            "type": "feature",
+            "description": "Mitigates double-booking of physical labs, examination tables, or ultrasound devices."
+          },
+          {
+            "id": "scheduling_status",
+            "label": "Intake Queue Workflows",
+            "type": "feature",
+            "description": "Updates appointment states (Scheduled -> Checked In -> In Triage -> With Clinician -> Checked Out)."
+          }
+        ]
+      },
+      {
+        "id": "module_billing",
+        "label": "Billing & Claims Realization",
+        "type": "financial_module",
+        "path": "/src/modules/billing/",
+        "collections": ["charges", "invoices", "payments"],
+        "description": "Automates the capture of clinical services and facilitates real-time invoicing and payment tracking.",
+        "children": [
+          {
+            "id": "billing_charges",
+            "label": "Clinical Charge Capture",
+            "type": "feature",
+            "description": "Pulls procedures or diagnostic records compiled during a visit directly into draft charge line-items."
+          },
+          {
+            "id": "billing_assistant",
+            "label": "AI ICD-10 & CPT Coding Auditor",
+            "type": "ai_feature",
+            "description": "Audits SOAP charts and suggests compliant medical insurance codes to guarantee fast reimbursement and minimize audit risks."
+          },
+          {
+            "id": "billing_invoice",
+            "label": "Digital Invoices & Ledger",
+            "type": "feature",
+            "description": "Maintains patient balances, outputs PDF bills, and handles stripe configuration rules."
+          },
+          {
+            "id": "billing_payment",
+            "label": "Payment Processing",
+            "type": "feature",
+            "description": "Processes online cards, cash copays, and tracks standard insurance claims approvals."
+          }
+        ]
+      },
+      {
+        "id": "module_frontdesk",
+        "label": "Front-Desk & Reception Suite",
+        "type": "operations_module",
+        "path": "/src/modules/frontdesk/",
+        "collections": ["checkins", "consents"],
+        "description": "Coordinates patient arrivals, insurance checks, and intake documentation.",
+        "children": [
+          {
+            "id": "intake_checkin",
+            "label": "Express Self Check-in",
+            "type": "feature",
+            "description": "Tablet friendly entry form matching checking-in patients to Scheduled timeline records."
+          },
+          {
+            "id": "intake_verification",
+            "label": "Insurance Eligibility Verification",
+            "type": "feature",
+            "description": "Captures subscriber codes, validates active coverage timelines, and records co-pay parameters."
+          },
+          {
+            "id": "intake_consents",
+            "label": "Digital Consent Repository",
+            "type": "feature",
+            "description": "Collects signature telemetry logs for privacy policies, clinical procedures, and HIPAA agreements."
+          }
+        ]
+      },
+      {
+        "id": "module_inventory",
+        "label": "Inventory & Supply Tracking",
+        "type": "logistics_module",
+        "path": "/src/modules/inventory/",
+        "collections": ["inventory"],
+        "description": "Keeps stock levels audited, prevents waste from expiration, and tracks critical clinical tools.",
+        "children": [
+          {
+            "id": "inventory_levels",
+            "label": "Live Stock Auditing",
+            "type": "feature",
+            "description": "Monitors quantities on hand for syringes, gloves, critical diagnostic reagents, and medications."
+          },
+          {
+            "id": "inventory_expiries",
+            "label": "Expiry Date Monitors",
+            "type": "feature",
+            "description": "Alerts administrative teams when specialized supplies or sterile vaccines approach shelf-life limits."
+          },
+          {
+            "id": "inventory_reorders",
+            "label": "Automated Reorder Alerts",
+            "type": "feature",
+            "description": "Flags items that cross safe safety-stock baseline limits to prevent clinical shortages."
+          }
+        ]
+      },
+      {
+        "id": "module_tasks",
+        "label": "Workflow & Task Management",
+        "type": "collaboration_module",
+        "path": "/src/modules/tasks/",
+        "collections": ["tasks"],
+        "description": "Intra-clinic digital bulletin and task board coordinating cross-department workflows.",
+        "children": [
+          {
+            "id": "tasks_board",
+            "label": "Task Assignment Engine",
+            "type": "feature",
+            "description": "Assigns checklists to specific teams or individual clinic staff, with status tracking (Todo -> In Progress -> Done)."
+          },
+          {
+            "id": "tasks_priorities",
+            "label": "AI Priority Sorting",
+            "type": "ai_feature",
+            "description": "Utilizes AI model analysis of active clinics volume and patient severity parameters to auto-escalate tasks to clinician attention."
+          }
+        ]
+      },
+      {
+        "id": "module_governance",
+        "label": "Admin Governance & Compliance",
+        "type": "admin_module",
+        "path": "/src/modules/admin/governance/",
+        "collections": ["sops", "contracts", "acknowledgments"],
+        "description": "Maintains corporate policies, SOPs, employment contracts, and regulatory logs.",
+        "children": [
+          {
+            "id": "governance_sop",
+            "label": "SOP Repository & Versions",
+            "type": "feature",
+            "description": "Centralizes Standard Operating Procedures with digital version tracking for clinical safety standards."
+          },
+          {
+            "id": "governance_acks",
+            "label": "Regulatory Signature Tracking",
+            "type": "feature",
+            "description": "Captures staff sign-offs on updated clinic procedures and safety manuals to prove audit compliance."
+          }
+        ]
+      },
+      {
+        "id": "gemini_integration",
+        "label": "Gemini AI Automation Hub",
+        "type": "ai_module",
+        "description": "Deep server-side LLM processing to streamline charting, coding, and workflow prioritization.",
+        "children": [
+          {
+            "id": "ai_soap_summary",
+            "label": "Clinical Note Summarizer",
+            "type": "ai_capability",
+            "description": "Compresses lengthy SOAP narratives into highly accurate, structured transition summaries for nursing shift changes."
+          },
+          {
+            "id": "ai_billing_coding",
+            "label": "CPT & ICD-10 Auto-Coder",
+            "type": "ai_capability",
+            "description": "Converts plain-text procedure logs and diagnostics notes into standard billing codes (ICD-10-CM / CPT-4)."
+          },
+          {
+            "id": "ai_sop_qa",
+            "label": "Interactive SOP Analyst",
+            "type": "ai_capability",
+            "description": "Allows administrative staff to query complex policy documents and receive context-grounded rule clarifications."
+          }
+        ]
+      }
+    ]
+  }
+}

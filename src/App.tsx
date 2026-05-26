@@ -13,6 +13,7 @@ import { RoleDashboard } from './modules/dashboard/RoleDashboard';
 import { BillingDashboard } from './modules/billing/BillingDashboard';
 import { CareNetworkGraph } from './modules/admin/rbac/CareNetworkGraph';
 import { AdminGovernanceConsole } from './modules/admin/AdminGovernanceConsole';
+import { MessagesModule } from './modules/messages/MessagesModule';
 import { Activity, ChevronRight, PanelLeft, PanelLeftClose, Loader2 } from 'lucide-react';
 import { useWindowSizeClass } from './hooks/useAdaptiveWidth';
 import { motion, AnimatePresence } from 'motion/react';
@@ -84,11 +85,14 @@ export default function App() {
       <Shell currentModule={currentModule} onNavigate={handleNavigate}>
         {currentModule === 'dashboard' && (
           <div className="h-full flex flex-col min-w-0">
-            <RoleDashboard onNavigateToPatient={(id) => {
-              setCurrentModule('patients');
-              setViewState({ subView: 'detail', selectedPatientId: id });
-              setIsListOpen(false);
-            }} />
+            <RoleDashboard 
+              onNavigateToPatient={(id) => {
+                setCurrentModule('patients');
+                setViewState({ subView: 'detail', selectedPatientId: id });
+                setIsListOpen(false);
+              }} 
+              onNavigate={handleNavigate}
+            />
           </div>
         )}
 
@@ -188,6 +192,21 @@ export default function App() {
         {currentModule === 'scheduling' && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <AppointmentsDashboard />
+          </div>
+        )}
+
+        {currentModule === 'messages' && (
+          <div className="flex-1 min-h-0 overflow-hidden h-full">
+            <MessagesModule />
+          </div>
+        )}
+
+        {currentModule === 'health-record' && (
+          <div className="flex-1 min-h-0 overflow-auto h-full">
+            <ClinicalRecords 
+              patientId={userProfile?.patientId || userProfile?.id || 'p-1'} 
+              showBackButton={false} 
+            />
           </div>
         )}
 
