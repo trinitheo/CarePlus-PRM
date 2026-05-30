@@ -43,6 +43,13 @@ export default function App() {
 
   const [isListOpen, setIsListOpen] = useState(true);
 
+  const handleNavigate = (module: string) => {
+    setCurrentModule(module);
+    if (module === 'patients' && viewState.subView === 'explorer') {
+      setIsListOpen(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[#FAFAFA]">
@@ -58,23 +65,56 @@ export default function App() {
     return <LoginScreen onLoginSuccess={refreshProfile} />;
   }
 
-  // RBAC Intercept: If the user is a patient, bypass the clinical shell entirely
+  // RBAC Intercept: If the user is a patient, wrap in clinical Shell with permitted views
   if (userProfile.role === 'patient') {
     return (
       <EventStoreProvider>
         <HIPAAMonitorProvider>
-          <PatientPortalRoot />
+          <Shell currentModule={currentModule} onNavigate={handleNavigate}>
+            {currentModule === 'dashboard' && <PatientPortalRoot />}
+            {currentModule === 'messages' && (
+              <div className="flex-1 min-h-0 overflow-hidden h-full">
+                <MessagesModule />
+              </div>
+            )}
+            {currentModule === 'health-record' && (
+              <div className="flex-1 min-h-0 overflow-auto h-full">
+                <ClinicalRecords 
+                  patientId={userProfile.patientId || userProfile.id || 'p-1'} 
+                  showBackButton={false} 
+                />
+              </div>
+            )}
+            {currentModule === 'profile' && (
+              <div className="flex-1 min-h-0 overflow-auto h-full">
+                <ProfileEditor 
+                  initialProfile={userProfile} 
+                  onSave={async (updated) => {
+                    await saveUserProfile(userProfile.id, updated);
+                    const currentSession = localStorage.getItem('careplus_current_user');
+                    if (currentSession) {
+                      const parsed = JSON.parse(currentSession);
+                      localStorage.setItem('careplus_current_user', JSON.stringify({
+                        ...parsed,
+                        displayName: updated.displayName,
+                        email: updated.email,
+                        phone: updated.phone,
+                        department: updated.department,
+                        npiNumber: updated.npiNumber,
+                        bio: updated.bio
+                      }));
+                    }
+                    refreshProfile();
+                  }}
+                  onCancel={() => setCurrentModule('dashboard')}
+                />
+              </div>
+            )}
+          </Shell>
         </HIPAAMonitorProvider>
       </EventStoreProvider>
     );
   }
-
-  const handleNavigate = (module: string) => {
-    setCurrentModule(module);
-    if (module === 'patients' && viewState.subView === 'explorer') {
-      setIsListOpen(true);
-    }
-  };
 
   const selectPatient = (id: string) => {
     setViewState({ subView: 'detail', selectedPatientId: id });
