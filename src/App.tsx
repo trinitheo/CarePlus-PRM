@@ -22,6 +22,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { savePatient, saveUserProfile } from './services/clinicalFirestoreService';
 import { ProfileEditor } from './components/ProfileEditor';
+import { PatientPortalRoot } from './modules/patient-portal/PatientPortalRoot';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
@@ -55,6 +56,17 @@ export default function App() {
 
   if (!userProfile) {
     return <LoginScreen onLoginSuccess={refreshProfile} />;
+  }
+
+  // RBAC Intercept: If the user is a patient, bypass the clinical shell entirely
+  if (userProfile.role === 'patient') {
+    return (
+      <EventStoreProvider>
+        <HIPAAMonitorProvider>
+          <PatientPortalRoot />
+        </HIPAAMonitorProvider>
+      </EventStoreProvider>
+    );
   }
 
   const handleNavigate = (module: string) => {

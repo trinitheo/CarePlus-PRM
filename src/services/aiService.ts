@@ -107,3 +107,28 @@ export async function checkLabMonitoringRequirements(medicationName: string) {
     return { required: false };
   }
 }
+
+export async function generateAdherenceSimulationReport(adherenceLevel: number, conditions: string[], medications: string[]) {
+  try {
+    const prompt = `Act as an encouraging health coach and medical supervisor. A patient has a current simulated adherence rate of ${adherenceLevel}% to their treatment plan.
+    Patient Conditions: ${conditions.join(', ')}
+    Medications: ${medications.join(', ')}
+
+    Analyze this virtual level of adherence (${adherenceLevel}%). Show:
+    1. Chronological progression and likely outcomes of continuing at this rate (risk vs success).
+    2. Specific lifestyle recommendations and behavioral modifications to improve adherence or manage symptoms (nutrition, tracking).
+    3. An encouraging, empathetic clinical summary.
+    
+    Make the tone accessible, empathetic, but scientifically grounded. Return clean, concise markdown output with brief headers and bullet points. Keep it to around 150 words.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+
+    return response.text;
+  } catch (error) {
+    console.error("Adherence Report Generation Error:", error);
+    return "Simulation report currently unavailable. Please continue taking your medications as prescribed and check in with your provider.";
+  }
+}
