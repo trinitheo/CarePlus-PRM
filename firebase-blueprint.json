@@ -10,8 +10,9 @@
         "displayName": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["clinician", "nurse", "allied_health", "admin", "billing", "patient"] 
+          "enum": ["clinician", "nurse", "allied_health", "admin", "billing", "patient", "manager", "front_desk", "read_only"] 
         },
+        "patientId": { "type": "string", "description": "Connected patient record ID for linked charting" },
         "specialty": { "type": "string", "description": "e.g. Physiotherapist, Psychologist, Optometrist" },
         "dashboardSettings": {
           "type": "object",
@@ -50,6 +51,11 @@
         "lastName": { "type": "string" },
         "dateOfBirth": { "type": "string", "format": "date" },
         "gender": { "type": "string" },
+        "authorizedUserIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of user IDs authorized to access this patient's records"
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "mrn", "firstName", "lastName"]
@@ -367,7 +373,7 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "manager", "clinician", "front_desk", "read_only"] },
+        "role": { "type": "string", "enum": ["admin", "manager", "clinician", "nurse", "allied_health", "billing", "patient", "front_desk", "read_only"] },
         "assignedBy": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

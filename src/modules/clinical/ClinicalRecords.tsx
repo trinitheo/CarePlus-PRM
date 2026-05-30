@@ -20,6 +20,7 @@ import { VitalsCard } from './VitalsCard';
 import { InteractionEntryModal } from './InteractionEntryModal';
 import { ClinicalTimelineCard } from './ClinicalTimelineCard';
 import { CareTeamManager } from './CareTeamManager';
+import { PatientProxyManager } from './PatientProxyManager';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { savePatient } from '../../services/clinicalFirestoreService';
 import { Input } from '../../components/ui/input';
@@ -863,6 +864,14 @@ export function ClinicalRecords({
                         </div>
                       )}
                       <CareTeamManager patientId={patientId} />
+                   </div>
+                   <div className="flex-1 min-h-0 relative group">
+                      {isEditingLayout && (
+                        <div className="absolute -top-2 -left-2 z-20 h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
+                          <LayoutDashboard className="h-3 w-3" />
+                        </div>
+                      )}
+                      <PatientProxyManager patientId={patientId} />
                    </div>
                 </div>
               </div>

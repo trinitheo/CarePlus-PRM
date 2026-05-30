@@ -25,6 +25,7 @@ export interface UserProfile {
   npiNumber?: string;
   bio?: string;
   displayName?: string;
+  patientId?: string;
 }
 
 interface ProfileEditorProps {

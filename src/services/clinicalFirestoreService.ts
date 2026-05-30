@@ -257,6 +257,19 @@ export async function savePatient(patientId: string, data: any) {
   return mockDbService.updateItem('patients', patientId, data);
 }
 
+export async function updateAuthorizedUsers(patientId: string, authorizedUserIds: string[]) {
+  try {
+    const patientRef = doc(db, 'patients', patientId);
+    await setDoc(patientRef, {
+      authorizedUserIds,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error('Failed to sync authorized users to Firestore:', e);
+  }
+  return mockDbService.updateItem('patients', patientId, { authorizedUserIds });
+}
+
 /**
  * Provisions a specific patient record for demo purposes: Sarah Mitchell
  * Already in mockDb, so just returns ID

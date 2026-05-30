@@ -26,6 +26,7 @@ export interface Patient {
   tags?: string[];
   chiefComplaint?: string;
   isDraft?: boolean;
+  authorizedUserIds?: string[]; // Accounts/proxies authorized to access this chart
   createdAt: any;
 }
 
@@ -54,6 +55,7 @@ export interface User {
   displayName: string;
   avatar?: string;
   role: UserRole;
+  patientId?: string; // Point to connected Patient chart for patient role / proxies
   specialty?: string | AlliedHealthSpecialty;
   organizationId?: string;
   dashboardSettings?: Record<'compact' | 'medium' | 'expanded', {

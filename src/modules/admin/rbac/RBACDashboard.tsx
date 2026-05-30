@@ -6,7 +6,8 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { db } from '../../../services/clinicalFirestoreService';
-import { updateUserRole, AppRole } from '../../../services/rbacService';
+import { updateUserRole, updateUserPatientLink, AppRole } from '../../../services/rbacService';
+import { mockDbService } from '../../../lib/mockDatabase';
 import { Shield, User, Search, Save, History, Loader2, CheckCircle2, Database, Zap } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
@@ -18,10 +19,12 @@ interface UserData {
   email: string;
   displayName: string;
   currentRole: AppRole;
+  patientId?: string;
 }
 
 export function RBACDashboard() {
   const [users, setUsers] = useState<UserData[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
@@ -46,11 +49,36 @@ export function RBACDashboard() {
           id: doc.id,
           email: data.email || '',
           displayName: data.displayName || 'Unknown User',
-          currentRole: rolesMap.get(doc.id) || data.role || 'read_only'
+          currentRole: rolesMap.get(doc.id) || data.role || 'read_only',
+          patientId: data.patientId || undefined
         });
       });
       
       setUsers(usersList);
+
+      // Fetch patient charts for linkage dropdown
+      let patientsList: any[] = [];
+      try {
+        const patientsSnap = await getDocs(collection(db, 'patients'));
+        patientsSnap.forEach(pDoc => {
+          const d = pDoc.data();
+          patientsList.push({
+            id: pDoc.id,
+            name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || pDoc.id
+          });
+        });
+      } catch (err) {
+        console.warn("Failed real firestore patient fetch in rbac panel, copying mock", err);
+      }
+      if (patientsList.length === 0) {
+        const mockPatients = mockDbService.getCollection('patients');
+        patientsList = mockPatients.map(p => ({
+          id: p.id,
+          name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || p.id
+        }));
+      }
+      setPatients(patientsList);
+
     } catch (err) {
       console.error("Failed to fetch RBAC data", err);
     } finally {
@@ -89,6 +117,21 @@ export function RBACDashboard() {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, currentRole: newRole } : u));
     } catch (err) {
       alert("Failed to update role. Ensure you have admin permissions.");
+    } finally {
+      setIsUpdating(null);
+    }
+  };
+
+  const handlePatientLinkChange = async (userId: string, patientId: string | null) => {
+    setIsUpdating(userId);
+    try {
+      await updateUserPatientLink(userId, patientId);
+      // Update local state
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, patientId: patientId || undefined } : u));
+      toast.success("Patient linkage updated successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update patient linkage");
     } finally {
       setIsUpdating(null);
     }
@@ -185,20 +228,39 @@ export function RBACDashboard() {
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <select 
-                      value={user.currentRole}
-                      disabled={isUpdating === user.id}
-                      onChange={(e) => handleRoleChange(user.id, e.target.value as AppRole)}
-                      className="bg-[#FAFAFA] border border-[#EDEBE9] rounded-lg px-3 py-1.5 text-xs font-bold text-[#242424] focus:ring-2 focus:ring-[#0078D4]/20 outline-none cursor-pointer"
-                    >
-                      <option value="admin">Administrator</option>
-                      <option value="clinician">Clinician</option>
-                      <option value="nurse">Nurse</option>
-                      <option value="billing">Billing Specialist</option>
-                      <option value="allied_health">Allied Health</option>
-                      <option value="patient">Patient</option>
-                      <option value="read_only">Read-Only Staff</option>
-                    </select>
+                    <div className="flex flex-col gap-2">
+                      <select 
+                        value={user.currentRole}
+                        disabled={isUpdating === user.id}
+                        onChange={(e) => handleRoleChange(user.id, e.target.value as AppRole)}
+                        className="bg-[#FAFAFA] border border-[#EDEBE9] rounded-lg px-3 py-1.5 text-xs font-bold text-[#242424] focus:ring-2 focus:ring-[#0078D4]/20 outline-none cursor-pointer w-full max-w-[200px]"
+                      >
+                        <option value="admin">Administrator</option>
+                        <option value="clinician">Clinician</option>
+                        <option value="nurse">Nurse</option>
+                        <option value="billing">Billing Specialist</option>
+                        <option value="allied_health">Allied Health</option>
+                        <option value="patient">Patient</option>
+                        <option value="read_only">Read-Only Staff</option>
+                      </select>
+                      
+                      {user.currentRole === 'patient' && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[10px] font-bold uppercase text-[#616161] tracking-wider whitespace-nowrap">Link Chart:</span>
+                          <select
+                            value={user.patientId || ''}
+                            disabled={isUpdating === user.id}
+                            onChange={(e) => handlePatientLinkChange(user.id, e.target.value || null)}
+                            className="bg-sky-50 border border-sky-100 rounded px-2 py-1 text-[11px] font-bold text-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20 outline-none cursor-pointer w-full max-w-[200px]"
+                          >
+                            <option value="">-- Unlinked --</option>
+                            {patients.map(p => (
+                              <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">

@@ -73,16 +73,31 @@ service cloud.firestore {
       );
     }
 
+    function isLinkedPatient(patientId) {
+      return isSignedIn() && (
+        request.auth.uid == patientId ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('patientId', '') == patientId) ||
+        (exists(/databases/$(database)/documents/patients/$(patientId)) &&
+         'authorizedUserIds' in get(/databases/$(database)/documents/patients/$(patientId)).data &&
+         get(/databases/$(database)/documents/patients/$(patientId)).data.authorizedUserIds.hasAny([request.auth.uid]))
+      );
+    }
+
+    function hasPatientAccess(patientId) {
+      return isCareTeamMember(patientId) || isLinkedPatient(patientId);
+    }
+
     // --- Global Admin Bypass ---
     match /{document=**} {
-      // TEMPORARY FOR DEBUGGING ONLY
-      allow read, write: if request.auth != null;
+      // ONLY Admin can bypass, forcing rules evaluation for staff, clinicians, and patients
+      allow read, write: if isSignedIn() && isAdmin();
     }
 
     // --- Entity Validations ---
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
-             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'billing', 'patient'];
+             data.role in ['clinician', 'nurse', 'allied_health', 'admin', 'billing', 'patient', 'manager', 'front_desk', 'read_only'];
     }
 
     // --- Collection Rules ---
@@ -90,8 +105,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
       allow list: if isSignedIn() && isStaff(); 
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
       allow delete: if isAdmin();
     }
 
@@ -102,64 +117,64 @@ service cloud.firestore {
     }
 
     match /patients/{patientId} {
-      // Allow signed in users to see the demo record for provisioning/demo discovery
-      allow get: if isSignedIn() && (isStaff() || request.auth.uid == patientId || patientId == 'sarah-mitchell-42' || patientId == 'p-1');
+      // Allow clinicians/staff, the patient itself, or authorized proxy users to see the record
+      allow get: if isSignedIn() && (isStaff() || isLinkedPatient(patientId));
       allow list: if isSignedIn() && isStaff();
-      allow create: if isSignedIn() && (isStaff() || request.auth.uid == patientId || patientId == 'sarah-mitchell-42' || patientId == 'p-1');
-      allow update: if isSignedIn() && (isStaff() || request.auth.uid == patientId || patientId == 'sarah-mitchell-42' || patientId == 'p-1');
+      allow create: if isSignedIn() && (isStaff() || request.auth.uid == patientId);
+      allow update: if isSignedIn() && (isStaff() || isLinkedPatient(patientId));
       
       match /care_teams/{memberId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && (isStaff() || request.auth.uid == memberId || patientId == 'p-1' || patientId == 'sarah-mitchell-42');
+        allow read: if isSignedIn() && (isStaff() || isLinkedPatient(patientId));
+        allow write: if isSignedIn() && (isStaff() || request.auth.uid == memberId);
       }
 
       match /clinical_records/{recordId} {
-        allow read: if isCareTeamMember(patientId);
+        allow read: if hasPatientAccess(patientId);
         allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse() || isAlliedHealth());
         allow update: if isAdmin() || (isAuthor(existing()) && !existing().get('isFinalized', false));
       }
 
       match /prescriptions/{prescriptionId} {
-        allow read: if isCareTeamMember(patientId);
-        // Patients can create refill requests (refillRequested: true)
-        allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse() || request.auth.uid == patientId);
+        allow read: if hasPatientAccess(patientId);
+        // Patients and proxies can submit refill requests (refillRequested: true)
+        allow create: if hasPatientAccess(patientId) && (isClinician() || isNurse() || isLinkedPatient(patientId));
         allow update: if isCareTeamMember(patientId) && (isClinician() || isNurse());
       }
 
       match /investigations/{investigationId} {
-        allow read: if isCareTeamMember(patientId);
+        allow read: if hasPatientAccess(patientId);
         allow write: if isCareTeamMember(patientId) && (isClinician() || isAdmin());
       }
 
       match /procedures/{procedureId} {
-        allow read: if isCareTeamMember(patientId);
+        allow read: if hasPatientAccess(patientId);
         allow write: if isCareTeamMember(patientId) && (isClinician() || isNurse());
       }
 
       match /vitals/{vitalId} {
-        allow read: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse() || isAlliedHealth());
+        allow read: if hasPatientAccess(patientId);
+        allow create: if hasPatientAccess(patientId) && (isClinician() || isNurse() || isAlliedHealth() || isLinkedPatient(patientId));
         allow update: if isCareTeamMember(patientId) && (isClinician() || isNurse());
       }
 
       match /referrals/{referralId} {
-        allow read: if isCareTeamMember(patientId) && !isNurse(); // Nurses cannot see referrals
+        allow read: if hasPatientAccess(patientId) && !isNurse(); // Nurses cannot see referrals
         allow write: if isCareTeamMember(patientId) && (isClinician() || isAlliedHealth());
       }
 
       match /interactions/{interactionId} {
-        allow read: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId);
+        allow read: if hasPatientAccess(patientId);
+        allow create: if hasPatientAccess(patientId);
       }
 
       match /health_records/{recordId} {
-        allow read: if isCareTeamMember(patientId);
-        allow create: if isCareTeamMember(patientId) || isSignedIn();
+        allow read: if hasPatientAccess(patientId);
+        allow create: if hasPatientAccess(patientId) || isSignedIn();
       }
 
       match /clinical_intakes/{intakeId} {
-        allow read: if isCareTeamMember(patientId);
-        allow write: if isCareTeamMember(patientId) || isStaff();
+        allow read: if hasPatientAccess(patientId);
+        allow write: if hasPatientAccess(patientId) || isStaff();
       }
     }
 
