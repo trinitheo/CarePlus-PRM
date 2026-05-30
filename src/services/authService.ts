@@ -1,52 +1,102 @@
 
 import { User, UserRole } from '../types';
 import { db, auth } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, addDoc, query, where } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
 
 export interface CurrentUser extends User {
   patientId?: string;
 }
 
-const mockUsers: Array<{
-  id: string;
-  displayName: string;
-  email: string;
-  role: UserRole;
-  avatar: string;
-  status: 'Active' | 'Inactive';
-}> = [
-  { id: 'admin-1', displayName: 'Dr. Evelyn Chen', email: 'e.chen@careplus.ai', role: 'admin', avatar: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-  { id: 'clinician-1', displayName: 'Dr. David Smith', email: 'd.smith@careplus.ai', role: 'clinician', avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da60710?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-  { id: 'nurse-1', displayName: 'Robert Johnson', email: 'r.johnson@careplus.ai', role: 'nurse', avatar: 'https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-  { id: 'manager-1', displayName: 'Alicia Rodriguez', email: 'a.rodriguez@careplus.ai', role: 'manager', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-  { id: 'billing-1', displayName: 'Sandra Dee', email: 's.dee@careplus.ai', role: 'billing', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-  { id: 'allied-1', displayName: 'Michael Lee', email: 'm.lee@careplus.ai', role: 'allied_health', avatar: 'https://images.unsplash.com/photo-1556157382-97eda2d62296?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-  { id: 'patient-1', displayName: 'Benjamin Carter', email: 'b.carter@personal.com', role: 'patient', avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=200&auto=format&fit=crop', status: 'Active' },
-];
-
 const SESSION_KEY = 'careplus_current_user';
 
 export const authService = {
   async getDemoUsers() {
-    return mockUsers;
+    return this.getRegisteredUsers();
+  },
+
+  async getRegisteredUsers(): Promise<any[]> {
+    try {
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      const qSnap = await getDocs(collection(db, 'registered_users'));
+      return qSnap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+    } catch (err) {
+      console.warn("Failed to fetch registered users from Firestore:", err);
+      return [];
+    }
+  },
+
+  async registerUser(displayName: string, email: string, role: UserRole, avatar?: string): Promise<any> {
+    try {
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      
+      const emailLower = email.toLowerCase().trim();
+      const defaultAvatar = avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200&auto=format&fit=crop`;
+      
+      const payload = {
+        displayName,
+        email: emailLower,
+        role,
+        avatar: defaultAvatar,
+        status: 'Active',
+        createdAt: new Date().toISOString()
+      };
+
+      // Check if user already exists
+      const q = query(collection(db, 'registered_users'), where('email', '==', emailLower));
+      const qSnap = await getDocs(q);
+      if (!qSnap.empty) {
+        throw new Error("A profile with this email address already exists.");
+      }
+
+      const docRef = await addDoc(collection(db, 'registered_users'), payload);
+      return { id: docRef.id, ...payload };
+    } catch (err: any) {
+      console.error("Failed to register user in Firestore:", err);
+      throw err;
+    }
   },
 
   async loginWithDemo(email: string): Promise<CurrentUser> {
-    const userMatched = mockUsers.find(u => u.email === email);
-    if (!userMatched) throw new Error("User not found");
+    try {
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      
+      const emailLower = email.toLowerCase().trim();
+      const q = query(collection(db, 'registered_users'), where('email', '==', emailLower));
+      const qSnap = await getDocs(q);
+      
+      if (qSnap.empty) {
+        throw new Error("No registered profile found matching this email. Please check your registry or register a new account.");
+      }
 
-    const user: CurrentUser = {
-      id: userMatched.id,
-      displayName: userMatched.displayName,
-      email: userMatched.email,
-      role: userMatched.role,
-      avatar: userMatched.avatar,
-      patientId: userMatched.role === 'patient' ? `p-1` : undefined,
-      createdAt: new Date().toISOString()
-    };
+      const docSnap = qSnap.docs[0];
+      const userMatched = docSnap.data();
 
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    return user;
+      const user: CurrentUser = {
+        id: docSnap.id,
+        displayName: userMatched.displayName,
+        email: userMatched.email,
+        role: userMatched.role as UserRole,
+        avatar: userMatched.avatar,
+        patientId: userMatched.patientId || (userMatched.role === 'patient' ? `p-${docSnap.id}` : undefined),
+        createdAt: userMatched.createdAt || new Date().toISOString()
+      };
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      return user;
+    } catch (err: any) {
+      console.error("Login lookup failed:", err);
+      throw err;
+    }
   },
 
   logout() {

@@ -132,3 +132,45 @@ export async function generateAdherenceSimulationReport(adherenceLevel: number, 
     return "Simulation report currently unavailable. Please continue taking your medications as prescribed and check in with your provider.";
   }
 }
+
+export async function generatePlainLanguageSummary(soapNote: {
+  title?: string;
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+  icd10Codes?: string[];
+  content?: string;
+}) {
+  try {
+    const prompt = `As a compassionate primary care physician, convert this highly technical clinician-only SOAP Encounter Note into a friendly, clear, plain-language patient summary.
+
+    Encounter Title: ${soapNote.title || 'Clinical Consultation'}
+    Subjective (Patient's reported context): ${soapNote.subjective || soapNote.content || 'None reported'}
+    Objective (Clinician physical observations & vitals): ${soapNote.objective || 'None logged'}
+    Assessment (Medical diagnosis & clinical understanding): ${soapNote.assessment || 'None logged'}
+    Plan (Treatment instructions, tests, next steps): ${soapNote.plan || 'No plan specified'}
+    ICD-10 Diagnostic Codes: ${(soapNote.icd10Codes || []).join(', ') || 'None'}
+
+    Follow these rules:
+    - REDACT and do NOT mention any overly dry clinical jargon or sensitive internal clinician-only shorthand in its raw form. Convert them explaining what they mean in normal human words.
+    - Translate any ICD-10 codes into plain, comforting terms (e.g., E08/E11 means Type 2 Diabetes, E28.2 means PCOS) and explain them briefly in 1 sentence.
+    - Provide an encouraging "Patient-Facing Summary" explaining:
+      1. What We Discussed/What You Reported
+      2. What We Measured/Observed
+      3. What This Means (Our Assessment in simple terms)
+      4. Your Simple Action Plan (Step-by-step next steps)
+    - Keep the tone empathetic, accessible, clear, and reassuring. Keep the total word count under 250 words, using clean markdown with bullet points.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+
+    return response.text;
+  } catch (error) {
+    console.error("Plain Language Generation Error:", error);
+    return "Plain English summary is currently being compiled. Please refer to your Action Plan or contact your care team.";
+  }
+}
+

@@ -55,6 +55,28 @@ const CONDITION_DESCRIPTIONS: Record<string, {
     targetValue: 'Hormonal and insulin sensitivity balance',
     tip: 'Regular resistance training optimizes natural muscular receptor activity, significantly lessening androgenic symptoms over time.',
     icon: Brain
+  },
+  'Rheumatoid Arthritis (M05.79)': {
+    friendlyName: 'Rheumatoid Arthritis with Rheumatoid Factor (M05.79)',
+    description: 'A chronic, systemic autoimmune inflammatory disease targeting synovial tissue in multiple symmetric joint spaces.',
+    status: 'In Controlled Remission',
+    statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    managedBy: 'Dr. G. Theogate (Rheumatology)',
+    targetTitle: 'Core Inflammatory Goal',
+    targetValue: 'CRP < 5.0 mg/L (Latest: 3.2 mg/L)',
+    tip: 'Morning warmth therapy followed by finger tendon gliding exercises reduces early stiffness and preserves joint kinematics.',
+    icon: Stethoscope
+  },
+  'Rheumatoid Arthritis': {
+    friendlyName: 'Rheumatoid Arthritis Status',
+    description: 'A chronic, systemic autoimmune inflammatory disease targeting synovial tissue in multiple symmetric joint spaces.',
+    status: 'In Controlled Remission',
+    statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    managedBy: 'Dr. G. Theogate (Rheumatology)',
+    targetTitle: 'Core Inflammatory Goal',
+    targetValue: 'CRP < 5.0 mg/L (Latest: 3.2 mg/L)',
+    tip: 'Morning warmth therapy followed by finger tendon gliding exercises reduces early stiffness and preserves joint kinematics.',
+    icon: Stethoscope
   }
 };
 
@@ -75,10 +97,57 @@ export function DailyActionPlan({ patient, latestVitalRecord, bloodGlucoseStatus
   };
 
   const clinicalDirectives = useMemo(() => {
-    const liveSteps = latestVitalRecord?.steps !== undefined && latestVitalRecord?.steps !== null ? Number(latestVitalRecord.steps) : 8420;
+    const liveSteps = latestVitalRecord?.steps !== undefined && latestVitalRecord?.steps !== null ? Number(latestVitalRecord.steps) : 7800;
     const liveSleep = latestVitalRecord?.sleep !== undefined && latestVitalRecord?.sleep !== null ? Number(latestVitalRecord.sleep) : 7.6;
     const liveGlucose = bloodGlucoseStatus.val;
     const liveHyd = latestVitalRecord?.hydration !== undefined && latestVitalRecord?.hydration !== null ? Number(latestVitalRecord.hydration) : 92;
+
+    const isRA = (patient?.conditions || []).some((c: string) => c.toLowerCase().includes('arthritis') || c.toLowerCase().includes('rheumatoid'));
+
+    if (isRA) {
+      return [
+        {
+          id: 'dir-joint-exercises',
+          action: 'Perform finger and wrist stretching exercises',
+          instruction: 'Engage in 10 minutes of finger tendon gliding and gentle wrist physical therapy stretches.',
+          trackingInfo: 'Completed daily joint physical therapy',
+          category: 'Physical Therapy',
+          status: 'Managed by Physiotherapy'
+        },
+        {
+          id: 'dir-meds-ra',
+          action: 'Verify weekly Immunomodulator dosage',
+          instruction: 'Take Methotrexate and Folate exactly as scheduled to prevent inflammation flare-ups.',
+          trackingInfo: 'Weekly Dose Logged',
+          category: 'Pharmacotherapy',
+          status: 'Managed by Rheumatology'
+        },
+        {
+          id: 'dir-steps',
+          action: 'Achieve low-impact step guidelines',
+          instruction: 'Engage in gentle continuous walking to maintain lower extremity joint flexibility.',
+          trackingInfo: `Current Progress: ${liveSteps.toLocaleString()} steps`,
+          category: 'Physical Activity',
+          status: liveSteps >= 7000 ? 'Target achieved today!' : 'Pending milestone'
+        },
+        {
+          id: 'dir-sleep',
+          action: 'Secure circadian restorative sleep window',
+          instruction: 'Aim for 7.5+ hours of sound sleep to manage inflammation and fatigue triggers.',
+          trackingInfo: `Latest sleep duration: ${liveSleep} hours`,
+          category: 'Circadian Balance',
+          status: liveSleep >= 7.0 ? 'Optimal recovery logged' : 'Below target'
+        },
+        {
+          id: 'dir-hydration',
+          action: 'Support fluid equilibrium & tissue hydration',
+          instruction: 'Drink 2.5L filtered water daily to optimize synovial joint lubrication.',
+          trackingInfo: `Tissue Hydration: ${liveHyd}%`,
+          category: 'Hydration Status',
+          status: liveHyd >= 85 ? 'Optimally hydrated' : 'Increase intake'
+        }
+      ];
+    }
 
     return [
       {
@@ -122,7 +191,7 @@ export function DailyActionPlan({ patient, latestVitalRecord, bloodGlucoseStatus
         status: liveHyd >= 85 ? 'Optimally hydrated' : 'Increase intake'
       }
     ];
-  }, [latestVitalRecord, bloodGlucoseStatus]);
+  }, [latestVitalRecord, bloodGlucoseStatus, patient]);
 
   const completionPercent = useMemo(() => {
     const total = clinicalDirectives.length;

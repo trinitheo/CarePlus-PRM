@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { HealthBoard } from './views/HealthBoard';
 import { AdherenceSimulator } from './views/AdherenceSimulator';
 import { WellnessClasses } from './views/WellnessClasses';
+import { MyConsultations } from './views/MyConsultations';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { useQueryModel } from '../../store/eventStore';
 
-type PortalView = 'board' | 'simulator' | 'classes';
+type PortalView = 'board' | 'simulator' | 'classes' | 'consultations';
 
 export function PatientPortalRoot() {
   const [activeTab, setActiveTab ] = useState<PortalView>('board');
   const { userProfile } = useCurrentUser();
-  const patientId = userProfile?.id || 'sarah-mitchell-42';
+  const patientId = userProfile?.patientId || (userProfile?.role === 'patient' && userProfile?.patientId) || 'pat-marcus-001';
   const patientData = usePatientClinicalData(patientId);
   const { appointments } = useQueryModel();
 
@@ -34,8 +35,14 @@ export function PatientPortalRoot() {
             Adherence Score Simulator
           </button>
           <button 
+            onClick={() => setActiveTab('consultations')}
+            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'consultations' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            My Consultation Notes
+          </button>
+          <button 
             onClick={() => setActiveTab('classes')}
-            className={`py-5 text-sm font-bold tracking-wide transition-colors border-[#7A9876] border-b-4 cursor-pointer ${activeTab === 'classes' ? 'border-[#7A9876] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'classes' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Classes & Wellness
           </button>
@@ -43,7 +50,7 @@ export function PatientPortalRoot() {
       </div>
 
       {/* Scrollable Isolated View Container */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full">
         {activeTab === 'board' && (
           <HealthBoard 
             patientData={patientData} 
@@ -52,6 +59,7 @@ export function PatientPortalRoot() {
           />
         )}
         {activeTab === 'simulator' && <AdherenceSimulator />}
+        {activeTab === 'consultations' && <MyConsultations patientData={patientData} />}
         {activeTab === 'classes' && <WellnessClasses />}
       </div>
     </div>

@@ -18,7 +18,7 @@ interface Interaction {
   id: string;
   patientId: string;
   authorId: string;
-  authorRole: UserRole;
+  authorRole: string;
   type: 'clinical' | 'nursing' | 'pt' | 'social_care' | 'financial' | 'support_group';
   content: string;
   category?: string;

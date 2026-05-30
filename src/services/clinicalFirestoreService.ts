@@ -12,11 +12,56 @@ import {
   limit, 
   onSnapshot,
   serverTimestamp,
-  deleteDoc
+  deleteDoc,
+  addDoc
 } from 'firebase/firestore';
 import { mockDbService, MockDb } from '../lib/mockDatabase';
 
 export { db, auth };
+
+export async function resetAppToNewInstall() {
+  const collectionsToWipe = ['users', 'roles', 'appointments', 'messages', 'audit_logs', 'clinical_records', 'registered_users'];
+  
+  // Wipe standard collections
+  for (const collName of collectionsToWipe) {
+    try {
+      const qSnap = await getDocs(collection(db, collName));
+      const deletePromises = qSnap.docs.map(docSnap => deleteDoc(doc(db, collName, docSnap.id)));
+      await Promise.all(deletePromises);
+    } catch (e) {
+      console.warn(`Could not wipe collection ${collName} in Firestore:`, e);
+    }
+  }
+
+  // Wipe patients & their nested subcollections
+  try {
+    const patientsSnap = await getDocs(collection(db, 'patients'));
+    for (const pDoc of patientsSnap.docs) {
+      const subColls = ['care_teams', 'clinical_records', 'prescriptions', 'investigations', 'procedures'];
+      for (const sub of subColls) {
+        try {
+          const subSnap = await getDocs(collection(db, 'patients', pDoc.id, sub));
+          const subPromises = subSnap.docs.map(subDoc => deleteDoc(doc(db, 'patients', pDoc.id, sub, subDoc.id)));
+          await Promise.all(subPromises);
+        } catch (_) {}
+      }
+      await deleteDoc(doc(db, 'patients', pDoc.id));
+    }
+  } catch (e) {
+    console.warn("Could not wipe patients collection or subcollections in Firestore:", e);
+  }
+
+  // Clear system sessions
+  localStorage.clear();
+  sessionStorage.clear();
+
+  // Sign out from Firebase Auth
+  try {
+    await auth.signOut();
+  } catch (err) {
+    console.warn("Sign out during raw reset failed:", err);
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -341,15 +386,29 @@ export async function completeCourtesyCall(taskId: string, notes: string) {
 }
 
 export async function markMessageRead(messageId: string) {
-  return mockDbService.updateItem('messages' as any, messageId, { read: true });
+  mockDbService.updateItem('messages' as any, messageId, { read: true });
+  try {
+    const docRef = doc(db, 'messages', messageId);
+    await updateDoc(docRef, { read: true });
+  } catch (error) {
+    console.warn("Firestore markMessageRead fallback:", error);
+  }
 }
 
 export async function createMessage(data: any) {
-  return mockDbService.addItem('messages' as any, {
+  const payload = {
     ...data,
     createdAt: new Date().toISOString(),
     status: 'sent'
-  });
+  };
+  const mockResult = mockDbService.addItem('messages' as any, payload);
+  try {
+    const docRef = await addDoc(collection(db, 'messages'), payload);
+    return { ...payload, id: docRef.id };
+  } catch (error) {
+    console.warn("Firestore createMessage fallback:", error);
+    return mockResult;
+  }
 }
 
 export async function createRefillRequest(patientId: string, data: any) {

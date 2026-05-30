@@ -440,9 +440,36 @@
         "createdBy": { "type": "string" }
       },
       "required": ["name", "type", "fields"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Secure secure message between clinician and user/patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromUserId": { "type": "string" },
+        "fromUserName": { "type": "string" },
+        "fromRole": { "type": "string" },
+        "toUserId": { "type": "string" },
+        "toUserName": { "type": "string" },
+        "toRole": { "type": "string" },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "read": { "type": "boolean" },
+        "status": { "type": "string" },
+        "priority": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUserId", "toUserId", "subject", "body"]
     }
   },
   "firestore": {
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Direct communications and refills"
+    },
     "/roles/{userId}": {
       "schema": "UserRole",
       "description": "RBAC assignment"

@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useQueryModel } from '../../store/eventStore';
 import { db } from '../../lib/firebase';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { 
   createMessage, 
   createRefillRequest, 
@@ -230,6 +230,19 @@ export function PatientPortalDashboard() {
   const [homeVisitTime, setHomeVisitTime] = useState('Morning (8:00 AM - 12:00 PM)');
   const [homeVisitNotes, setHomeVisitNotes] = useState('');
 
+  // Patient Booking input fields
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [bookingProviderId, setBookingProviderId] = useState('mitchell_provider');
+  const [bookingDate, setBookingDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // default to tomorrow
+    return d.toISOString().split('T')[0];
+  });
+  const [bookingTimeSlot, setBookingTimeSlot] = useState('09:30 AM');
+  const [bookingVisitType, setBookingVisitType] = useState<'in_clinic' | 'telehealth'>('in_clinic');
+  const [bookingPriority, setBookingPriority] = useState<'routine' | 'urgent'>('routine');
+  const [bookingReason, setBookingReason] = useState('');
+
   // Status logs
   const [submitting, setSubmitting] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -422,13 +435,21 @@ export function PatientPortalDashboard() {
 
     try {
       await createMessage({
-        senderId: userProfile?.id || 'sarah-mitchell-42',
-        senderName: userProfile?.displayName || 'Sarah Mitchell',
+        fromUserId: userProfile?.patientId || userProfile?.id || 'pat-marcus-001',
+        fromUserName: userProfile?.displayName || 'Marcus Everett',
+        fromRole: 'patient',
+        senderId: userProfile?.patientId || userProfile?.id || 'pat-marcus-001',
+        senderName: userProfile?.displayName || 'Marcus Everett',
         senderRole: 'patient',
+        toUserId: selectedProvider.id,
+        toUserName: selectedProvider.name,
+        toRole: 'clinician',
         recipientId: selectedProvider.id,
         recipientName: selectedProvider.name,
         subject: `Re: ${selectedProvider.currentIssue}`,
+        body: messageBody,
         text: messageBody,
+        read: false,
         status: 'sent',
         priority: 'routine'
       });
@@ -481,8 +502,8 @@ export function PatientPortalDashboard() {
       const visitId = `home-${Date.now()}`;
       const payload = {
         id: visitId,
-        patientId: userProfile?.id || 'sarah-mitchell-42',
-        patientName: userProfile?.displayName || 'Sarah Mitchell',
+        patientId: userProfile?.patientId || userProfile?.id || 'pat-marcus-001',
+        patientName: userProfile?.displayName || 'Marcus Everett',
         type: 'home_triage',
         specialty: 'Family Nursing Triage Unit',
         symptoms: homeVisitSymptoms,
@@ -508,19 +529,139 @@ export function PatientPortalDashboard() {
     }
   };
 
+  const handleBookAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bookingReason.trim()) {
+      triggerToast("Please enter a reason for the consultation.");
+      return;
+    }
+    setSubmitting(true);
+    playHapticSound();
+
+    try {
+      const apptId = `appt-${Date.now()}`;
+      
+      // Calculate appointment time
+      const [timeStr, ampm] = bookingTimeSlot.split(' ');
+      let [hours, minutes] = timeStr.split(':').map(Number);
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      
+      const apptDate = new Date(bookingDate);
+      apptDate.setHours(hours, minutes, 0, 0);
+
+      const provider = healthcareProviders.find(p => p.id === bookingProviderId);
+
+      const payload = {
+        id: apptId,
+        patientId: userProfile?.patientId || userProfile?.id || 'pat-marcus-001',
+        patientName: userProfile?.displayName || 'Marcus Everett',
+        providerId: bookingProviderId,
+        providerName: provider?.name || 'Dr. G. Theogate',
+        time: apptDate.toISOString(),
+        duration: 30,
+        status: 'scheduled',
+        visitType: bookingVisitType,
+        priority: bookingPriority,
+        reason: bookingReason,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Write directly to Firestore
+      await addDoc(collection(db, 'appointments'), payload);
+
+      triggerToast('Appointment Booked Successfully!');
+      setBookingReason('');
+      setIsBookingOpen(false);
+    } catch (err) {
+      console.error("Booking error:", err);
+      triggerToast('Error scheduling- booking saved.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelAppointment = async (appointmentId: string) => {
+    playHapticSound();
+    
+    try {
+      const apptsRef = collection(db, 'appointments');
+      const q = query(apptsRef, where("id", "==", appointmentId));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docRef = doc(db, 'appointments', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { 
+          status: 'cancelled',
+          updatedAt: new Date().toISOString()
+        });
+        triggerToast('Appointment Cancelled.');
+      } else {
+        triggerToast('Could not find appointment to cancel.');
+      }
+    } catch (err) {
+      console.error("Cancellation error:", err);
+      triggerToast('Error updating appointment status.');
+    }
+  };
+
   // Dynamic Upcoming Schedule listing merging clinical appointments + registered community events
   const userAppointments = useMemo(() => {
     const list = Object.values(appointments || {})
-      .filter((a: any) => a.patientId === userProfile?.id)
-      .map((a: any) => ({
-        id: a.id,
-        title: `${a.type === 'home_triage' ? 'Mobile Home Triage' : 'Clinical Consultation'}`,
-        time: `${a.preferredDate || a.date || 'TBD'} - ${a.preferredTime || a.time || 'TBD'}`,
-        badgeColor: 'bg-indigo-50 border-indigo-100 text-indigo-700',
-        icon: Stethoscope,
-        location: a.type === 'home_triage' ? 'Home Dispatch' : 'Main Clinic Building',
-        info: a.notes || 'Routine follow-up'
-      }));
+      .filter((a: any) => a.patientId === (userProfile?.id || 'sarah-mitchell-42') && a.status !== 'cancelled')
+      .map((a: any) => {
+        let title = 'Clinical Consultation';
+        let timeFormatted = 'TBD';
+        let isHomeVisit = false;
+        
+        if (a.type === 'home_triage') {
+          title = 'Mobile Home Triage';
+          timeFormatted = `${a.preferredDate || 'Tomorrow'} - ${a.preferredTime || 'Morning'}`;
+          isHomeVisit = true;
+        } else {
+          title = a.reason || 'General Health Consultation';
+          if (a.providerName) {
+            title += ` with ${a.providerName}`;
+          } else if (a.providerId) {
+            const provider = healthcareProviders.find(p => p.id === a.providerId);
+            if (provider) title += ` with ${provider.name}`;
+          }
+          
+          if (a.time) {
+            try {
+              const d = new Date(a.time);
+              timeFormatted = d.toLocaleDateString(undefined, { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+              });
+            } catch (e) {
+              timeFormatted = String(a.time);
+            }
+          }
+        }
+
+        return {
+          id: a.id,
+          title,
+          time: timeFormatted,
+          badgeColor: a.visitType === 'telehealth' 
+            ? 'bg-sky-50 border-sky-100 text-sky-700' 
+            : 'bg-indigo-50 border-indigo-100 text-indigo-700',
+          icon: Stethoscope,
+          location: a.type === 'home_triage' 
+            ? 'Home Dispatch' 
+            : a.visitType === 'telehealth' || a.visitType === 'virtual'
+              ? 'Virtual Telehealth Link' 
+              : 'Main Clinic Building',
+          info: a.notes || a.reason || 'Routine follow-up',
+          isClinicAppt: a.type !== 'home_triage',
+          status: a.status || 'scheduled'
+        };
+      });
 
     // Append joined fitness classes
     const joinedFitness = MOCK_FITNESS_CLASSES
@@ -532,7 +673,8 @@ export function PatientPortalDashboard() {
         badgeColor: 'bg-emerald-50 border-emerald-100 text-emerald-700',
         icon: Activity,
         location: f.location,
-        info: `Instructor: ${f.instructor} • Est. burn: ${f.calories} kcal`
+        info: `Instructor: ${f.instructor} • Est. burn: ${f.calories} kcal`,
+        isClinicAppt: false
       }));
 
     // Append joined social events
@@ -545,7 +687,8 @@ export function PatientPortalDashboard() {
         badgeColor: 'bg-amber-50 border-amber-100 text-amber-700',
         icon: Users,
         location: g.location,
-        info: g.description
+        info: g.description,
+        isClinicAppt: false
       }));
 
     return [...list, ...joinedFitness, ...joinedSocial];
@@ -960,32 +1103,53 @@ export function PatientPortalDashboard() {
                     </h3>
                     <p className="text-[10px] font-bold text-[#A19F9D] uppercase mt-0.5 tracking-wide">Integrated clinic appointments & wellness sessions</p>
                   </div>
-                  <Badge className="bg-[#EDEBE9] border-[#EDEBE9] text-[#616161] font-extrabold uppercase text-[8px] tracking-widest">
-                    {userAppointments.length} UPCOMING
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => { playHapticSound(); setIsBookingOpen(true); }}
+                      className="h-7 px-2.5 bg-[#0078D4] hover:bg-[#005A9E] text-white text-[9px] font-black uppercase tracking-wider rounded-lg flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Plus size={10} strokeWidth={3} /> Book
+                    </button>
+                    <Badge className="bg-[#EDEBE9] border-[#EDEBE9] text-[#616161] font-extrabold uppercase text-[8px] tracking-widest">
+                      {userAppointments.length} UPCOMING
+                    </Badge>
+                  </div>
                 </div>
-
+ 
                 <div className="space-y-4">
                   {userAppointments.map(item => (
                     <div 
                       key={item.id} 
-                      className={`flex gap-4 p-4 rounded-xl border transition-all hover:bg-slate-50/50 bg-[#FAF9F8]`}
+                      className={`flex flex-col gap-3 p-4 rounded-xl border transition-all hover:bg-slate-50/50 bg-[#FAF9F8]`}
                     >
-                      <div className={`p-3 rounded-xl h-fit border shrink-0 ${item.badgeColor}`}>
-                        <item.icon size={18} />
+                      <div className="flex gap-4">
+                        <div className={`p-3 rounded-xl h-fit border shrink-0 ${item.badgeColor}`}>
+                          <item.icon size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-black text-slate-900 truncate leading-tight mb-1">{item.title}</h4>
+                          <p className="text-[10px] font-bold text-[#757370] flex items-center gap-1.5 mb-1 bg-white/70 py-0.5 px-2 rounded w-fit border border-slate-100">
+                            <Clock size={11} className="text-[#0078D4]" /> {item.time}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 mb-1.5">
+                            <MapPin size={11} className="text-rose-500" /> {item.location}
+                          </p>
+                          <p className="text-[11px] text-[#242424] font-medium leading-relaxed italic bg-white/40 p-2 rounded-lg border border-slate-100 border-dashed">
+                            {item.info}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-black text-slate-900 truncate leading-tight mb-1">{item.title}</h4>
-                        <p className="text-[10px] font-bold text-[#757370] flex items-center gap-1.5 mb-1 bg-white/70 py-0.5 px-2 rounded w-fit border border-slate-100">
-                          <Clock size={11} className="text-[#0078D4]" /> {item.time}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 mb-1.5">
-                          <MapPin size={11} className="text-rose-500" /> {item.location}
-                        </p>
-                        <p className="text-[11px] text-[#242424] font-medium leading-relaxed italic bg-white/40 p-2 rounded-lg border border-slate-100 border-dashed">
-                          {item.info}
-                        </p>
-                      </div>
+                      
+                      {item.isClinicAppt && (
+                        <div className="flex justify-end pt-1 border-t border-slate-100/60">
+                          <button
+                            onClick={() => handleCancelAppointment(item.id)}
+                            className="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+                          >
+                            Cancel Visit Selection
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
 
@@ -1561,6 +1725,176 @@ export function PatientPortalDashboard() {
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <>Submit Request</>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 4: CLINIC / TELEHEALTH BOOKING ENGINE */}
+      <Dialog open={isBookingOpen} onOpenChange={setIsBookingOpen}>
+        <DialogContent className="max-w-lg w-full bg-white border border-[#EDEBE9] rounded-2xl shadow-xl p-6 font-sans">
+          <DialogHeader className="pb-3 border-b border-[#EDEBE9]">
+            <DialogTitle className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+              <Calendar size={16} className="text-indigo-600" /> Book Health Consultation
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleBookAppointment} className="space-y-4 pt-4 overflow-y-auto max-h-[75vh] pr-1">
+            {/* 1. Provider Cards Selector */}
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-widest text-[#757370] mb-2">Select Clinical Specialist</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {healthcareProviders.map(provider => {
+                  const isSelected = bookingProviderId === provider.id;
+                  return (
+                    <button
+                      key={provider.id}
+                      type="button"
+                      onClick={() => { playHapticSound(); setBookingProviderId(provider.id); }}
+                      className={`p-3 border rounded-xl text-left transition-all flex flex-col justify-between ${
+                        isSelected 
+                          ? 'bg-indigo-50 border-indigo-400 text-indigo-900 shadow-sm shadow-indigo-100' 
+                          : 'bg-[#FAFAFA] border-[#EDEBE9] text-[#616161] hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className={`h-6 w-6 rounded-full flex items-center justify-center font-black text-[10px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                          {provider.avatar}
+                        </div>
+                        <span className="text-[11px] font-black tracking-tight truncate leading-none">{provider.name}</span>
+                      </div>
+                      <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider line-clamp-1">{provider.specialty}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Date and Visit Type */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-[8px] font-black uppercase tracking-widest text-[#757370] mb-1.5">Consultation Date</label>
+                <input 
+                  type="date"
+                  value={bookingDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                  className="w-full bg-[#FAFAFA] border border-[#EDEBE9] rounded-xl px-3 py-2 text-xs font-bold text-[#242424] focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[8px] font-black uppercase tracking-widest text-[#757370] mb-1.5">Visit Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'in_clinic', label: 'In-Clinic', icon: Stethoscope },
+                    { value: 'telehealth', label: 'Telehealth', icon: Smartphone }
+                  ].map(type => {
+                    const isSelected = bookingVisitType === type.value;
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => { playHapticSound(); setBookingVisitType(type.value as any); }}
+                        className={`py-2 px-3 border rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                          isSelected 
+                            ? 'bg-[#0078D4] border-[#005A9E] text-white' 
+                            : 'bg-white border-[#EDEBE9] text-[#616161] hover:bg-slate-50'
+                        }`}
+                      >
+                        <type.icon size={13} />
+                        {type.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Availability Time Slot Picker */}
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-widest text-[#757370] mb-2">Available Daily Time Slots</label>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {['09:00 AM', '10:15 AM', '11:15 AM', '01:30 PM', '02:45 PM', '04:00 PM'].map(slot => {
+                  const isSelected = bookingTimeSlot === slot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => { playHapticSound(); setBookingTimeSlot(slot); }}
+                      className={`py-2 rounded-xl text-[10px] font-black text-center transition-all border ${
+                        isSelected 
+                          ? 'bg-emerald-500 border-emerald-600 text-white shadow-xs font-bold' 
+                          : 'bg-[#FAFAFA] border-[#EDEBE9] text-[#616161] hover:bg-slate-100'
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4. Priority Triage Level */}
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-widest text-[#757370] mb-1.5">Triage Priority Assessment</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'routine', label: 'Routine Preventative Care' },
+                  { value: 'urgent', label: 'Urgent Symptom Review' }
+                ].map(p => {
+                  const isSelected = bookingPriority === p.value;
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => { playHapticSound(); setBookingPriority(p.value as any); }}
+                      className={`py-2 px-3 border rounded-xl text-[10px] font-black transition-all ${
+                        isSelected 
+                          ? 'bg-rose-50 border-rose-300 text-rose-700 font-bold' 
+                          : 'bg-[#FAFAFA] border-[#EDEBE9] text-[#616161]'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 5. Reason for Consultation */}
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-widest text-[#757370] mb-1.5">Reason for Booking & Symptoms</label>
+              <Textarea 
+                placeholder="Briefly explain your health concerns, physiological changes, or questions..."
+                value={bookingReason}
+                onChange={(e) => setBookingReason(e.target.value)}
+                className="min-h-18 bg-[#FAFAFA] border border-[#EDEBE9] rounded-xl font-medium text-xs text-slate-800"
+                required
+              />
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex gap-3 pt-2">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => setIsBookingOpen(false)}
+                className="flex-1 hover:bg-slate-50 text-slate-600 font-extrabold text-[10px] uppercase tracking-widest bg-white border border-[#EDEBE9] py-3.5"
+              >
+                Cancel Open [ESC]
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={submitting}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-widest py-3.5 flex items-center justify-center gap-1.5"
+              >
+                {submitting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <>Book Appointment Now</>
                 )}
               </Button>
             </div>

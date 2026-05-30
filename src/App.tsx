@@ -50,7 +50,7 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  if (loading && !userProfile) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[#FAFAFA]">
         <div className="flex flex-col items-center gap-4">

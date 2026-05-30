@@ -13,6 +13,8 @@ import { Card } from '../../components/ui/card';
 import { ComposeMessageModal } from '../dashboard/ComposeMessageModal';
 import { mockDbService } from '../../lib/mockDatabase';
 import { markMessageRead } from '../../services/clinicalFirestoreService';
+import { db } from '../../lib/firebase';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 
 // Helper for relative time formatting
 function timeAgo(dateString: any): string {
@@ -53,24 +55,56 @@ const ROLE_COLORS: Record<string, string> = {
 export function MessagesModule() {
   const { userProfile } = useCurrentUser();
   const [messages, setMessages] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'unread'>('inbox');
+  const [firestoreMessages, setFirestoreMessages] = useState<any[]>([]);
+  const [activeTab, setActiveTab ] = useState<'inbox' | 'sent' | 'unread'>('inbox');
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isReplying, setIsReplying] = useState(false);
   const [isCustomComposeOpen, setIsCustomComposeOpen] = useState(false);
 
+  // 1. Listen to real-time Firestore messages if user is signed in
+  useEffect(() => {
+    if (!userProfile) return;
+    try {
+      const q = query(collection(db, 'messages'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setFirestoreMessages(msgs);
+      }, (err) => {
+        console.warn("Firestore messages live sync warning, using offline fallback:", err);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Failed to setup clinical messaging subscription:", e);
+    }
+  }, [userProfile?.id]);
+
   const fetchMessages = () => {
     if (!userProfile) return;
-    const allMsgs = mockDbService.getCollection('messages');
+    const allOffline = mockDbService.getCollection('messages') || [];
+    
+    // Merge live Firestore messages and offline records, giving live data precedence
+    const liveIds = new Set(firestoreMessages.map(i => i.id));
+    const uniqueOffline = allOffline.filter(i => !liveIds.has(i.id));
+    const allMsgs = [...firestoreMessages, ...uniqueOffline];
     
     // Filter messages based on tab
     let filtered: any[] = [];
     if (activeTab === 'inbox') {
-      filtered = allMsgs.filter((m: any) => m.toUserId === userProfile.id);
+      filtered = allMsgs.filter((m: any) => 
+        m.toUserId === userProfile.id || 
+        m.recipientId === userProfile.id
+      );
     } else if (activeTab === 'sent') {
-      filtered = allMsgs.filter((m: any) => m.fromUserId === userProfile.id);
+      filtered = allMsgs.filter((m: any) => 
+        m.fromUserId === userProfile.id || 
+        m.senderId === userProfile.id
+      );
     } else if (activeTab === 'unread') {
-      filtered = allMsgs.filter((m: any) => m.toUserId === userProfile.id && !m.read);
+      filtered = allMsgs.filter((m: any) => 
+        (m.toUserId === userProfile.id || m.recipientId === userProfile.id) && 
+        !m.read
+      );
     }
 
     // Apply search query
@@ -78,9 +112,9 @@ export function MessagesModule() {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(m => 
         (m.subject || '').toLowerCase().includes(q) ||
-        (m.body || '').toLowerCase().includes(q) ||
-        (m.fromUserName || '').toLowerCase().includes(q) ||
-        (m.toUserName || '').toLowerCase().includes(q) ||
+        (m.body || m.text || '').toLowerCase().includes(q) ||
+        (m.fromUserName || m.senderName || '').toLowerCase().includes(q) ||
+        (m.toUserName || m.recipientName || '').toLowerCase().includes(q) ||
         (m.patientName || '').toLowerCase().includes(q)
       );
     }
@@ -97,21 +131,21 @@ export function MessagesModule() {
 
   useEffect(() => {
     fetchMessages();
-  }, [userProfile?.id, activeTab, searchQuery]);
+  }, [userProfile?.id, firestoreMessages, activeTab, searchQuery]);
 
   const handleRead = async (msg: any) => {
     setSelectedMessage(msg);
-    if (!msg.read && msg.toUserId === userProfile?.id) {
+    if (!msg.read && (msg.toUserId === userProfile?.id || msg.recipientId === userProfile?.id)) {
       await markMessageRead(msg.id);
       // Update local state in-place to avoid layout flickering
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m));
-      // Refresh the system overview counts
+      // Refresh
       fetchMessages();
     }
   };
 
-  const currentUnreadCount = mockDbService.getCollection('messages')
-    .filter((m: any) => m.toUserId === userProfile?.id && !m.read).length;
+  const currentUnreadCount = (firestoreMessages.length > 0 ? firestoreMessages : mockDbService.getCollection('messages'))
+    .filter((m: any) => (m.toUserId === userProfile?.id || m.recipientId === userProfile?.id) && !m.read).length;
 
   return (
     <div className="h-full flex flex-col min-w-0">

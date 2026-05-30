@@ -110,6 +110,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /registered_users/{userId} {
+      allow read, write: if isSignedIn();
+    }
+
     match /roles/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
       allow list: if isSignedIn() && isStaff();
@@ -189,7 +193,7 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && isStaff();
+      allow update: if isSignedIn() && (isStaff() || resource.data.patientId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
@@ -216,9 +220,17 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.toUserId || request.auth.uid == resource.data.fromUserId);
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.toUserId || 
+        request.auth.uid == resource.data.fromUserId ||
+        request.auth.uid == resource.data.recipientId ||
+        request.auth.uid == resource.data.senderId
+      );
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.toUserId || 
+        request.auth.uid == resource.data.recipientId
+      );
     }
 
     match /audit_logs/{logId} {

@@ -6,13 +6,14 @@ import { signInAnonymously } from 'firebase/auth';
 import { saveUserProfile } from '../services/clinicalFirestoreService';
 
 export function useCurrentUser() {
-  const [userProfile, setUserProfile] = useState<CurrentUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<CurrentUser | null>(() => authService.getCurrentUser());
+  const [loading, setLoading] = useState(() => !authService.getCurrentUser());
 
   const refreshProfile = () => {
     const demoUser = authService.getCurrentUser();
     if (demoUser) {
       setUserProfile(demoUser);
+      setLoading(false);
     } else {
       setUserProfile(null);
     }

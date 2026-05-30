@@ -29,22 +29,18 @@ import {
   Stethoscope,
   ClipboardList,
   Info,
-  Check
+  Check,
+  Smartphone,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { transition } from '../../../lib/motion';
 import { DailyActionPlan } from './DailyActionPlan';
+import { updatePatientVitals } from '../../../services/clinicalFirestoreService';
 
 interface HealthBoardProps {
   patientData?: {
-    patient?: {
-      id?: string;
-      name: string;
-      dob: string;
-      age: number;
-      conditions: string[];
-      mrn: string;
-    } | null;
+    patient?: any;
     vitals?: any[];
     prescriptions?: any[];
     clinical_records?: any[];
@@ -123,14 +119,34 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     setVitalsOrder(defaultOrder);
     localStorage.removeItem('careplus_vitals_order_v1');
   };
-  const patient = patientData?.patient || {
-    name: 'Sarah Mitchell',
-    dob: 'Mar 15, 1984',
-    age: 42,
-    conditions: ['Type 2 Diabetes', 'PCOS'],
-    mrn: 'MRN-77291-SM',
-    id: 'sarah-mitchell-42'
-  };
+  const rawPatient = patientData?.patient;
+  const patient = useMemo(() => {
+    if (!rawPatient || (!rawPatient.name && !rawPatient.firstName && !rawPatient.id)) {
+      return {
+        name: 'Marcus Everett',
+        dob: 'Mar 14, 1985',
+        age: 39,
+        conditions: ['Rheumatoid Arthritis (M05.79)'],
+        mrn: 'pat-marcus-001',
+        id: 'pat-marcus-001'
+      };
+    }
+    const name = rawPatient.name || (rawPatient.firstName ? `${rawPatient.firstName} ${rawPatient.lastName || ''}`.trim() : 'Unnamed Patient');
+    return {
+      name,
+      dob: rawPatient.dob || rawPatient.dateOfBirth || 'Mar 14, 1985',
+      age: rawPatient.age || (rawPatient.dateOfBirth ? new Date().getFullYear() - new Date(rawPatient.dateOfBirth).getFullYear() : 39),
+      conditions: rawPatient.conditions || ['Rheumatoid Arthritis (M05.79)'],
+      mrn: rawPatient.mrn || rawPatient.id || rawPatient.patientId || 'pat-marcus-001',
+      id: rawPatient.id || rawPatient.patientId || 'pat-marcus-001'
+    };
+  }, [rawPatient]);
+
+  const patientFirstName = useMemo(() => {
+    if (!patient?.name) return 'Patient';
+    const parts = patient.name.split(' ');
+    return parts[0] || 'Patient';
+  }, [patient]);
 
   const handleSyncVitals = async () => {
     setIsSyncing(true);
@@ -165,6 +181,115 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       return timeB - timeA;
     })[0];
   }, [vitals]);
+
+  // --- WEARABLE HEALTH DEVICE SYNC HUB STATE & CONTROLS ---
+  const [activeDevice, setActiveDevice] = useState<'apple' | 'android' | null>('apple');
+  const [isDeviceLinked, setIsDeviceLinked] = useState<boolean>(true);
+  const [syncPermissions, setSyncPermissions] = useState({
+    steps: true,
+    heartRate: true,
+    sleep: true,
+    glucose: true,
+    oxygen: true
+  });
+  
+  const [selectedPreset, setSelectedPreset] = useState<string>('afternoon');
+  const [wearableSyncing, setWearableSyncing] = useState<boolean>(false);
+  const [wearableSyncStep, setWearableSyncStep] = useState<string | null>(null);
+  const [wearableSyncProgress, setWearableSyncProgress] = useState<number>(0);
+  const [wearableSyncSuccess, setWearableSyncSuccess] = useState<boolean>(false);
+  const [syncHistory, setSyncHistory] = useState<Array<{time: string; device: string; itemsCount: number}>>([
+    { time: '10:14 AM', device: 'Apple Health', itemsCount: 4 },
+    { time: 'Yesterday', device: 'Apple Health', itemsCount: 3 }
+  ]);
+
+  const presetOptions = [
+    { id: 'morning', label: '☀️ Morning Baseline Recovery', bp: '116/74', hr: 64, steps: 2840, sleep: 7.8, glucose: 95, spo2: 99, temp: 36.6 },
+    { id: 'afternoon', label: '🏃‍♀️ Post-Therapeutic Stretching & Gym', bp: '122/80', hr: 82, steps: 7800, sleep: 7.6, glucose: 104, spo2: 98, temp: 37.1 },
+    { id: 'evening', label: '💤 Evening Rest & Recovery state', bp: '118/72', hr: 60, steps: 9420, sleep: 8.2, glucose: 91, spo2: 99, temp: 36.8 }
+  ];
+
+  const handleWearableSync = async () => {
+    if (!activeDevice || !isDeviceLinked) return;
+    setWearableSyncing(true);
+    setWearableSyncSuccess(false);
+    setWearableSyncProgress(0);
+
+    const steps = [
+      'Establishing secure TLS OAuth handshake with mobile daemon...',
+      activeDevice === 'apple' 
+        ? 'Scanning Local iOS Apple HealthKit databases...' 
+        : 'Connecting to system Android Health Connect service platform...',
+      'Retrieving decrypted biometric sensor streams...',
+      'Applying clinical standard verification and range filters...',
+      'Encrypting and publishing telemetry to PRM secure database...'
+    ];
+
+    for (let i = 0; i < steps.length; i++) {
+      setWearableSyncStep(steps[i]);
+      setWearableSyncProgress(Math.round(((i + 1) / steps.length) * 100));
+      await new Promise(resolve => setTimeout(resolve, 750));
+    }
+
+    try {
+      const p = presetOptions.find(o => o.id === selectedPreset) || presetOptions[1];
+      
+      // Determine what to import based on permission filters
+      const glucoseVal = syncPermissions.glucose ? p.glucose : (latestVitalRecord?.glucose || 104);
+      const stepsCount = syncPermissions.steps ? p.steps : (latestVitalRecord?.steps || 7800);
+      const heartRateVal = syncPermissions.heartRate ? p.hr : (latestVitalRecord?.hr || 82);
+      const sleepHours = syncPermissions.sleep ? p.sleep : (latestVitalRecord?.sleep || 7.6);
+      const spo2Val = syncPermissions.oxygen ? p.spo2 : (latestVitalRecord?.spo2 || 98);
+
+      const payload = {
+        patientId: patient.id || 'pat-marcus-001',
+        authorId: 'uid-marcus-portal-001',
+        source: activeDevice === 'apple' ? 'apple_health' : 'android_health_connect',
+        device: activeDevice === 'apple' ? 'Apple Watch Ultra 2' : 'Android Pixel Watch 3',
+        timestamp: Date.now(),
+        bp: p.bp,
+        hr: Number(heartRateVal),
+        glucose: Number(glucoseVal),
+        steps: Number(stepsCount),
+        sleep: Number(sleepHours),
+        spo2: Number(spo2Val),
+        temp: Number(p.temp),
+        rr: 16,
+        weight: 86.2,
+        height: 178,
+        bmi: 27.2,
+        gcs: '15/15',
+        gcs_e: 4,
+        gcs_v: 5,
+        gcs_m: 6,
+        avpu: 'A',
+        pain: 1,
+        hydration: 94,
+        createdAt: { seconds: Math.floor(Date.now() / 1000) }
+      };
+
+      await updatePatientVitals(patient.id || 'pat-marcus-001', payload);
+      setWearableSyncSuccess(true);
+      
+      setSyncStatusMessage(`${activeDevice === 'apple' ? 'Apple Health' : 'Android Health'} Synchronized!`);
+      setTimeout(() => setSyncStatusMessage(null), 4000);
+
+      const itemsSyncedCount = Object.values(syncPermissions).filter(Boolean).length;
+      setSyncHistory(prev => [
+        {
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          device: activeDevice === 'apple' ? 'Apple HealthKit' : 'Android Health Connect',
+          itemsCount: itemsSyncedCount
+        },
+        ...prev
+      ]);
+    } catch (err) {
+      console.error('Error during clinical wearable synchronization:', err);
+    } finally {
+      setWearableSyncing(false);
+      setWearableSyncStep(null);
+    }
+  };
 
   // Custom styling rules congruent with Aequanimitas high-density clinical UI
   const bloodGlucoseStatus = useMemo(() => {
@@ -489,19 +614,19 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
   const patientAppointments = useMemo(() => {
     const list = (appointments && appointments.length > 0)
-      ? appointments.filter(apt => apt.patientId === patient?.id || apt.patientId === 'sarah-mitchell-42' || apt.patientName?.includes(patient?.name || 'Sarah'))
+      ? appointments.filter(apt => apt.patientId === patient?.id || apt.patientId === 'pat-marcus-001' || apt.patientName?.includes(patient?.name || 'Marcus'))
       : [];
 
     const baseList = list.length > 0 ? list : [
       {
-        id: 'apt-1',
-        providerId: 'prov-1',
-        providerName: 'Dr. James Wilson',
-        specialty: 'Internal Medicine / Endocrinology',
-        time: new Date(Date.now() + 86400 * 1000 * 4).toISOString(),
-        visitType: 'telehealth',
-        reason: 'Diabetes Management Review & PCOS Follow-up',
-        room: 'Consultation Room 3B',
+        id: 'appt-marcus-001',
+        providerId: 'user-theogate-001',
+        providerName: 'Dr. G. Theogate',
+        specialty: 'Rheumatology',
+        time: new Date(Date.now() + 86400 * 1000).toISOString(),
+        visitType: 'in_clinic',
+        reason: 'Rheumatoid Arthritis 6-Month Review',
+        room: 'Consultation Suite 3B',
         status: 'scheduled'
       }
     ];
@@ -512,15 +637,24 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       let specialty = apt.specialty || 'General Medicine';
       
       if (!providerName) {
-        if (apt.providerId === 'prov-1' || apt.providerId === 'wilson_provider') {
+        if (apt.providerId === 'user-theogate-001') {
+          providerName = 'Dr. G. Theogate';
+          specialty = 'Rheumatology';
+        } else if (apt.providerId === 'user-alwayson-001') {
+          providerName = 'Michelle Alwayson';
+          specialty = 'Physiotherapy';
+        } else if (apt.providerId === 'user-nurse-rivera-001') {
+          providerName = 'Tamara Rivera';
+          specialty = 'Chronic Disease Management';
+        } else if (apt.providerId === 'prov-1' || apt.providerId === 'wilson_provider') {
           providerName = 'Dr. James Wilson';
           specialty = 'Internal Medicine & Endocrinology';
         } else if (apt.providerId === 'prov-2' || apt.providerId === 'rostova_provider') {
           providerName = 'Dr. Elena Rostova';
           specialty = 'Reproductive Endocrinology';
         } else {
-          providerName = 'Dr. James Wilson';
-          specialty = 'Internal Medicine & Endocrinology';
+          providerName = 'Dr. G. Theogate';
+          specialty = 'Rheumatology';
         }
       }
 
@@ -636,7 +770,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               </span>
             </h1>
             <p className="text-xs md:text-sm font-semibold text-slate-500 pt-1">
-              Patient ID: 77291-SM
+              Patient ID: {patient?.mrn || '77291-SM'}
             </p>
           </div>
         </div>
@@ -733,7 +867,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     Holistic Encouragement
                   </span>
                   <h2 className="text-lg font-extrabold text-[#3F5B42] tracking-tight leading-snug">
-                    We are so proud of your progress, Sarah
+                    We are so proud of your progress, {patientFirstName}
                   </h2>
                   <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
                     Caring for yourself is a gentle series of daily choices, not rigid scores. Your consistent 96% reflects beautiful, steady dedication to feeling your best.
@@ -770,7 +904,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     8,420 steps is an absolute triumph
                   </h2>
                   <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
-                    You've successfully tracked significant movement today, Sarah! Consistent step counts help expand cardiovascular resilience and support healthy blood pressure metrics.
+                    You've successfully tracked significant movement today, {patientFirstName}! Consistent step counts help expand cardiovascular resilience and support healthy blood pressure metrics.
                   </p>
                   <p className="text-[11px] italic text-blue-800 font-medium pt-1">
                     “Each step releases natural strength, feeding your cells oxygen and vital energy.”
@@ -943,7 +1077,263 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         </div>
 
         {/* Right Column - Appointments, Rx, Quick Actions */}
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fadeIn">
+          
+          {/* Wearable Device Integration & Sync Center */}
+          <Card className="border border-[#DEE8E0] shadow-sm overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/70 p-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Smartphone className="h-4 w-4 text-[#3F5B42]" />
+                  Wearable Sync Hub
+                </CardTitle>
+                <Badge variant="outline" className={`text-[10px] font-bold px-1.5 ${isDeviceLinked ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-50 text-slate-500'}`}>
+                  ● {isDeviceLinked ? 'Connected' : 'Disconnected'}
+                </Badge>
+              </div>
+              <CardDescription className="text-[11px] leading-relaxed mt-1">
+                Synchronize standard consumer device biometrics securely with Aequanimitas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 pb-4 px-4 space-y-4">
+              
+              {/* Device Selector Tabs */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDevice('apple');
+                    setIsDeviceLinked(true);
+                  }}
+                  className={`py-2 px-2.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    activeDevice === 'apple'
+                      ? 'bg-[#3F5B42] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
+                >
+                  <span className="text-sm">🍎</span> Apple Health
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDevice('android');
+                    setIsDeviceLinked(true);
+                  }}
+                  className={`py-2 px-2.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    activeDevice === 'android'
+                      ? 'bg-[#3F5B42] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
+                >
+                  <span className="text-sm">🤖</span> Android Connect
+                </button>
+              </div>
+
+              {/* Master Connection Status Toggle */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                <div className="space-y-0.5">
+                  <span className="font-bold text-slate-800">Linked to CarePlus System</span>
+                  <p className="text-[10px] text-slate-500 leading-snug">
+                    {activeDevice === 'apple' ? 'Authorized via iOS HealthKit' : 'Authorized via Play Store Health Connect'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDeviceLinked(!isDeviceLinked)}
+                  className={`w-11 h-6 rounded-full transition-colors flex items-center p-0.5 cursor-pointer ${
+                    isDeviceLinked ? 'bg-[#3F5B42]' : 'bg-slate-300'
+                  }`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${isDeviceLinked ? 'translate-x-[20px]' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {isDeviceLinked ? (
+                <>
+                  {/* Parameter Permission Matrix */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                      Sync Scope & Parameters
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSyncPermissions(p => ({ ...p, steps: !p.steps }))}
+                        className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
+                          syncPermissions.steps 
+                            ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
+                            : 'bg-white border-slate-200 text-slate-500'
+                        }`}
+                      >
+                        <span className="truncate">🏃‍♀️ Step Count</span>
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.steps ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSyncPermissions(p => ({ ...p, heartRate: !p.heartRate }))}
+                        className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
+                          syncPermissions.heartRate 
+                            ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
+                            : 'bg-white border-slate-200 text-slate-500'
+                        }`}
+                      >
+                        <span className="truncate">❤️ Heart Rate</span>
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.heartRate ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSyncPermissions(p => ({ ...p, sleep: !p.sleep }))}
+                        className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
+                          syncPermissions.sleep 
+                            ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
+                            : 'bg-white border-slate-200 text-slate-500'
+                        }`}
+                      >
+                        <span className="truncate">💤 Sleep Analysis</span>
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.sleep ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSyncPermissions(p => ({ ...p, glucose: !p.glucose }))}
+                        className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
+                          syncPermissions.glucose 
+                            ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
+                            : 'bg-white border-slate-200 text-slate-500'
+                        }`}
+                      >
+                        <span className="truncate">🩸 blood Glucose</span>
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.glucose ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Simulator Control Area with elegant styling to avoid clutter */}
+                  <div className="bg-[#EEF3F0] border border-[#DEE8E0] rounded-xl p-3 space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] bg-[#3F5B42] text-white font-extrabold px-1.5 py-0.5 rounded tracking-wider uppercase font-mono">
+                        Biometrics Simulator
+                      </span>
+                      <span className="text-[10px] font-semibold text-[#3F5B42]">
+                        Preview Live Biometric Presets
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-600 leading-snug">
+                      Toggle standard clinical baselines to simulate direct smartwatch sensor feeds.
+                    </p>
+                    <select
+                      value={selectedPreset}
+                      onChange={(e) => setSelectedPreset(e.target.value)}
+                      className="w-full text-xs bg-white border border-[#DEE8E0] rounded-lg p-2 font-bold text-slate-700 shadow-sm outline-none focus:ring-1 focus:ring-[#3F5B42] cursor-pointer"
+                    >
+                      {presetOptions.map(p => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+
+                    {/* Preview Table of selected preset */}
+                    <div className="grid grid-cols-3 gap-1 pt-1.5 text-[10px] font-mono text-slate-600">
+                      <div className="bg-white/65 p-1 rounded border border-[#E4ECE7] text-center">
+                        <span className="block text-[8px] text-slate-400 uppercase">Steps</span>
+                        <strong>{presetOptions.find(o => o.id === selectedPreset)?.steps.toLocaleString()}</strong>
+                      </div>
+                      <div className="bg-white/65 p-1 rounded border border-[#E4ECE7] text-center">
+                        <span className="block text-[8px] text-slate-400 uppercase">Glucose</span>
+                        <strong>{presetOptions.find(o => o.id === selectedPreset)?.glucose} md/dL</strong>
+                      </div>
+                      <div className="bg-white/65 p-1 rounded border border-[#E4ECE7] text-center">
+                        <span className="block text-[8px] text-slate-400 uppercase">Heart Rate</span>
+                        <strong>{presetOptions.find(o => o.id === selectedPreset)?.hr} bpm</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action / Progress Area */}
+                  {wearableSyncing ? (
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4 text-[#3F5B42] animate-spin shrink-0" />
+                        <span className="text-xs font-extrabold text-slate-800">Synchronizing Wireless Feed...</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-mono italic animate-pulse leading-snug">
+                        {wearableSyncStep}
+                      </p>
+                      <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-[#3F5B42] h-full rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${wearableSyncProgress}%` }} 
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleWearableSync}
+                      className="w-full py-2.5 bg-[#3F5B42] hover:bg-[#324935] text-white text-xs font-bold rounded-lg transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer border border-[#2D422E]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Sync biometric data now
+                    </button>
+                  )}
+
+                  {/* Complete feedback message */}
+                  {wearableSyncSuccess && !wearableSyncing && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-xl flex items-start gap-2 text-xs"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <strong className="font-bold text-emerald-900 block">Telemetry Sync Successful!</strong>
+                        <p className="text-[10px] text-emerald-800 leading-snug">
+                          Standard biometrics successfully mapped and updated in your patient charts. Values updated in real-time.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Rolling Audit Trail */}
+                  {syncHistory.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                        Recent Sync Feed History
+                      </span>
+                      <div className="space-y-1.5 divide-y divide-slate-100 max-h-24 overflow-y-auto pr-1">
+                        {syncHistory.map((h, idx) => (
+                          <div key={idx} className="text-[10px] flex items-center justify-between pt-1.5 first:pt-0">
+                            <span className="font-medium text-slate-700">
+                              🕒 {h.time} — <strong className="text-slate-900 font-bold">{h.device}</strong>
+                            </span>
+                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">
+                              {h.itemsCount} channels synced
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center space-y-3">
+                  <AlertCircle className="h-6 w-6 text-slate-400 mx-auto" />
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-slate-700 block">Wearable Feeds Paused</span>
+                    <p className="text-[11px] text-slate-500 leading-normal max-w-xs mx-auto">
+                      Link your device to start streaming step counts, sleep cycles, and heart rates automatically.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDeviceLinked(true)}
+                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold rounded transition-colors cursor-pointer"
+                  >
+                    Authorize Integration Link
+                  </button>
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
           
           {/* Scheduling focus */}
           <Card className="border border-slate-200 shadow-sm">

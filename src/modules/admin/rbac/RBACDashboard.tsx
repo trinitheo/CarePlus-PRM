@@ -5,7 +5,7 @@ import {
   getDocs, 
   onSnapshot 
 } from 'firebase/firestore';
-import { db } from '../../../services/clinicalFirestoreService';
+import { db, resetAppToNewInstall } from '../../../services/clinicalFirestoreService';
 import { updateUserRole, updateUserPatientLink, AppRole } from '../../../services/rbacService';
 import { mockDbService } from '../../../lib/mockDatabase';
 import { Shield, User, Search, Save, History, Loader2, CheckCircle2, Database, Zap } from 'lucide-react';
@@ -109,6 +109,40 @@ export function RBACDashboard() {
     }
   };
 
+  const handleRunMarcusSeed = async () => {
+    if (!window.confirm("This will load and seed Marcus D. Everett's complete Rheumatoid Arthritis patient case, clinical history, longitudinal vitals, and provider roles. Continue?")) return;
+    
+    setIsSeeding(true);
+    try {
+      await SeedService.seedMarcusEverettCase((progress) => {
+        setSeedProgress(progress);
+      });
+      toast.success("Marcus Everett Case Seeded Successfully!");
+      await fetchUsers(); // Refresh the directory
+    } catch (err) {
+      console.error("Marcus Everett seeding failed", err);
+      toast.error("Marcus Everett seeding failed");
+    } finally {
+      setIsSeeding(false);
+      setSeedProgress(null);
+    }
+  };
+
+  const handleFactoryReset = async () => {
+    if (!window.confirm("Are you sure you want to completely wipe the application data? This will delete all customized users, roles, messages, patient charts, and schedules from Firestore, log you out, and reset the system as a clean install. Continue?")) return;
+    
+    setIsSeeding(true);
+    try {
+      await resetAppToNewInstall();
+      toast.success("Database Reset Complete");
+      window.location.reload();
+    } catch (err) {
+      console.error("Factory Reset failed", err);
+      toast.error("Wipe operation failed");
+      setIsSeeding(false);
+    }
+  };
+
   const handleRoleChange = async (userId: string, newRole: AppRole) => {
     setIsUpdating(userId);
     try {
@@ -157,19 +191,62 @@ export function RBACDashboard() {
         <div className="flex items-center gap-3">
           <Button 
             variant="outline" 
-            className="rounded-xl border-[#EDEBE9] bg-white text-xs font-black uppercase tracking-wider h-11 px-6 hover:bg-[#F3F2F1] transition-all flex items-center gap-2"
+            className="rounded-xl border-[#EDEBE9] bg-white text-xs font-black uppercase tracking-wider h-11 px-5 hover:bg-[#F3F2F1] transition-all flex items-center gap-2"
             onClick={handleRunSeed}
+            disabled={isSeeding}
+          >
+            {isSeeding && !seedProgress ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-[#0078D4]" />
+                Starting...
+              </>
+            ) : isSeeding && seedProgress ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-[#0078D4]" />
+                {`${seedProgress.step.substring(0, 10)}...`}
+              </>
+            ) : (
+              <>
+                <Database className="h-4 w-4 text-[#0078D4]" />
+                Seed Graph Group
+              </>
+            )}
+          </Button>
+
+          <Button 
+            variant="outline" 
+            className="rounded-xl border-sky-200 bg-sky-50 text-[#0078D4] text-xs font-black uppercase tracking-wider h-11 px-5 hover:bg-sky-100 transition-all flex items-center gap-2"
+            onClick={handleRunMarcusSeed}
             disabled={isSeeding}
           >
             {isSeeding ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin text-[#0078D4]" />
-                {seedProgress ? `${seedProgress.step} (${seedProgress.count}/${seedProgress.total})` : 'Initializing...'}
+                Seeding Case...
               </>
             ) : (
               <>
-                <Database className="h-4 w-4 text-[#0078D4]" />
-                Seed Graph Data
+                <CheckCircle2 className="h-4 w-4 text-[#0078D4]" />
+                Seed Marcus Case
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="destructive"
+            className="rounded-xl bg-red-600 hover:bg-red-700 hover:shadow-lg hover:shadow-red-500/15 text-white border-0 text-xs font-black uppercase tracking-wider h-11 px-6 transition-all flex items-center gap-2"
+            onClick={handleFactoryReset}
+            disabled={isSeeding}
+          >
+            {isSeeding && !seedProgress ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                Resetting...
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4" />
+                Erase Database
               </>
             )}
           </Button>
