@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { HealthBoard } from './views/HealthBoard';
-import { AdherenceSimulator } from './views/AdherenceSimulator';
+import { MyHealthScore } from './views/MyHealthScore';
 import { WellnessClasses } from './views/WellnessClasses';
 import { MyConsultations } from './views/MyConsultations';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { useQueryModel } from '../../store/eventStore';
 
-type PortalView = 'board' | 'simulator' | 'classes' | 'consultations';
+type PortalView = 'board' | 'health-score' | 'classes' | 'consultations';
 
 export function PatientPortalRoot() {
   const [activeTab, setActiveTab ] = useState<PortalView>('board');
@@ -24,15 +24,15 @@ export function PatientPortalRoot() {
         <div className="max-w-5xl mx-auto px-6 flex gap-8">
           <button 
             onClick={() => setActiveTab('board')}
-            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'board' ? 'border-[#7A9876] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'board' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             My Health Board
           </button>
           <button 
-            onClick={() => setActiveTab('simulator')}
-            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'simulator' ? 'border-[#7A9876] text-[#2C3E2D]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            onClick={() => setActiveTab('health-score')}
+            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'health-score' ? 'border-[#7A9876] text-[#2C3E2D] font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
-            Adherence Score Simulator
+            My Health Score
           </button>
           <button 
             onClick={() => setActiveTab('consultations')}
@@ -55,10 +55,16 @@ export function PatientPortalRoot() {
           <HealthBoard 
             patientData={patientData} 
             appointments={Object.values(appointments)} 
-            onNavigateTab={(tab) => setActiveTab(tab as PortalView)} 
+            onNavigateTab={(tab) => {
+              if (tab === 'simulator') {
+                setActiveTab('health-score');
+              } else {
+                setActiveTab(tab as PortalView);
+              }
+            }} 
           />
         )}
-        {activeTab === 'simulator' && <AdherenceSimulator />}
+        {activeTab === 'health-score' && <MyHealthScore patientData={patientData} />}
         {activeTab === 'consultations' && <MyConsultations patientData={patientData} />}
         {activeTab === 'classes' && <WellnessClasses />}
       </div>

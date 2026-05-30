@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { 
@@ -9,7 +9,9 @@ import {
   Stethoscope, 
   ClipboardList, 
   Info, 
-  Check 
+  Check,
+  Timer,
+  Sparkle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -193,11 +195,69 @@ export function DailyActionPlan({ patient, latestVitalRecord, bloodGlucoseStatus
     ];
   }, [latestVitalRecord, bloodGlucoseStatus, patient]);
 
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  // Periodically refresh current time to handle real-time JITAI expiration
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const combinedDirectives = useMemo(() => {
+    const staticDirs = clinicalDirectives.map(item => ({
+      ...item,
+      id: item.id,
+      type: 'clinical_directive' as const,
+      action: item.action,
+      instruction: item.instruction,
+      category: item.category,
+      trackingInfo: item.trackingInfo,
+      status: item.status,
+      expirationTimestamp: 0
+    }));
+
+    const dynamicGoals = (patient?.actionPlan || []).map((item: any) => ({
+      id: item.id,
+      type: 'ai_micro_goal' as const,
+      action: item.title,
+      instruction: item.description,
+      category: 'AI Telemetry Nudge',
+      trackingInfo: 'Smart Telemetry',
+      status: 'Adherence action needed',
+      expirationTimestamp: item.expirationTimestamp || (Date.now() + 3600 * 1000)
+    }));
+
+    return [...staticDirs, ...dynamicGoals];
+  }, [clinicalDirectives, patient?.actionPlan]);
+
+  const visibleDirectives = useMemo(() => {
+    return combinedDirectives.filter(goal => {
+      if (goal.type === 'ai_micro_goal') {
+        const isCompleted = !!completedDirectives[goal.id];
+        if (!isCompleted && goal.expirationTimestamp < currentTime) {
+          return false; // Hide expired nudges if not completed
+        }
+      }
+      return true;
+    });
+  }, [combinedDirectives, completedDirectives, currentTime]);
+
   const completionPercent = useMemo(() => {
-    const total = clinicalDirectives.length;
-    const completedCount = clinicalDirectives.filter(d => completedDirectives[d.id]).length;
+    const total = visibleDirectives.length;
+    const completedCount = visibleDirectives.filter(d => completedDirectives[d.id]).length;
     return total > 0 ? Math.round((completedCount / total) * 100) : 0;
-  }, [clinicalDirectives, completedDirectives]);
+  }, [visibleDirectives, completedDirectives]);
+
+  const getRemainingTimeText = (expirationTimestamp: number) => {
+    const diff = expirationTimestamp - currentTime;
+    if (diff <= 0) return 'Expired';
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    if (mins > 0) return `Expires in ${mins}m ${secs}s`;
+    return `Expires in ${secs}s`;
+  };
 
   return (
     <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
@@ -298,7 +358,7 @@ export function DailyActionPlan({ patient, latestVitalRecord, bloodGlucoseStatus
                   Today's Care Actions
                 </h3>
                 <span className="text-[11px] font-mono text-emerald-600 font-bold">
-                  {clinicalDirectives.filter(d => completedDirectives[d.id]).length} / {clinicalDirectives.length} done
+                  {visibleDirectives.filter(d => completedDirectives[d.id]).length} / {visibleDirectives.length} done
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mb-4 font-normal">
@@ -315,32 +375,50 @@ export function DailyActionPlan({ patient, latestVitalRecord, bloodGlucoseStatus
               
               {/* Checklist elements list */}
               <div className="space-y-3">
-                {clinicalDirectives.map((dir) => {
+                {visibleDirectives.map((dir) => {
                   const isDone = !!completedDirectives[dir.id];
+                  const isAI = dir.type === 'ai_micro_goal';
                   return (
                     <div 
                       key={dir.id}
                       onClick={() => handleToggleDirective(dir.id)}
                       className={`p-3 rounded-xl border transition-all duration-150 cursor-pointer flex items-start gap-3 select-none ${
                         isDone 
-                          ? 'bg-emerald-50/30 border-emerald-200/50 hover:bg-emerald-50/50 shadow-sm' 
-                          : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/40 shadow-sm'
+                          ? isAI
+                            ? 'bg-emerald-50/20 border-emerald-200/50 hover:bg-emerald-50/40 shadow-sm'
+                            : 'bg-emerald-50/30 border-emerald-200/50 hover:bg-emerald-50/50 shadow-sm' 
+                          : isAI
+                            ? 'bg-[#EEF3F0]/80 border-emerald-300 hover:border-emerald-400 hover:bg-[#EEF3F0] shadow-sm'
+                            : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/40 shadow-sm'
                       }`}
                     >
                       <div className="mt-0.5 shrink-0">
                         <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center transition-colors ${
                           isDone 
                             ? 'bg-emerald-500 border-emerald-500 text-white' 
-                            : 'border-slate-300 bg-white'
+                            : isAI
+                              ? 'border-emerald-500 bg-white'
+                              : 'border-slate-300 bg-white'
                         }`}>
                           {isDone && <Check className="h-3 w-3 stroke-[3]" />}
                         </div>
                       </div>
                       
-                      <div className="space-y-1 pr-1 text-left">
-                        <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400 font-mono">
-                          {dir.category}
-                        </span>
+                      <div className="space-y-1 pr-1 text-left flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={`text-[9px] font-bold uppercase tracking-wide font-mono px-1.5 py-0.25 rounded ${
+                            isAI ? 'bg-emerald-100 text-[#3F5B42]' : 'text-slate-400 bg-slate-100'
+                          }`}>
+                            {isAI ? '🤖 ' : ''}{dir.category}
+                          </span>
+                          {isAI && !isDone && (
+                            <span className="text-[9px] font-mono font-bold text-amber-600 flex items-center gap-1">
+                              <Timer className="h-3 w-3" />
+                              {getRemainingTimeText(dir.expirationTimestamp)}
+                            </span>
+                          )}
+                        </div>
+                        
                         <h4 className={`text-xs font-bold leading-tight ${isDone ? 'line-through text-slate-400 font-medium' : 'text-slate-800'}`}>
                           {dir.action}
                         </h4>
@@ -349,7 +427,9 @@ export function DailyActionPlan({ patient, latestVitalRecord, bloodGlucoseStatus
                         </p>
                         
                         <div className="flex flex-wrap gap-x-2 pt-1 font-mono text-[9px] font-bold">
-                          <span className="text-blue-600 bg-blue-50 px-1.5 py-0.25 rounded border border-blue-100/50 shrink-0">
+                          <span className={`${
+                            isAI ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-blue-600 bg-blue-50 border-blue-100/50'
+                          } px-1.5 py-0.25 rounded border shrink-0`}>
                             {dir.trackingInfo}
                           </span>
                           <span className={`shrink-0 ${isDone ? 'text-emerald-500' : 'text-amber-500'}`}>

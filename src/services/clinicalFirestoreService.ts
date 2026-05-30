@@ -346,7 +346,145 @@ export async function saveClinicalIntake(patientId: string, intakeId: string, da
 
 // Vitals
 export async function updatePatientVitals(patientId: string, data: any) {
+  try {
+    const sanitized = sanitizeData(data);
+    await addDoc(collection(db, 'patients', patientId, 'vitals'), {
+      ...sanitized,
+      timestamp: data.timestamp || Date.now()
+    });
+  } catch (e) {
+    console.error('Failed to write vitals to Firestore:', e);
+  }
   return mockDbService.addItem('vitals', data, patientId);
+}
+
+export async function updatePatientNudgeAndActionPlan(patientId: string, activeNudge: any, actionPlan: any[]) {
+  try {
+    const sanitizedNudge = sanitizeData(activeNudge);
+    const sanitizedPlan = sanitizeData(actionPlan);
+    await setDoc(doc(db, 'patients', patientId), {
+      activeNudge: sanitizedNudge,
+      actionPlan: sanitizedPlan,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error('Failed to update patient activeNudge and actionPlan in Firestore:', e);
+  }
+  return mockDbService.updateItem('patients', patientId, { activeNudge, actionPlan });
+}
+
+export function computeHealthScore(factors: {
+  medsDays?: number;
+  sleepHours?: number;
+  dailySteps?: number;
+  bloodGlucose?: number;
+  aiGoalsCompleted?: boolean;
+  willAttend?: boolean;
+}) {
+  const baseScore = 72;
+  let medsContribution = 0;
+  let sleepContribution = 0;
+  let stepsContribution = 0;
+  let glucoseContribution = 0;
+  let aiContribution = 0;
+  let appointmentContribution = 0;
+
+  const medsDays = typeof factors.medsDays === 'number' ? factors.medsDays : 5;
+  const sleepHours = typeof factors.sleepHours === 'number' ? factors.sleepHours : 7.6;
+  const dailySteps = typeof factors.dailySteps === 'number' ? factors.dailySteps : 8420;
+  const bloodGlucose = typeof factors.bloodGlucose === 'number' ? factors.bloodGlucose : 104;
+  const aiGoalsCompleted = typeof factors.aiGoalsCompleted === 'boolean' ? factors.aiGoalsCompleted : true;
+  const willAttend = typeof factors.willAttend === 'boolean' ? factors.willAttend : true;
+
+  // 1. Medication compliance (Max +8, or -4 below 4 days)
+  if (medsDays === 7) medsContribution = 8;
+  else if (medsDays >= 5) medsContribution = 5;
+  else if (medsDays >= 3) medsContribution = 1;
+  else medsContribution = -4;
+
+  // 2. Sleep duration (Max +6 for 7-9 hours, penalty drops below 6.5)
+  if (sleepHours >= 7 && sleepHours <= 9) {
+    sleepContribution = 6;
+  } else if (sleepHours >= 6 && sleepHours < 7) {
+    sleepContribution = 2;
+  } else if (sleepHours > 9) {
+    sleepContribution = 3;
+  } else {
+    sleepContribution = -3;
+  }
+
+  // 3. Daily Steps (Max +8 for >= 8000 steps, step counts below 4000 get 0 or negative)
+  if (dailySteps >= 9000) stepsContribution = 8;
+  else if (dailySteps >= 8000) stepsContribution = 7;
+  else if (dailySteps >= 7000) stepsContribution = 6;
+  else if (dailySteps >= 5000) stepsContribution = 3;
+  else if (dailySteps >= 3000) stepsContribution = 1;
+  else stepsContribution = -2;
+
+  // 4. Blood Glucose level (Target is 75 to 125 mg/dL for +8, severe penalty high/low)
+  if (bloodGlucose >= 75 && bloodGlucose <= 125) {
+    glucoseContribution = 8;
+  } else if (bloodGlucose >= 126 && bloodGlucose <= 150) {
+    glucoseContribution = 3;
+  } else if (bloodGlucose > 150) {
+    glucoseContribution = -5;
+  } else if (bloodGlucose < 70) {
+    glucoseContribution = -6;
+  } else {
+    glucoseContribution = 1;
+  }
+
+  // 5. Completion of dynamic AI JITAI Micro-Goals (+10 pts)
+  if (aiGoalsCompleted) {
+    aiContribution = 10;
+  } else {
+    aiContribution = -2;
+  }
+
+  // 6. Clinical Appointment confirmation stability
+  if (!willAttend) {
+    appointmentContribution = -5;
+  } else {
+    appointmentContribution = 2;
+  }
+
+  const totalMod = 
+    medsContribution + 
+    sleepContribution + 
+    stepsContribution + 
+    glucoseContribution + 
+    aiContribution + 
+    appointmentContribution;
+
+  return Math.min(Math.max(baseScore + totalMod, 0), 100);
+}
+
+export async function updatePatientHealthScore(
+  patientId: string, 
+  score: number, 
+  factors: {
+    medsDays?: number;
+    sleepHours?: number;
+    dailySteps?: number;
+    bloodGlucose?: number;
+    aiGoalsCompleted?: boolean;
+    willAttend?: boolean;
+  }
+) {
+  try {
+    const sanitizedFactors = sanitizeData(factors);
+    await setDoc(doc(db, 'patients', patientId), {
+      healthScore: score,
+      ...sanitizedFactors,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error('Failed to update patient health score in Firestore:', e);
+  }
+  return mockDbService.updateItem('patients', patientId, { 
+    healthScore: score,
+    ...factors 
+  });
 }
 
 export async function updatePatientStatus(patientId: string, status: string) {

@@ -36,7 +36,7 @@ import {
 import { motion } from 'motion/react';
 import { transition } from '../../../lib/motion';
 import { DailyActionPlan } from './DailyActionPlan';
-import { updatePatientVitals } from '../../../services/clinicalFirestoreService';
+import { updatePatientVitals, updatePatientNudgeAndActionPlan, computeHealthScore, updatePatientHealthScore } from '../../../services/clinicalFirestoreService';
 
 interface HealthBoardProps {
   patientData?: {
@@ -121,26 +121,88 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   };
   const rawPatient = patientData?.patient;
   const patient = useMemo(() => {
+    const medsDays = typeof rawPatient?.medsDays === 'number' ? rawPatient.medsDays : 5;
+    const sleepHours = typeof rawPatient?.sleepHours === 'number' ? rawPatient.sleepHours : 7.6;
+    const dailySteps = typeof rawPatient?.dailySteps === 'number' ? rawPatient.dailySteps : 8420;
+    const bloodGlucose = typeof rawPatient?.bloodGlucose === 'number' ? rawPatient.bloodGlucose : 104;
+    const aiGoalsCompleted = typeof rawPatient?.aiGoalsCompleted === 'boolean' ? rawPatient.aiGoalsCompleted : true;
+    const willAttend = typeof rawPatient?.willAttend === 'boolean' ? rawPatient.willAttend : true;
+
     if (!rawPatient || (!rawPatient.name && !rawPatient.firstName && !rawPatient.id)) {
+      const computedDefault = computeHealthScore({
+        medsDays,
+        sleepHours,
+        dailySteps,
+        bloodGlucose,
+        aiGoalsCompleted,
+        willAttend
+      });
       return {
         name: 'Marcus Everett',
         dob: 'Mar 14, 1985',
         age: 39,
         conditions: ['Rheumatoid Arthritis (M05.79)'],
         mrn: 'pat-marcus-001',
-        id: 'pat-marcus-001'
+        id: 'pat-marcus-001',
+        actionPlan: [],
+        activeNudge: null,
+        healthScore: computedDefault,
+        medsDays,
+        sleepHours,
+        dailySteps,
+        bloodGlucose,
+        aiGoalsCompleted,
+        willAttend
       };
     }
     const name = rawPatient.name || (rawPatient.firstName ? `${rawPatient.firstName} ${rawPatient.lastName || ''}`.trim() : 'Unnamed Patient');
+    
+    const healthScore = typeof rawPatient.healthScore === 'number' 
+      ? rawPatient.healthScore 
+      : computeHealthScore({
+          medsDays,
+          sleepHours,
+          dailySteps,
+          bloodGlucose,
+          aiGoalsCompleted,
+          willAttend
+        });
+
     return {
       name,
       dob: rawPatient.dob || rawPatient.dateOfBirth || 'Mar 14, 1985',
       age: rawPatient.age || (rawPatient.dateOfBirth ? new Date().getFullYear() - new Date(rawPatient.dateOfBirth).getFullYear() : 39),
       conditions: rawPatient.conditions || ['Rheumatoid Arthritis (M05.79)'],
       mrn: rawPatient.mrn || rawPatient.id || rawPatient.patientId || 'pat-marcus-001',
-      id: rawPatient.id || rawPatient.patientId || 'pat-marcus-001'
+      id: rawPatient.id || rawPatient.patientId || 'pat-marcus-001',
+      actionPlan: rawPatient.actionPlan || [],
+      activeNudge: rawPatient.activeNudge || null,
+      healthScore,
+      medsDays,
+      sleepHours,
+      dailySteps,
+      bloodGlucose,
+      aiGoalsCompleted,
+      willAttend
     };
   }, [rawPatient]);
+
+  const getTabNudge = (vibe: 'holistic' | 'metabolic' | 'activity' | 'circadian') => {
+    const nudge = patient?.activeNudge;
+    if (!nudge) return null;
+    
+    const vibeMap: Record<string, 'holistic' | 'metabolic' | 'activity' | 'circadian'> = {
+      'Mindful': 'holistic',
+      'Metabolic': 'metabolic',
+      'Steps': 'activity',
+      'Rest': 'circadian'
+    };
+    
+    if (vibeMap[nudge.tabTarget] === vibe) {
+      return nudge;
+    }
+    return null;
+  };
 
   const patientFirstName = useMemo(() => {
     if (!patient?.name) return 'Patient';
@@ -269,6 +331,53 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       };
 
       await updatePatientVitals(patient.id || 'pat-marcus-001', payload);
+
+      // Simulate onWrite Cloud Run backend trigger intercepting telemetry:
+      // It evaluates boundaries, query-links the COM-B barrier mapping, and updates activeNudge & actionPlan on Firestore
+      const simulatedNudge = {
+        tabTarget: 'Metabolic',
+        message: `Biometrics detected a glucose level of ${glucoseVal} mg/dL. Based on your PCOS/Diabetes afternoon energy-slump barrier profile, gentle physical active contractions provide a beautiful natural pathway to sponge glucose directly out of your bloodstream. Would you like to check off the active 10-minute Post-Meal Muscle Contraction Walk under your care actions list?`,
+        timestamp: Date.now()
+      };
+
+      const simulatedActionPlan = [
+        {
+          id: 'ai-goal-walk-' + Date.now(),
+          type: 'ai_micro_goal',
+          title: '🚶‍♂️ 10-Min Post-Meal Muscle Contraction Walk',
+          description: `Activate muscular GLUT4 glucose sponge receptors to smoothly curb afternoon metabolic spikes.`,
+          expirationTimestamp: Date.now() + 15 * 60 * 1000, // 15-minute time boundary (JITAI)
+          completed: false
+        },
+        {
+          id: 'ai-goal-water-' + Date.now(),
+          type: 'ai_micro_goal',
+          title: '💧 Circulating Hydration Flush',
+          description: `Drink 300ml of pure water to assist tissue fluid equilibrium and support glycemic cleansing.`,
+          expirationTimestamp: Date.now() + 8 * 60 * 1000, // 8-minute time boundary (JITAI)
+          completed: false
+        }
+      ];
+
+      await updatePatientNudgeAndActionPlan(patient.id || 'pat-marcus-001', simulatedNudge, simulatedActionPlan);
+      
+      const recalculatedScore = computeHealthScore({
+        medsDays: patient.medsDays,
+        sleepHours: Number(sleepHours),
+        dailySteps: Number(stepsCount),
+        bloodGlucose: Number(glucoseVal),
+        aiGoalsCompleted: patient.aiGoalsCompleted,
+        willAttend: patient.willAttend
+      });
+      await updatePatientHealthScore(patient.id || 'pat-marcus-001', recalculatedScore, {
+        medsDays: patient.medsDays,
+        sleepHours: Number(sleepHours),
+        dailySteps: Number(stepsCount),
+        bloodGlucose: Number(glucoseVal),
+        aiGoalsCompleted: patient.aiGoalsCompleted,
+        willAttend: patient.willAttend
+      });
+      
       setWearableSyncSuccess(true);
       
       setSyncStatusMessage(`${activeDevice === 'apple' ? 'Apple Health' : 'Android Health'} Synchronized!`);
@@ -798,12 +907,14 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 fill="none" 
                 strokeLinecap="round"
                 strokeDasharray="251.3" 
-                strokeDashoffset={251.3 - (251.3 * 96) / 100} 
+                strokeDashoffset={251.3 - (251.3 * (patient?.healthScore ?? 96)) / 100} 
                 className="transition-all duration-1000 ease-out"
               />
             </svg>
             <div className="absolute text-center flex flex-col items-center justify-center">
-              <span className="text-4xl md:text-5xl font-black font-sans tracking-tight text-slate-900 leading-none">96</span>
+              <span className="text-4xl md:text-5xl font-black font-sans tracking-tight text-slate-900 leading-none">
+                {patient?.healthScore ?? 96}
+              </span>
               <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mt-1">Health Score</span>
             </div>
           </div>
@@ -818,116 +929,220 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             {/* Conversation Focus Area Buttons */}
             <div className="flex flex-wrap gap-1.5 p-1 bg-[#EEF3F0] rounded-lg border border-[#DEE8E0] max-w-sm">
               <button
-                onClick={() => setActiveVibe('holistic')}
-                className={`px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
+                onClick={() => {
+                  setActiveVibe('holistic');
+                }}
+                className={`relative px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
                   activeVibe === 'holistic'
                     ? 'bg-[#3F5B42] text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-[#DCE7E1]'
                 }`}
               >
                 🌱 Mindful
+                {patient?.activeNudge?.tabTarget === 'Mindful' && (
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                  </span>
+                )}
               </button>
               <button
-                onClick={() => setActiveVibe('metabolic')}
-                className={`px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
+                onClick={() => {
+                  setActiveVibe('metabolic');
+                }}
+                className={`relative px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
                   activeVibe === 'metabolic'
                     ? 'bg-[#3F5B42] text-white shadow-sm'
-                    : 'text-slate-[#3F5B42] hover:text-slate-900 hover:bg-[#DCE7E1]'
+                    : 'text-[#3F5B42] hover:text-slate-900 hover:bg-[#DCE7E1]'
                 }`}
               >
                 🩺 Metabolic
+                {patient?.activeNudge?.tabTarget === 'Metabolic' && (
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                  </span>
+                )}
               </button>
               <button
-                onClick={() => setActiveVibe('activity')}
-                className={`px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
+                onClick={() => {
+                  setActiveVibe('activity');
+                }}
+                className={`relative px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
                   activeVibe === 'activity'
                     ? 'bg-[#3F5B42] text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-[#DCE7E1]'
                 }`}
               >
                 🏃‍♀️ Steps
+                {patient?.activeNudge?.tabTarget === 'Steps' && (
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                  </span>
+                )}
               </button>
               <button
-                onClick={() => setActiveVibe('circadian')}
-                className={`px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
+                onClick={() => {
+                  setActiveVibe('circadian');
+                }}
+                className={`relative px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded transition-all duration-200 cursor-pointer ${
                   activeVibe === 'circadian'
                     ? 'bg-[#3F5B42] text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-[#DCE7E1]'
                 }`}
               >
                 💤 Rest
+                {patient?.activeNudge?.tabTarget === 'Rest' && (
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                  </span>
+                )}
               </button>
             </div>
 
             {/* Dynamic Conversational Output Area */}
             <div className="min-h-[145px] flex flex-col justify-between">
-              {activeVibe === 'holistic' && (
-                <div className="space-y-1.5 animate-fadeIn">
-                  <span className="bg-[#D1E2D7] text-emerald-900 border border-[#BED1C5] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
-                    Holistic Encouragement
-                  </span>
-                  <h2 className="text-lg font-extrabold text-[#3F5B42] tracking-tight leading-snug">
-                    We are so proud of your progress, {patientFirstName}
-                  </h2>
-                  <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
-                    Caring for yourself is a gentle series of daily choices, not rigid scores. Your consistent 96% reflects beautiful, steady dedication to feeling your best.
-                  </p>
-                  <p className="text-[11px] italic text-emerald-800 font-medium pt-1">
-                    “Every warm ritual you build today is quietly strengthening your foundation.”
-                  </p>
-                </div>
-              )}
+              {activeVibe === 'holistic' && (() => {
+                const nudge = getTabNudge('holistic');
+                if (nudge) {
+                  return (
+                    <div className="space-y-2 animate-fadeIn">
+                      <span className="bg-amber-100 text-amber-950 border border-[#FFE0B2] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit flex items-center gap-1">
+                        ✨ Adaptive AI Telemetry Focus
+                      </span>
+                      <h2 className="text-base font-extrabold text-[#3F5B42] tracking-tight leading-snug">
+                        Mindfulness Prompt
+                      </h2>
+                      <p className="text-[11.5px] leading-relaxed text-slate-850 font-medium bg-[#FAFCFB] p-2.5 rounded-lg border border-emerald-100 shadow-inner">
+                        {nudge.message}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <span className="bg-[#D1E2D7] text-emerald-900 border border-[#BED1C5] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
+                      Holistic Encouragement
+                    </span>
+                    <h2 className="text-lg font-extrabold text-[#3F5B42] tracking-tight leading-snug">
+                      We are so proud of your progress, {patientFirstName}
+                    </h2>
+                    <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
+                      Caring for yourself is a gentle series of daily choices, not rigid scores. Your consistent 96% reflects beautiful, steady dedication to feeling your best.
+                    </p>
+                    <p className="text-[11px] italic text-emerald-800 font-medium pt-1">
+                      “Every warm ritual you build today is quietly strengthening your foundation.”
+                    </p>
+                  </div>
+                );
+              })()}
 
-              {activeVibe === 'metabolic' && (
-                <div className="space-y-1.5 animate-fadeIn">
-                  <span className="bg-[#FFF4E5] text-amber-950 border border-[#FFE0B2] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
-                    Metabolic Harmony
-                  </span>
-                  <h2 className="text-lg font-extrabold text-amber-900 tracking-tight leading-snug">
-                    A clinical touch on your glucose balance
-                  </h2>
-                  <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
-                    Fasting number of {bloodGlucoseStatus.val} is a steady step in your diabetes plan. Consider a light 10-minute walk after lunch — it's a wonderfully natural way to aid insulin absorption!
-                  </p>
-                  <p className="text-[11px] italic text-amber-800 font-medium pt-1">
-                    “Be patient with your rhythms. Your clinical support team is walking right beside you.”
-                  </p>
-                </div>
-              )}
+              {activeVibe === 'metabolic' && (() => {
+                const nudge = getTabNudge('metabolic');
+                if (nudge) {
+                  return (
+                    <div className="space-y-2 animate-fadeIn">
+                      <span className="bg-[#FFF4E5] text-amber-950 border border-[#FFE0B2] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit flex items-center gap-1 animate-pulse">
+                        ✨ Adaptive AI Telemetry Focus
+                      </span>
+                      <h2 className="text-base font-extrabold text-amber-900 tracking-tight leading-snug">
+                        Metabolic Ingestion Prompt
+                      </h2>
+                      <p className="text-[11.5px] leading-relaxed text-slate-850 font-semibold bg-[#FAFCFB] p-2.5 rounded-lg border border-[#FFE0B2] shadow-inner font-sans">
+                        {nudge.message}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <span className="bg-[#FFF4E5] text-amber-950 border border-[#FFE0B2] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
+                      Metabolic Harmony
+                    </span>
+                    <h2 className="text-lg font-extrabold text-amber-900 tracking-tight leading-snug">
+                      A clinical touch on your glucose balance
+                    </h2>
+                    <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
+                      Fasting number of {bloodGlucoseStatus.val} is a steady step in your diabetes plan. Consider a light 10-minute walk after lunch — it's a wonderfully natural way to aid insulin absorption!
+                    </p>
+                    <p className="text-[11px] italic text-amber-800 font-medium pt-1">
+                      “Be patient with your rhythms. Your clinical support team is walking right beside you.”
+                    </p>
+                  </div>
+                );
+              })()}
 
-              {activeVibe === 'activity' && (
-                <div className="space-y-1.5 animate-fadeIn">
-                  <span className="bg-blue-50 text-blue-900 border border-blue-100 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
-                    Cardiovascular Stamina
-                  </span>
-                  <h2 className="text-lg font-extrabold text-blue-900 tracking-tight leading-snug">
-                    8,420 steps is an absolute triumph
-                  </h2>
-                  <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
-                    You've successfully tracked significant movement today, {patientFirstName}! Consistent step counts help expand cardiovascular resilience and support healthy blood pressure metrics.
-                  </p>
-                  <p className="text-[11px] italic text-blue-800 font-medium pt-1">
-                    “Each step releases natural strength, feeding your cells oxygen and vital energy.”
-                  </p>
-                </div>
-              )}
+              {activeVibe === 'activity' && (() => {
+                const nudge = getTabNudge('activity');
+                if (nudge) {
+                  return (
+                    <div className="space-y-2 animate-fadeIn">
+                      <span className="bg-amber-100 text-amber-950 border border-[#FFE0B2] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit flex items-center gap-1">
+                        ✨ Adaptive AI Telemetry Focus
+                      </span>
+                      <h2 className="text-base font-extrabold text-[#3F5B42] tracking-tight leading-snug">
+                        Steps & Activity Advisory
+                      </h2>
+                      <p className="text-[11.5px] leading-relaxed text-slate-850 font-medium bg-[#FAFCFB] p-2.5 rounded-lg border border-blue-100 shadow-inner">
+                        {nudge.message}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <span className="bg-blue-50 text-blue-900 border border-blue-100 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
+                      Cardiovascular Stamina
+                    </span>
+                    <h2 className="text-lg font-extrabold text-blue-900 tracking-tight leading-snug">
+                      8,420 steps is an absolute triumph
+                    </h2>
+                    <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
+                      You've successfully tracked significant movement today, {patientFirstName}! Consistent step counts help expand cardiovascular resilience and support healthy blood pressure metrics.
+                    </p>
+                    <p className="text-[11px] italic text-blue-800 font-medium pt-1">
+                      “Each step releases natural strength, feeding your cells oxygen and vital energy.”
+                    </p>
+                  </div>
+                );
+              })()}
 
-              {activeVibe === 'circadian' && (
-                <div className="space-y-1.5 animate-fadeIn">
-                  <span className="bg-purple-50 text-purple-950 border border-purple-100 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
-                    Restful Recovery
-                  </span>
-                  <h2 className="text-lg font-extrabold text-purple-950 tracking-tight leading-snug">
-                    Sleep is the quiet healer
-                  </h2>
-                  <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
-                    Logging 7.6 hours of restful sleep gives your nervous system the vital space it needs to reset cortisol levels, naturally stabilizing your morning metabolic resistance.
-                  </p>
-                  <p className="text-[11px] italic text-purple-900 font-medium pt-1">
-                    “An hour of calm, restful sleep is the ultimate medicine for hormonal renewal.”
-                  </p>
-                </div>
-              )}
+              {activeVibe === 'circadian' && (() => {
+                const nudge = getTabNudge('circadian');
+                if (nudge) {
+                  return (
+                    <div className="space-y-2 animate-fadeIn">
+                      <span className="bg-[#FFF4E5] text-amber-950 border border-[#FFE0B2] px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit flex items-center gap-1">
+                        ✨ Adaptive AI Telemetry Focus
+                      </span>
+                      <h2 className="text-base font-extrabold text-[#3F5B42] tracking-tight leading-snug">
+                        Circadian Support Summary
+                      </h2>
+                      <p className="text-[11.5px] leading-relaxed text-slate-850 font-medium bg-[#FAFCFB] p-2.5 rounded-lg border border-purple-100 shadow-inner">
+                        {nudge.message}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <span className="bg-purple-50 text-purple-950 border border-purple-100 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider w-fit">
+                      Restful Recovery
+                    </span>
+                    <h2 className="text-lg font-extrabold text-purple-950 tracking-tight leading-snug">
+                      Sleep is the quiet healer
+                    </h2>
+                    <p className="text-xs md:text-[13px] text-slate-700 leading-relaxed font-normal">
+                      Logging 7.6 hours of restful sleep gives your nervous system the vital space it needs to reset cortisol levels, naturally stabilizing your morning metabolic resistance.
+                    </p>
+                    <p className="text-[11px] italic text-purple-900 font-medium pt-1">
+                      “An hour of calm, restful sleep is the ultimate medicine for hormonal renewal.”
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           </div>
           
