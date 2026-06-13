@@ -1,8 +1,7 @@
-import { auth } from './clinicalFirestoreService';
-import { mockDbService } from '../lib/mockDatabase';
+import { auth, clinicalService } from './clinicalFirestoreService';
 
 export async function uploadSOP(title: string, content: string, version: string) {
-  return mockDbService.addItem('sops', {
+  return clinicalService.addItem('sops', {
     title,
     content,
     version,
@@ -12,9 +11,10 @@ export async function uploadSOP(title: string, content: string, version: string)
 
 export async function acknowledgeSOP(sopId: string) {
   const userId = auth.currentUser?.uid || 'system';
-  mockDbService.addItem('sop_acknowledgments' as any, {
+  await clinicalService.addItem('sop_acknowledgments', {
     sopId,
     userId,
     witnessedAt: { seconds: Math.floor(Date.now() / 1000) }
   });
 }
+

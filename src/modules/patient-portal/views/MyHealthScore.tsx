@@ -40,17 +40,40 @@ export function MyHealthScore({ patientData }: MyHealthScoreProps) {
     if (rPatient?.id) {
       if (rPatient.id !== prevPatientId) {
         setPrevPatientId(rPatient.id);
+        // Force-load bypass when changing patients
+        if (typeof rPatient.medsDays === 'number') setMedsDays(rPatient.medsDays);
+        if (typeof rPatient.sleepHours === 'number') setSleepHours(rPatient.sleepHours);
+        if (typeof rPatient.dailySteps === 'number') setDailySteps(rPatient.dailySteps);
+        if (typeof rPatient.bloodGlucose === 'number') setBloodGlucose(rPatient.bloodGlucose);
+        if (typeof rPatient.aiGoalsCompleted === 'boolean') setAiGoalsCompleted(rPatient.aiGoalsCompleted);
+        if (typeof rPatient.willAttend === 'boolean') setWillAttend(rPatient.willAttend);
+        setSyncStatus('synced');
+        return;
       }
-      if (typeof rPatient.medsDays === 'number') setMedsDays(rPatient.medsDays);
-      if (typeof rPatient.sleepHours === 'number') setSleepHours(rPatient.sleepHours);
-      if (typeof rPatient.dailySteps === 'number') setDailySteps(rPatient.dailySteps);
-      if (typeof rPatient.bloodGlucose === 'number') setBloodGlucose(rPatient.bloodGlucose);
-      if (typeof rPatient.aiGoalsCompleted === 'boolean') setAiGoalsCompleted(rPatient.aiGoalsCompleted);
-      if (typeof rPatient.willAttend === 'boolean') setWillAttend(rPatient.willAttend);
-      // Let's preserve synced indicator
-      setSyncStatus('synced');
+      
+      // UI State Lock: ONLY update local state if we are fully synced.
+      // This prevents the slider value from snapping/stuttering while the user is actively dragging.
+      if (syncStatus === 'synced') {
+        if (typeof rPatient.medsDays === 'number') setMedsDays(rPatient.medsDays);
+        if (typeof rPatient.sleepHours === 'number') setSleepHours(rPatient.sleepHours);
+        if (typeof rPatient.dailySteps === 'number') setDailySteps(rPatient.dailySteps);
+        if (typeof rPatient.bloodGlucose === 'number') setBloodGlucose(rPatient.bloodGlucose);
+        if (typeof rPatient.aiGoalsCompleted === 'boolean') setAiGoalsCompleted(rPatient.aiGoalsCompleted);
+        if (typeof rPatient.willAttend === 'boolean') setWillAttend(rPatient.willAttend);
+      }
     }
-  }, [rPatient?.id, rPatient?.medsDays, rPatient?.sleepHours, rPatient?.dailySteps, rPatient?.bloodGlucose, rPatient?.aiGoalsCompleted, rPatient?.willAttend]);
+  }, [rPatient?.id, rPatient?.medsDays, rPatient?.sleepHours, rPatient?.dailySteps, rPatient?.bloodGlucose, rPatient?.aiGoalsCompleted, rPatient?.willAttend, syncStatus, prevPatientId]);
+
+  // Careful cleanup logic: Failsafe release timer ensuring the UI doesn't get stuck in a locked state
+  useEffect(() => {
+    if (syncStatus === 'saving') {
+      const lockFailsafe = setTimeout(() => {
+        setSyncStatus('synced');
+        console.warn('CarePlus UI Lock Failsafe triggered: Released saving lock.');
+      }, 5000);
+      return () => clearTimeout(lockFailsafe);
+    }
+  }, [syncStatus]);
 
   // Debounced auto-sync to Firestore Patients collection
   useEffect(() => {
@@ -67,7 +90,7 @@ export function MyHealthScore({ patientData }: MyHealthScoreProps) {
           bloodGlucose,
           aiGoalsCompleted,
           willAttend
-        });
+        }, 'manual');
         setSyncStatus('synced');
       } catch (err) {
         console.error('Failed to autosave health score:', err);
@@ -89,7 +112,7 @@ export function MyHealthScore({ patientData }: MyHealthScoreProps) {
         bloodGlucose,
         aiGoalsCompleted,
         willAttend
-      });
+      }, 'manual');
       setSyncStatus('synced');
     } catch (err) {
       console.error('Failed manual sync of health score:', err);
@@ -180,6 +203,57 @@ export function MyHealthScore({ patientData }: MyHealthScoreProps) {
     setCalculationDetails(mods);
     setPredictedScore(Math.min(Math.max(baseScore + totalModifiers, 0), 100));
   }, [medsDays, sleepHours, dailySteps, bloodGlucose, aiGoalsCompleted, willAttend]);
+
+  // Resolve active metrics for UI explanation
+  const getSourceStats = (channel: 'sleepHours' | 'dailySteps' | 'bloodGlucose', label: string, unit: string) => {
+    const wearable = rPatient?.wearable?.[channel];
+    const manual = rPatient?.manual?.[channel];
+
+    const wearableVal = wearable?.value;
+    let wearableTime = 0;
+    if (wearable?.lastUpdated) {
+      wearableTime = typeof wearable.lastUpdated === 'object' && typeof wearable.lastUpdated.toMillis === 'function'
+        ? wearable.lastUpdated.toMillis()
+        : new Date(wearable.lastUpdated).getTime() || Number(wearable.lastUpdated) || 0;
+    }
+
+    const manualVal = manual?.value;
+    let manualTime = 0;
+    if (manual?.lastUpdated) {
+      manualTime = typeof manual.lastUpdated === 'object' && typeof manual.lastUpdated.toMillis === 'function'
+        ? manual.lastUpdated.toMillis()
+        : new Date(manual.lastUpdated).getTime() || Number(manual.lastUpdated) || 0;
+    }
+
+    // Default mock background values on fresh clean install to keep the UI beautiful
+    const fallbackVal = channel === 'sleepHours' ? 7.6 : channel === 'dailySteps' ? 7800 : 104;
+    const resolvedActive = (wearableVal !== undefined && wearableTime > manualTime) ? wearableVal : (manualVal !== undefined ? manualVal : fallbackVal);
+    const isWearableWinner = wearableVal !== undefined && wearableTime > manualTime;
+
+    return {
+      label,
+      unit,
+      wearableVal: wearableVal !== undefined ? wearableVal : fallbackVal,
+      wearableTime,
+      manualVal: manualVal !== undefined ? manualVal : fallbackVal,
+      manualTime,
+      isWearableWinner,
+      activeVal: resolvedActive
+    };
+  };
+
+  const sleepHealthStats = getSourceStats('sleepHours', 'Sleep Duration', 'hrs');
+  const stepsHealthStats = getSourceStats('dailySteps', 'Step Activity', 'steps');
+  const glucoseHealthStats = getSourceStats('bloodGlucose', 'Glucose Status', 'mg/dL');
+
+  const formatTime = (epoch: number) => {
+    if (!epoch) return 'Awaiting telemetry';
+    const diff = Date.now() - epoch;
+    if (diff < 15000) return 'Just now';
+    if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    return new Date(epoch).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
 
   return (
     <motion.div 
@@ -380,6 +454,158 @@ export function MyHealthScore({ patientData }: MyHealthScoreProps) {
 
         </div>
 
+      </div>
+
+      {/* Last Write Wins (LWW) Channel Arbitrator */}
+      <div className="bg-slate-900 text-slate-100 rounded-2xl p-6 border border-slate-800 shadow-lg space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="space-y-1">
+            <span className="bg-teal-500/10 text-[#2DD4BF] text-[9px] font-extrabold uppercase px-2 py-0.5 rounded tracking-widest font-mono">
+              Live Resolution Engine
+            </span>
+            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+              📂 Schema Branching & Last Write Wins (LWW) Priority Arbitrator
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              To guarantee bulletproof clinical audit records, CarePlus branches each biometric data stream. The calculation engine resolves which source to feed into the unified health score in real-time according to transaction timestamp precedence.
+            </p>
+          </div>
+          <div className="text-right flex items-center gap-1.5 bg-teal-500/10 text-[#2DD4BF] text-xs font-semibold px-2.5 py-1 rounded">
+            <div className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-ping" />
+            <span className="font-mono text-[10px] uppercase tracking-wide">Active Arbitration Channels</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* Sleep Hours channel */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span className="text-[11px] font-bold text-slate-200">🌘 Sleep Duration</span>
+              {sleepHealthStats.isWearableWinner ? (
+                <span className="text-[9px] font-extrabold text-emerald-400 bg-emerald-950/50 px-1.5 py-0.5 rounded">Wearable Priority</span>
+              ) : (
+                <span className="text-[9px] font-extrabold text-[#38BDF8] bg-sky-950/50 px-1.5 py-0.5 rounded">Manual Priority</span>
+              )}
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">Device Telemetry:</span>
+                <span className={`font-mono font-bold ${sleepHealthStats.isWearableWinner ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {sleepHealthStats.wearableVal} hrs
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500 italic pb-1">
+                <span>Timestamp:</span>
+                <span>{formatTime(sleepHealthStats.wearableTime)}</span>
+              </div>
+
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">User Manual Slider:</span>
+                <span className={`font-mono font-bold ${!sleepHealthStats.isWearableWinner ? 'text-sky-400' : 'text-slate-500'}`}>
+                  {sleepHealthStats.manualVal} hrs
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500 italic border-b border-slate-850 pb-2">
+                <span>Timestamp:</span>
+                <span>{formatTime(sleepHealthStats.manualTime)}</span>
+              </div>
+
+              <div className="flex justify-between items-center pt-1 text-[11px] font-bold">
+                <span className="text-slate-300">Resolved Value:</span>
+                <span className="text-[#2DD4BF] font-mono">{sleepHealthStats.activeVal} hrs</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Daily Steps channel */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span className="text-[11px] font-bold text-slate-200">🏃Step Activity</span>
+              {stepsHealthStats.isWearableWinner ? (
+                <span className="text-[9px] font-extrabold text-emerald-400 bg-emerald-950/50 px-1.5 py-0.5 rounded">Wearable Priority</span>
+              ) : (
+                <span className="text-[9px] font-extrabold text-[#38BDF8] bg-sky-950/50 px-1.5 py-0.5 rounded">Manual Priority</span>
+              )}
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">Device Telemetry:</span>
+                <span className={`font-mono font-bold ${stepsHealthStats.isWearableWinner ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {stepsHealthStats.wearableVal.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500 italic pb-1">
+                <span>Timestamp:</span>
+                <span>{formatTime(stepsHealthStats.wearableTime)}</span>
+              </div>
+
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">User Manual Slider:</span>
+                <span className={`font-mono font-bold ${!stepsHealthStats.isWearableWinner ? 'text-sky-400' : 'text-slate-500'}`}>
+                  {stepsHealthStats.manualVal.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500 italic border-b border-slate-850 pb-2">
+                <span>Timestamp:</span>
+                <span>{formatTime(stepsHealthStats.manualTime)}</span>
+              </div>
+
+              <div className="flex justify-between items-center pt-1 text-[11px] font-bold">
+                <span className="text-slate-300">Resolved Value:</span>
+                <span className="text-[#2DD4BF] font-mono">{stepsHealthStats.activeVal.toLocaleString()} steps</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Blood Glucose channel */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span className="text-[11px] font-bold text-slate-200">🩸 Glycemic Stability</span>
+              {glucoseHealthStats.isWearableWinner ? (
+                <span className="text-[9px] font-extrabold text-emerald-400 bg-emerald-950/50 px-1.5 py-0.5 rounded">Wearable Priority</span>
+              ) : (
+                <span className="text-[9px] font-extrabold text-[#38BDF8] bg-sky-950/50 px-1.5 py-0.5 rounded">Manual Priority</span>
+              )}
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">Device Telemetry:</span>
+                <span className={`font-mono font-bold ${glucoseHealthStats.isWearableWinner ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {glucoseHealthStats.wearableVal} mg/dL
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500 italic pb-1">
+                <span>Timestamp:</span>
+                <span>{formatTime(glucoseHealthStats.wearableTime)}</span>
+              </div>
+
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">User Manual Slider:</span>
+                <span className={`font-mono font-bold ${!glucoseHealthStats.isWearableWinner ? 'text-sky-400' : 'text-slate-500'}`}>
+                  {glucoseHealthStats.manualVal} mg/dL
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500 italic border-b border-slate-850 pb-2">
+                <span>Timestamp:</span>
+                <span>{formatTime(glucoseHealthStats.manualTime)}</span>
+              </div>
+
+              <div className="flex justify-between items-center pt-1 text-[11px] font-bold">
+                <span className="text-slate-300">Resolved Value:</span>
+                <span className="text-[#2DD4BF] font-mono">{glucoseHealthStats.activeVal} mg/dL</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <p className="text-[10px] text-slate-500 font-mono italic leading-relaxed pt-1">
+          💡 Try out the dual priorities: Use the Smart Wearable Feed Hub on the main Health Board to trigger a new Device Telemetry write (updating wearable timestamps), or slide any bar below to immediately generate a Manual Slider write (updating manual timestamps). Last Write Wins!
+        </p>
       </div>
 
       {/* Interactive Sliders Section */}

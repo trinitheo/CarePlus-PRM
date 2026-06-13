@@ -126,47 +126,95 @@ export const SeedService = {
     console.log('Seeding Marcus Everett rheumatoid arthritis model patient...');
     const patientId = 'pat-marcus-001';
 
+    const mapId = (id: string): string => {
+      if (id === 'user-theogate-001') return 'uid-clinician-001';
+      if (id === 'user-nurse-rivera-001' || id === 'user-alwayson-001') return 'uid-nurse-001';
+      if (id === 'uid-marcus-portal-001') return 'uid-patient-001';
+      return id;
+    };
+
+    const mapName = (name: string): string => {
+      if (!name) return name;
+      if (name.includes('Theogate')) return 'Dr. Gregory Theogate, MD';
+      if (name.includes('Rivera') || name.includes('Alwayson')) return 'Tamara Rivera, RN';
+      return name;
+    };
+
+    const mapObject = (obj: any): any => {
+      if (!obj) return obj;
+      const res = { ...obj };
+      if (res.authorId) res.authorId = mapId(res.authorId);
+      if (res.authorName) res.authorName = mapName(res.authorName);
+      if (res.providerId) res.providerId = mapId(res.providerId);
+      if (res.providerName) res.providerName = mapName(res.providerName);
+      if (res.fromProvider) {
+        if (res.fromProvider.includes('Theogate')) {
+          res.fromProvider = 'Dr. Gregory Theogate, MD — Rheumatology';
+        }
+      }
+      if (res.toProvider) {
+        if (res.toProvider.includes('Alwayson') || res.toProvider.includes('Rivera')) {
+          res.toProvider = 'Tamara Rivera, RN';
+        }
+      }
+      return res;
+    };
+
     // --- 1. PROVIDERS & USER PROFILES ---
-    // Dr. G. Theogate
+    // Dr. Gregory Theogate, MD
     const theogateObj = {
-      id: "user-theogate-001",
+      id: "uid-clinician-001",
       email: "g.theogate@careplus.health",
-      displayName: "Dr. G. Theogate",
+      displayName: "Dr. Gregory Theogate, MD",
       role: "clinician" as AppRole,
       specialty: "Rheumatology",
+      phone: "(555) 456-7890",
+      npi: "1982736450",
+      dea: "XT9872543",
       createdAt: "2024-09-01T08:00:00Z"
     };
 
-    // Michelle Alwayson
-    const alwaysonObj = {
-      id: "user-alwayson-001",
-      email: "m.alwayson@careplus.health",
-      displayName: "Michelle Alwayson",
-      role: "nurse" as AppRole, // mapped to nurse per PRM spec
-      specialty: "Physiotherapy",
-      createdAt: "2024-09-01T08:00:00Z"
+    // Elena Rostova (Front Desk)
+    const frontdeskObj = {
+      id: "uid-frontdesk-001",
+      email: "e.rostova@careplus.health",
+      displayName: "Elena Rostova",
+      role: "front_desk" as AppRole,
+      phone: "(555) 234-5678",
+      createdAt: "2025-01-08T09:00:00Z"
     };
 
-    // Tamara Rivera (Chronic Disease Management Nurse)
+    // Tamara Rivera, RN (Nurse)
     const riveraObj = {
-      id: "user-nurse-rivera-001",
+      id: "uid-nurse-001",
       email: "t.rivera@careplus.health",
-      displayName: "Tamara Rivera",
+      displayName: "Tamara Rivera, RN",
       role: "nurse" as AppRole,
-      specialty: "Chronic Disease Management",
+      phone: "(555) 345-6789",
+      licenseNumber: "RN-482019",
+      createdAt: "2024-09-01T08:00:00Z"
+    };
+
+    // Arthur Pendelton (Admin)
+    const adminObj = {
+      id: "uid-admin-001",
+      email: "a.pendelton@careplus.health",
+      displayName: "Arthur Pendelton",
+      role: "admin" as AppRole,
+      phone: "(555) 567-8901",
       createdAt: "2024-09-01T08:00:00Z"
     };
 
     // Marcus Everett (Patient Portal User Access)
     const marcusPortalUser = {
-      id: "uid-marcus-portal-001",
+      id: "uid-patient-001",
       email: "m.everett@personal.com",
       displayName: "Marcus Everett",
       role: "patient" as AppRole,
       createdAt: "2025-01-08T09:10:00Z"
     };
 
-    const usersToSeed = [theogateObj, alwaysonObj, riveraObj, marcusPortalUser];
+    const usersToSeed = [theogateObj, frontdeskObj, riveraObj, adminObj, marcusPortalUser];
     for (let idx = 0; idx < usersToSeed.length; idx++) {
       const u = usersToSeed[idx];
       // Save in mock DB cache
@@ -184,11 +232,13 @@ export const SeedService = {
         patientId: u.role === 'patient' ? 'pat-marcus-001' : undefined,
         avatar: u.role === 'patient' 
           ? 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=200&auto=format&fit=crop'
-          : u.id === 'user-theogate-001'
-            ? 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop'
-            : u.id === 'user-nurse-rivera-001'
-              ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop'
-              : 'https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop',
+          : u.id === 'uid-clinician-001'
+            ? 'https://images.unsplash.com/photo-1622253692010-333f2da60710?q=80&w=200&auto=format&fit=crop'
+            : u.id === 'uid-nurse-001'
+              ? 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop'
+              : u.id === 'uid-frontdesk-001'
+                ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop'
+                : 'https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop',
         status: 'Active',
         createdAt: u.createdAt
       });
@@ -203,7 +253,7 @@ export const SeedService = {
       lastName: "Everett",
       dateOfBirth: "1985-03-14",
       gender: "Male",
-      authorId: "user-theogate-001",
+      authorId: "uid-clinician-001",
       patientId: patientId,
       authorizedUserIds: [],
       appleHealthConnected: true,
@@ -212,7 +262,7 @@ export const SeedService = {
       appleHealthPermissionsGranted: ["HeartRate", "BloodPressure", "BodyMass", "BloodGlucose", "RestingHeartRate", "StepCount", "SleepAnalysis", "OxygenSaturation"],
       appleHealthLastSyncedAt: "2025-05-29T07:30:00Z",
       appleHealthDeviceModel: "Apple Watch Series 9 + iPhone 15 Pro",
-      appleHealthDataSourceId: "com.apple.health::uid-marcus-portal-001",
+      appleHealthDataSourceId: "com.apple.health::uid-patient-001",
       createdAt: "2025-01-08T09:10:00Z"
     };
 
@@ -223,31 +273,23 @@ export const SeedService = {
     // --- 3. SUBCOLLECTIONS AND CONNECTIVITY SHARDS ---
     
     // Clinical Care Teams Edge
-    await setDoc(doc(db, 'patients', patientId, 'care_teams', 'user-theogate-001'), {
-      userId: 'user-theogate-001',
+    await setDoc(doc(db, 'patients', patientId, 'care_teams', 'uid-clinician-001'), {
+      userId: 'uid-clinician-001',
       patientId: patientId,
       role: 'primary_clinician',
       status: 'active',
       joinedAt: new Date().toISOString()
     });
-    await setDoc(doc(db, 'patients', patientId, 'care_teams', 'user-alwayson-001'), {
-      userId: 'user-alwayson-001',
-      patientId: patientId,
-      role: 'physiotherapist',
-      status: 'active',
-      joinedAt: new Date().toISOString()
-    });
-    await setDoc(doc(db, 'patients', patientId, 'care_teams', 'user-nurse-rivera-001'), {
-      userId: 'user-nurse-rivera-001',
+    await setDoc(doc(db, 'patients', patientId, 'care_teams', 'uid-nurse-001'), {
+      userId: 'uid-nurse-001',
       patientId: patientId,
       role: 'case_manager',
       status: 'active',
       joinedAt: new Date().toISOString()
     });
     mockDb.care_teams[patientId] = [
-      { userId: 'user-theogate-001', role: 'primary_clinician', status: 'active' },
-      { userId: 'user-alwayson-001', role: 'physiotherapist', status: 'active' },
-      { userId: 'user-nurse-rivera-001', role: 'case_manager', status: 'active' }
+      { userId: 'uid-clinician-001', role: 'primary_clinician', status: 'active' },
+      { userId: 'uid-nurse-001', role: 'case_manager', status: 'active' }
     ];
 
     // Vitals Sequence (9 Dense Readings)
@@ -431,8 +473,9 @@ export const SeedService = {
       }
     ];
 
-    mockDb.vitals[patientId] = vitalsData;
-    for (const v of vitalsData) {
+    const mappedVitals = vitalsData.map(mapObject);
+    mockDb.vitals[patientId] = mappedVitals;
+    for (const v of mappedVitals) {
       await setDoc(doc(db, 'patients', patientId, 'vitals', v.id), v);
     }
     onProgress?.({ step: 'Ingesting Biomarkers & Vitals', count: vitalsData.length, total: vitalsData.length });
@@ -489,8 +532,9 @@ export const SeedService = {
       }
     ];
 
-    mockDb.clinical_records[patientId] = clinicalRecordsData;
-    for (const cr of clinicalRecordsData) {
+    const mappedCR = clinicalRecordsData.map(mapObject);
+    mockDb.clinical_records[patientId] = mappedCR;
+    for (const cr of mappedCR) {
       await setDoc(doc(db, 'patients', patientId, 'clinical_records', cr.id), cr);
     }
     onProgress?.({ step: 'Generating SOAP Case Summary', count: clinicalRecordsData.length, total: clinicalRecordsData.length });
@@ -607,8 +651,9 @@ export const SeedService = {
       }
     ];
 
-    mockDb.investigations[patientId] = investigationsData;
-    for (const inv of investigationsData) {
+    const mappedInv = investigationsData.map(mapObject);
+    mockDb.investigations[patientId] = mappedInv;
+    for (const inv of mappedInv) {
       await setDoc(doc(db, 'patients', patientId, 'investigations', inv.id), inv);
     }
     onProgress?.({ step: 'Generating Diagnostic Orders', count: investigationsData.length, total: investigationsData.length });
@@ -685,8 +730,9 @@ export const SeedService = {
       }
     ];
 
-    mockDb.prescriptions[patientId] = prescriptionsData;
-    for (const p of prescriptionsData) {
+    const mappedP = prescriptionsData.map(mapObject);
+    mockDb.prescriptions[patientId] = mappedP;
+    for (const p of mappedP) {
       await setDoc(doc(db, 'patients', patientId, 'prescriptions', p.id), p);
     }
     onProgress?.({ step: 'Issuing Pharmacotherapeutic Scripts', count: prescriptionsData.length, total: prescriptionsData.length });
@@ -721,8 +767,9 @@ export const SeedService = {
       }
     ];
 
-    mockDb.referrals[patientId] = referralsData;
-    for (const r of referralsData) {
+    const mappedR = referralsData.map(mapObject);
+    mockDb.referrals[patientId] = mappedR;
+    for (const r of mappedR) {
       await setDoc(doc(db, 'patients', patientId, 'referrals', r.id), r);
     }
     onProgress?.({ step: 'Registering Referrals', count: referralsData.length, total: referralsData.length });
@@ -755,8 +802,9 @@ export const SeedService = {
       }
     ];
 
-    mockDb.procedures[patientId] = proceduresData;
-    for (const pr of proceduresData) {
+    const mappedPr = proceduresData.map(mapObject);
+    mockDb.procedures[patientId] = mappedPr;
+    for (const pr of mappedPr) {
       await setDoc(doc(db, 'patients', patientId, 'procedures', pr.id), pr);
     }
     onProgress?.({ step: 'Scheduling Procedures', count: proceduresData.length, total: proceduresData.length });
@@ -845,32 +893,37 @@ export const SeedService = {
       }
     ];
 
-    mockDb.interactions[patientId] = interactionsData;
-    for (const i of interactionsData) {
+    const mappedI = interactionsData.map(mapObject);
+    mockDb.interactions[patientId] = mappedI;
+    for (const i of mappedI) {
       await setDoc(doc(db, 'patients', patientId, 'interactions', i.id), i);
     }
     
-    // Future Appointments linked with seeded providers
-    const apptObj1 = {
+    const rawAppt1 = {
       id: "appt-marcus-001",
       patientId: patientId,
       providerId: "user-theogate-001",
+      providerName: "Dr. Gregory Theogate, MD",
       time: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
       reason: "Rheumatoid Arthritis 6-Month Review",
       status: 'scheduled',
       visitType: 'in_clinic',
       priority: 'routine'
     };
-    const apptObj2 = {
+    const rawAppt2 = {
       id: "appt-marcus-002",
       patientId: patientId,
       providerId: "user-alwayson-001",
+      providerName: "Tamara Rivera, RN",
       time: new Date(Date.now() + 86400000 * 2).toISOString(), // In 2 days
       reason: "Hand & Wrist MSK Physical Therapy Routine",
       status: 'scheduled',
       visitType: 'in_clinic',
       priority: 'routine'
     };
+
+    const apptObj1 = mapObject(rawAppt1);
+    const apptObj2 = mapObject(rawAppt2);
 
     mockDb.appointments = mockDb.appointments.filter(a => a.patientId !== patientId);
     mockDb.appointments.push(apptObj1, apptObj2);

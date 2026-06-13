@@ -1,5 +1,4 @@
-import { auth } from './clinicalFirestoreService';
-import { mockDbService } from '../lib/mockDatabase';
+import { auth, clinicalService } from './clinicalFirestoreService';
 
 export interface InternalTask {
   id: string;
@@ -17,16 +16,17 @@ export interface InternalTask {
 
 export async function createInternalTask(data: Omit<InternalTask, 'id' | 'createdBy'>) {
   const adminId = auth.currentUser?.uid || 'system';
-  return mockDbService.addItem('tasks', {
+  return clinicalService.addItem('tasks', {
     ...data,
     createdBy: adminId
   });
 }
 
 export async function updateTaskStatus(taskId: string, status: InternalTask['status']) {
-  mockDbService.updateItem('tasks', taskId, { status });
+  await clinicalService.updateItem('tasks', taskId, { status });
 }
 
 export async function toggleSubtask(taskId: string, subtaskIndex: number, completed: boolean) {
   // Logic simplified for mock
 }
+

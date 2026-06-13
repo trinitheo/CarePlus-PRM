@@ -1,9 +1,8 @@
-import { auth } from './clinicalFirestoreService';
-import { mockDbService } from '../lib/mockDatabase';
+import { auth, clinicalService } from './clinicalFirestoreService';
 
 export async function createInvestigationOrder(patientId: string, data: any) {
   const adminId = auth.currentUser?.uid || 'system';
-  return mockDbService.addItem('investigations', {
+  return clinicalService.addItem('investigations', {
     ...data,
     authorId: adminId,
     status: 'ordered'
@@ -11,7 +10,7 @@ export async function createInvestigationOrder(patientId: string, data: any) {
 }
 
 export async function uploadInvestigationResult(investigationId: string, resultData: any) {
-  mockDbService.addItem('results', {
+  await clinicalService.addItem('results', {
     investigationId,
     ...resultData
   });
@@ -19,9 +18,10 @@ export async function uploadInvestigationResult(investigationId: string, resultD
 
 export async function acknowledgeResult(patientId: string, investigationId: string) {
   const adminId = auth.currentUser?.uid || 'system';
-  mockDbService.updateItem('investigations', investigationId, {
+  await clinicalService.updateItem('investigations', investigationId, {
     status: 'reviewed',
     acknowledgedBy: adminId,
     acknowledgedAt: { seconds: Math.floor(Date.now() / 1000) }
   }, patientId);
 }
+

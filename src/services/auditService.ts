@@ -1,5 +1,4 @@
-import { auth } from './clinicalFirestoreService';
-import { mockDbService } from '../lib/mockDatabase';
+import { auth, clinicalService } from './clinicalFirestoreService';
 
 export interface AuditEvent {
   id?: string;
@@ -17,7 +16,7 @@ export interface AuditEvent {
 export async function logAudit(event: Omit<AuditEvent, 'timestamp' | 'userId' | 'userName' | 'userRole'>) {
   const user = auth.currentUser;
   
-  mockDbService.addItem('audit_logs', {
+  await clinicalService.addItem('audit_logs', {
     ...event,
     userId: user?.uid || 'system',
     timestamp: { seconds: Math.floor(Date.now() / 1000) },
@@ -25,13 +24,12 @@ export async function logAudit(event: Omit<AuditEvent, 'timestamp' | 'userId' | 
 }
 
 export function subscribeToAuditLogs(callback: (logs: AuditEvent[]) => void, entityId?: string) {
-  // Sync simulation
-  const logs = mockDbService.getCollection('audit_logs');
-  if (entityId) {
-    callback(logs.filter((l: any) => l.entityId === entityId));
-  } else {
-    callback(logs);
-  }
-  
-  return () => {}; // No-op cleanup
+  return clinicalService.subscribeToCollection('audit_logs', (logs) => {
+    if (entityId) {
+      callback(logs.filter((l: any) => l.entityId === entityId));
+    } else {
+      callback(logs);
+    }
+  });
 }
+

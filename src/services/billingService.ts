@@ -1,5 +1,4 @@
-import { auth } from './clinicalFirestoreService';
-import { mockDbService } from '../lib/mockDatabase';
+import { auth, clinicalService } from './clinicalFirestoreService';
 import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -49,7 +48,7 @@ export async function suggestClinicalCodes(clinicalNote: string) {
 
 export async function captureCharge(data: Omit<Charge, 'id'>) {
   const adminId = auth.currentUser?.uid || 'system';
-  return mockDbService.addItem('charges', {
+  return clinicalService.addItem('charges', {
     ...data,
     clinicianId: adminId,
     status: 'captured'
@@ -57,7 +56,7 @@ export async function captureCharge(data: Omit<Charge, 'id'>) {
 }
 
 export async function createInvoice(patientId: string, chargeIds: string[]) {
-  const charges = mockDbService.getCollection('charges');
+  const charges = await clinicalService.getCollection('charges');
   let total = 0;
   charges.forEach((d: any) => {
     if (chargeIds.includes(d.id)) {
@@ -65,7 +64,7 @@ export async function createInvoice(patientId: string, chargeIds: string[]) {
     }
   });
 
-  return mockDbService.addItem('invoices', {
+  return clinicalService.addItem('invoices', {
     patientId,
     chargeIds,
     totalAmount: total,
@@ -74,3 +73,4 @@ export async function createInvoice(patientId: string, chargeIds: string[]) {
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   });
 }
+

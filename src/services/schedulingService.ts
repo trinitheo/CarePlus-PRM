@@ -1,4 +1,4 @@
-import { mockDbService } from '../lib/mockDatabase';
+import { clinicalService } from './clinicalFirestoreService';
 import { logAudit } from './auditService';
 
 export interface Appointment {
@@ -23,11 +23,11 @@ export interface Room {
 }
 
 export async function getRooms() {
-  return mockDbService.getCollection('rooms');
+  return clinicalService.getCollection('rooms');
 }
 
 export async function updateRoomStatus(roomId: string, status: Room['status'], appointmentId?: string) {
-  mockDbService.updateItem('rooms', roomId, {
+  await clinicalService.updateItem('rooms', roomId, {
     status,
     currentAppointmentId: appointmentId || null
   });
@@ -44,7 +44,7 @@ export async function transitionAppointment(appointmentId: string, newStatus: st
   const updates: any = { status: newStatus };
   if (roomId) updates.roomId = roomId;
 
-  mockDbService.updateItem('appointments', appointmentId, updates);
+  await clinicalService.updateItem('appointments', appointmentId, updates);
 
   await logAudit({
     action: 'APPOINTMENT_TRANSITION',
@@ -65,7 +65,7 @@ export async function transitionAppointment(appointmentId: string, newStatus: st
 }
 
 export async function createAppointment(data: Omit<Appointment, 'id'>) {
-  const id = mockDbService.addItem('appointments', data);
+  const id = await clinicalService.addItem('appointments', data);
 
   await logAudit({
     action: 'APPOINTMENT_CREATED',
@@ -76,3 +76,4 @@ export async function createAppointment(data: Omit<Appointment, 'id'>) {
 
   return id;
 }
+

@@ -473,7 +473,7 @@ export function PatientPortalDashboard() {
     playHapticSound();
 
     try {
-      await createRefillRequest(userProfile?.id || 'sarah-mitchell-42', {
+      await createRefillRequest(userProfile?.patientId || userProfile?.id || 'pat-marcus-001', {
         medications: selectedMeds,
         pharmacy: selectedPharmacy,
         patientNotes: rxNotes,
@@ -609,7 +609,7 @@ export function PatientPortalDashboard() {
   // Dynamic Upcoming Schedule listing merging clinical appointments + registered community events
   const userAppointments = useMemo(() => {
     const list = Object.values(appointments || {})
-      .filter((a: any) => a.patientId === (userProfile?.id || 'sarah-mitchell-42') && a.status !== 'cancelled')
+      .filter((a: any) => a.patientId === (userProfile?.patientId || userProfile?.id || 'pat-marcus-001') && a.status !== 'cancelled')
       .map((a: any) => {
         let title = 'Clinical Consultation';
         let timeFormatted = 'TBD';

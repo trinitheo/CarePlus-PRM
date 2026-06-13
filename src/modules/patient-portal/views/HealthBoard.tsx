@@ -31,7 +31,11 @@ import {
   Info,
   Check,
   Smartphone,
-  AlertCircle
+  AlertCircle,
+  Apple,
+  Watch,
+  Utensils,
+  Link2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { transition } from '../../../lib/motion';
@@ -247,6 +251,41 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   // --- WEARABLE HEALTH DEVICE SYNC HUB STATE & CONTROLS ---
   const [activeDevice, setActiveDevice] = useState<'apple' | 'android' | null>('apple');
   const [isDeviceLinked, setIsDeviceLinked] = useState<boolean>(true);
+  
+  // Blended "Device & App Sync" App Connections
+  const [appConnections, setAppConnections] = useState<Record<string, 'disconnected' | 'connecting' | 'connected'>>({
+    apple_health: 'connected',
+    android_connect: 'disconnected',
+    pharmacy: 'connected',
+    nutrition: 'disconnected'
+  });
+  const [connectingApp, setConnectingApp] = useState<string | null>(null);
+
+  const toggleAppConnection = (appId: string) => {
+    if (appConnections[appId] === 'connected') {
+      setAppConnections(prev => ({ ...prev, [appId]: 'disconnected' }));
+      if (appId === 'apple_health' && activeDevice === 'apple') {
+        setIsDeviceLinked(false);
+      } else if (appId === 'android_connect' && activeDevice === 'android') {
+        setIsDeviceLinked(false);
+      }
+    } else if (appConnections[appId] === 'disconnected') {
+      setConnectingApp(appId);
+      setAppConnections(prev => ({ ...prev, [appId]: 'connecting' }));
+      setTimeout(() => {
+        setAppConnections(prev => ({ ...prev, [appId]: 'connected' }));
+        setConnectingApp(null);
+        if (appId === 'apple_health') {
+          setActiveDevice('apple');
+          setIsDeviceLinked(true);
+        } else if (appId === 'android_connect') {
+          setActiveDevice('android');
+          setIsDeviceLinked(true);
+        }
+      }, 1200);
+    }
+  };
+
   const [syncPermissions, setSyncPermissions] = useState({
     steps: true,
     heartRate: true,
@@ -376,7 +415,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         bloodGlucose: Number(glucoseVal),
         aiGoalsCompleted: patient.aiGoalsCompleted,
         willAttend: patient.willAttend
-      });
+      }, 'wearable');
       
       setWearableSyncSuccess(true);
       
@@ -875,11 +914,11 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             <h1 className="text-3xl md:text-3xl font-extrabold tracking-tight text-slate-900 font-sans leading-tight">
               Welcome back,<br />
               <span className="text-[#3F5B42]">
-                {patient?.name || 'Sarah Mitchell'}
+                {patient?.name || 'Marcus Everett'}
               </span>
             </h1>
             <p className="text-xs md:text-sm font-semibold text-slate-500 pt-1">
-              Patient ID: {patient?.mrn || '77291-SM'}
+              Patient ID: {patient?.mrn || 'MRN-91283-ME'}
             </p>
           </div>
         </div>
@@ -1294,77 +1333,91 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         {/* Right Column - Appointments, Rx, Quick Actions */}
         <div className="space-y-6 animate-fadeIn">
           
-          {/* Wearable Device Integration & Sync Center */}
+          {/* Device & App Sync Hub */}
           <Card className="border border-[#DEE8E0] shadow-sm overflow-hidden bg-white">
             <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/70 p-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 font-sans">
                   <Smartphone className="h-4 w-4 text-[#3F5B42]" />
-                  Wearable Sync Hub
+                  Device & App Sync Hub
                 </CardTitle>
-                <Badge variant="outline" className={`text-[10px] font-bold px-1.5 ${isDeviceLinked ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-50 text-slate-500'}`}>
-                  ● {isDeviceLinked ? 'Connected' : 'Disconnected'}
-                </Badge>
+                <div className="flex items-center gap-1">
+                  {Object.values(appConnections).some(v => v === 'connected') ? (
+                    <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-200 font-bold px-1.5 flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse" />
+                      Live Feed Active
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-500 border-slate-200 font-bold px-1.5 font-sans">
+                      Disconnected
+                    </Badge>
+                  )}
+                </div>
               </div>
               <CardDescription className="text-[11px] leading-relaxed mt-1">
-                Synchronize standard consumer device biometrics securely with Aequanimitas.
+                Unified live integration from wearable telemetry, pharmacy medication logs, and nutritional APIs.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4 pb-4 px-4 space-y-4">
               
-              {/* Device Selector Tabs */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveDevice('apple');
-                    setIsDeviceLinked(true);
-                  }}
-                  className={`py-2 px-2.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    activeDevice === 'apple'
-                      ? 'bg-[#3F5B42] text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                >
-                  <span className="text-sm">🍎</span> Apple Health
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveDevice('android');
-                    setIsDeviceLinked(true);
-                  }}
-                  className={`py-2 px-2.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    activeDevice === 'android'
-                      ? 'bg-[#3F5B42] text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                >
-                  <span className="text-sm">🤖</span> Android Connect
-                </button>
-              </div>
-
-              {/* Master Connection Status Toggle */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                <div className="space-y-0.5">
-                  <span className="font-bold text-slate-800">Linked to CarePlus System</span>
-                  <p className="text-[10px] text-slate-500 leading-snug">
-                    {activeDevice === 'apple' ? 'Authorized via iOS HealthKit' : 'Authorized via Play Store Health Connect'}
-                  </p>
+              {/* Connected Feeds and Portals Grid */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                  Connected Feeds & Portals
+                </span>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { id: 'apple_health', name: 'Apple HealthKit', icon: Apple, color: 'text-red-500', bg: 'bg-red-50/30 border-red-100' },
+                    { id: 'android_connect', name: 'Android Health Connect', icon: Smartphone, color: 'text-emerald-500', bg: 'bg-emerald-50/40 border-emerald-100' },
+                    { id: 'pharmacy', name: 'CarePlus Pharmacy Hub', icon: Pill, color: 'text-amber-500', bg: 'bg-amber-50/40 border-amber-100' },
+                    { id: 'nutrition', name: 'Nutrition Sync (MyFitnessPal)', icon: Utensils, color: 'text-sky-500', bg: 'bg-sky-50/40 border-sky-100' }
+                  ].map((app) => {
+                    const status = appConnections[app.id];
+                    return (
+                      <div key={app.id} className={`flex items-center justify-between p-2.5 rounded-xl border ${app.bg} transition-all duration-200 text-xs`}>
+                        <div className="flex items-center gap-2 max-w-[70%]">
+                          <div className={`p-1.5 rounded-lg bg-white border border-slate-100 shrink-0 ${app.color}`}>
+                            <app.icon className="h-4 w-4" />
+                          </div>
+                          <div className="truncate">
+                            <div className="font-bold text-slate-800 leading-tight">{app.name}</div>
+                            <div className="text-[9px] font-semibold font-mono uppercase tracking-wide flex items-center gap-1">
+                              {status === 'connected' && (
+                                <span className="text-emerald-700 flex items-center gap-1">● Synced & Live</span>
+                              )}
+                              {status === 'connecting' && (
+                                <span className="text-amber-700 animate-pulse flex items-center gap-1">⏱ Linking...</span>
+                              )}
+                              {status === 'disconnected' && (
+                                <span className="text-slate-400">Not Synced</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={connectingApp !== null}
+                          onClick={() => toggleAppConnection(app.id)}
+                          className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer border ${
+                            status === 'connected'
+                              ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              : status === 'connecting'
+                              ? 'bg-slate-100 border-slate-100 text-slate-400 cursor-not-allowed'
+                              : 'bg-[#3F5B42] border-[#2D422E] text-white hover:bg-[#324935] shadow-sm'
+                          }`}
+                        >
+                          {status === 'connected' ? 'Disconnect' : status === 'connecting' ? 'Linking...' : 'Link Portal'}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsDeviceLinked(!isDeviceLinked)}
-                  className={`w-11 h-6 rounded-full transition-colors flex items-center p-0.5 cursor-pointer ${
-                    isDeviceLinked ? 'bg-[#3F5B42]' : 'bg-slate-300'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${isDeviceLinked ? 'translate-x-[20px]' : 'translate-x-0'}`} />
-                </button>
               </div>
 
-              {isDeviceLinked ? (
+              {Object.values(appConnections).some(v => v === 'connected') ? (
                 <>
+                  <div className="border-t border-slate-100 w-full my-1" />
+                  
                   {/* Parameter Permission Matrix */}
                   <div className="space-y-2">
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
@@ -1373,51 +1426,63 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
+                        disabled={appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected'}
                         onClick={() => setSyncPermissions(p => ({ ...p, steps: !p.steps }))}
                         className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
-                          syncPermissions.steps 
+                          (appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected')
+                            ? 'bg-slate-50 border-slate-100 text-slate-350 cursor-not-allowed'
+                            : syncPermissions.steps 
                             ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
                             : 'bg-white border-slate-200 text-slate-500'
                         }`}
                       >
                         <span className="truncate">🏃‍♀️ Step Count</span>
-                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.steps ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.steps && (appConnections.apple_health === 'connected' || appConnections.android_connect === 'connected') ? 'text-[#3F5B42] opacity-100' : 'opacity-0'}`} />
                       </button>
                       <button
                         type="button"
+                        disabled={appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected'}
                         onClick={() => setSyncPermissions(p => ({ ...p, heartRate: !p.heartRate }))}
                         className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
-                          syncPermissions.heartRate 
+                          (appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected')
+                            ? 'bg-slate-50 border-slate-100 text-slate-350 cursor-not-allowed'
+                            : syncPermissions.heartRate 
                             ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
                             : 'bg-white border-slate-200 text-slate-500'
                         }`}
                       >
                         <span className="truncate">❤️ Heart Rate</span>
-                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.heartRate ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.heartRate && (appConnections.apple_health === 'connected' || appConnections.android_connect === 'connected') ? 'text-[#3F5B42] opacity-100' : 'opacity-0'}`} />
                       </button>
                       <button
                         type="button"
+                        disabled={appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected'}
                         onClick={() => setSyncPermissions(p => ({ ...p, sleep: !p.sleep }))}
                         className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
-                          syncPermissions.sleep 
+                          (appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected')
+                            ? 'bg-slate-50 border-slate-100 text-slate-350 cursor-not-allowed'
+                            : syncPermissions.sleep 
                             ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
                             : 'bg-white border-slate-200 text-slate-500'
                         }`}
                       >
                         <span className="truncate">💤 Sleep Analysis</span>
-                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.sleep ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.sleep && (appConnections.apple_health === 'connected' || appConnections.android_connect === 'connected') ? 'text-[#3F5B42] opacity-100' : 'opacity-0'}`} />
                       </button>
                       <button
                         type="button"
+                        disabled={appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected'}
                         onClick={() => setSyncPermissions(p => ({ ...p, glucose: !p.glucose }))}
                         className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
-                          syncPermissions.glucose 
-                            ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-semibold' 
+                          (appConnections.apple_health !== 'connected' && appConnections.android_connect !== 'connected')
+                            ? 'bg-slate-50 border-slate-100 text-slate-350 cursor-not-allowed'
+                            : syncPermissions.glucose 
+                            ? 'bg-emerald-50/50 border-[#DEE8E0] text-emerald-950 font-semibold' 
                             : 'bg-white border-slate-200 text-slate-500'
                         }`}
                       >
                         <span className="truncate">🩸 blood Glucose</span>
-                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.glucose ? 'text-emerald-700 opacity-100' : 'opacity-0'}`} />
+                        <Check className={`h-3.5 w-3.5 shrink-0 ${syncPermissions.glucose && (appConnections.apple_health === 'connected' || appConnections.android_connect === 'connected') ? 'text-[#3F5B42] opacity-100' : 'opacity-0'}`} />
                       </button>
                     </div>
                   </div>
@@ -1513,13 +1578,13 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
                         Recent Sync Feed History
                       </span>
-                      <div className="space-y-1.5 divide-y divide-slate-100 max-h-24 overflow-y-auto pr-1">
+                      <div className="space-y-1.5 divide-y divide-slate-100 max-h-24 overflow-y-auto pr-1 text-slate-700">
                         {syncHistory.map((h, idx) => (
                           <div key={idx} className="text-[10px] flex items-center justify-between pt-1.5 first:pt-0">
                             <span className="font-medium text-slate-700">
-                              🕒 {h.time} — <strong className="text-slate-900 font-bold">{h.device}</strong>
+                              🕒 {h.time} — <strong className="text-slate-950 font-bold">{h.device}</strong>
                             </span>
-                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">
+                            <span className="bg-[#EEF3F0] text-[#3F5B42] px-1.5 py-0.5 rounded font-mono font-bold">
                               {h.itemsCount} channels synced
                             </span>
                           </div>
@@ -1532,17 +1597,17 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center space-y-3">
                   <AlertCircle className="h-6 w-6 text-slate-400 mx-auto" />
                   <div className="space-y-1">
-                    <span className="text-xs font-bold text-slate-700 block">Wearable Feeds Paused</span>
+                    <span className="text-xs font-bold text-slate-700 block">All Integrations Paused</span>
                     <p className="text-[11px] text-slate-500 leading-normal max-w-xs mx-auto">
-                      Link your device to start streaming step counts, sleep cycles, and heart rates automatically.
+                      Link a wearable, pharmacy, or nutrition system above to start streaming digital biomarkers securely.
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsDeviceLinked(true)}
-                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold rounded transition-colors cursor-pointer"
+                    onClick={() => toggleAppConnection('apple_health')}
+                    className="px-4 py-1.5 bg-[#3F5B42] hover:bg-[#324935] text-white text-[10px] font-bold rounded transition-colors cursor-pointer"
                   >
-                    Authorize Integration Link
+                    Quick-Link Apple HealthKit
                   </button>
                 </div>
               )}

@@ -1,4 +1,4 @@
-import { mockDbService } from '../lib/mockDatabase';
+import { clinicalService } from './clinicalFirestoreService';
 
 export interface InventoryItem {
   id: string;
@@ -13,24 +13,25 @@ export interface InventoryItem {
 }
 
 export async function getInventory() {
-  return mockDbService.getCollection('inventory');
+  return clinicalService.getCollection('inventory');
 }
 
 export async function updateStock(itemId: string, delta: number) {
-  const item = mockDbService.getDoc('inventory', itemId);
+  const item = await clinicalService.getDoc('inventory', itemId);
   if (item) {
-    mockDbService.updateItem('inventory', itemId, {
+    await clinicalService.updateItem('inventory', itemId, {
       stockLevel: (item.stockLevel || 0) + delta
     });
   }
 }
 
 export async function restockItem(itemId: string, amount: number) {
-  const item = mockDbService.getDoc('inventory', itemId);
+  const item = await clinicalService.getDoc('inventory', itemId);
   if (item) {
-    mockDbService.updateItem('inventory', itemId, {
+    await clinicalService.updateItem('inventory', itemId, {
       stockLevel: (item.stockLevel || 0) + amount,
       lastRestockedAt: { seconds: Math.floor(Date.now() / 1000) }
     });
   }
 }
+

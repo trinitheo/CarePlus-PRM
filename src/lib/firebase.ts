@@ -40,7 +40,9 @@ let authInstance: ReturnType<typeof getAuth>;
 if (typeof window !== 'undefined') {
   const g = globalThis as any;
   if (!g.__firebase_db) {
-    g.__firebase_db = initializeFirestore(app, {}, dbId);
+    g.__firebase_db = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, dbId);
     
     // Connect emulator only on the first initialization
     if (import.meta.env.VITE_USE_EMULATOR === 'true') {
@@ -65,7 +67,9 @@ if (typeof window !== 'undefined') {
   }
   authInstance = g.__firebase_auth;
 } else {
-  firestoreInstance = initializeFirestore(app, {}, dbId);
+  firestoreInstance = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  }, dbId);
   authInstance = getAuth(app);
 }
 
