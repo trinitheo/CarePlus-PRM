@@ -275,8 +275,8 @@ export function UpcomingSchedule({ onNavigateToPatient }: { onNavigateToPatient?
              <ScrollArea className="flex-1">
                <div className="space-y-4 pr-3">
                  {[
-                   { user: 'Dr. Sarah', action: 'Checked in Marcus', time: '14 mins ago' },
-                   { user: 'Nurse Lee', action: 'Finished vitals for p-2', time: '28 mins ago' },
+                   { user: 'Elena Rostova', action: 'Checked in Marcus', time: '14 mins ago' },
+                   { user: 'Nurse Tamara', action: 'Finished vitals for Marcus', time: '28 mins ago' },
                    { user: 'System', action: 'Auto-triaged appt-2', time: '1 hour ago' }
                  ].map((act, i) => (
                    <div key={i} className="flex gap-4">

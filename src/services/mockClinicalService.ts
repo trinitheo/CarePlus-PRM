@@ -228,8 +228,8 @@ export const mockClinicalService: ClinicalServiceType = {
     return result;
   },
 
-  async provisionSarahMitchell() {
-    return 'sarah-mitchell-42';
+  async provisionMarcusEverett() {
+    return 'pat-marcus-001';
   },
 
   async saveClinicalIntake(patientId: string, intakeId: string, data: any) {

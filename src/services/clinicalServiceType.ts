@@ -40,7 +40,7 @@ export interface ClinicalServiceType {
   
   savePatient(patientId: string, data: any): Promise<any>;
   updateAuthorizedUsers(patientId: string, authorizedUserIds: string[]): Promise<any>;
-  provisionSarahMitchell(): Promise<string>;
+  provisionMarcusEverett(): Promise<string>;
   
   saveClinicalIntake(patientId: string, intakeId: string, data: any): Promise<any>;
   updatePatientVitals(patientId: string, data: any): Promise<any>;

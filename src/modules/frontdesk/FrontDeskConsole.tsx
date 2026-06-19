@@ -27,7 +27,7 @@ interface DocketPatient {
 const MOCK_QUEUE: DocketPatient[] = [
   { id: '1', name: 'Eleanor Vance', time: '09:45 AM', tMinus: 9, status: 'pending', type: 'appointment', age: 34, gender: 'F', insurance: 'verified', copayDue: 45.00, consentSigned: false },
   { id: '2', name: 'Marcus Sterling', time: '10:00 AM', tMinus: 24, status: 'pending', type: 'appointment', age: 12, gender: 'M', insurance: 'mismatched', copayDue: 0, consentSigned: true },
-  { id: '3', name: 'Sarah Jenkins', time: '09:15 AM', tMinus: -21, status: 'arrived', type: 'appointment', age: 65, gender: 'F', insurance: 'verified', copayDue: 20.00, consentSigned: true },
+  { id: '3', name: 'Sophia Jenkins', time: '09:15 AM', tMinus: -21, status: 'arrived', type: 'appointment', age: 65, gender: 'F', insurance: 'verified', copayDue: 20.00, consentSigned: true },
   { id: '4', name: 'David Cho', time: 'Walk-in', tMinus: 0, status: 'in_intake', type: 'walk-in', age: 41, gender: 'M', insurance: 'pending', copayDue: 150.00, consentSigned: false },
 ];
 

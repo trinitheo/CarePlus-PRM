@@ -117,25 +117,24 @@ interface Note {
 
 const sampleNotes: Partial<Note>[] = [
   {
-    title: 'Post-Appendectomy Follow-up & Chronic Management',
-    author: 'Dr. Sarah Mitchell',
-    specialty: 'Internal Medicine',
-    content: `Chief Complaint: Follow-up for Hypertension and Type 2 Diabetes Mellitus.
+    title: 'Initial Rheumatological Assessment',
+    author: 'Dr. Gregory Theogate, MD',
+    specialty: 'Rheumatology',
+    content: `Chief Complaint: Symmetrical joint stiffness and pain in fingers and wrists.
     
 History of Present Illness:
-Patient Eleanor Vance, 42-year-old female, presents for chronic management. She has a history of hypertension and T2DM. Patient also reports significant alcohol consumption (heavy drinker). Past surgical history notable for appendectomy.
+Patient Marcus Everett, 39-year-old male, presents for evaluation of bilateral symmetrical joint pain and stiffness in MCP and PIP joints of both hands. Morning stiffness lasts > 90 minutes.
 
 Assessment:
-1. Essential Hypertension - currently suboptimal control.
-2. Type 2 Diabetes Mellitus - continuing current regimen.
-3. Heavy Alcohol Use - counseled on reduction.
+1. Early Rheumatoid Arthritis (RA) - seropositive.
+2. Symmetrical polyarthritis.
 
 Plan:
-1. Continue Lisinopril 10mg PO OD.
-2. Continue Rosuvastatin 20mg PO OD.
-3. Lifestyle modification counseling provided.
-4. Labs ordered: HbA1c, CMP, Lipid Panel.`,
-    tags: ['Hypertension', 'T2DM', 'Alcohol Use'],
+1. Start Methotrexate 10mg weekly, escalatable to 15mg.
+2. Folic Acid 5mg weekly (Tuesday, 24h post-MTX).
+3. Temporary bridge therapy with Prednisolone daily taper.
+4. Baseline LFTs and FBC in 4 weeks.`,
+    tags: ['Rheumatoid Arthritis', 'Methotrexate', 'Folic Acid'],
     status: 'final',
     priority: 'routine',
   },

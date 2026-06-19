@@ -147,7 +147,7 @@ export function WellnessClasses() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full">
       
       {/* Intro section */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">

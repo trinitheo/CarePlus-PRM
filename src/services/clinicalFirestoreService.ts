@@ -41,7 +41,7 @@ export const saveReferral = (patientId: string, data: any) => clinicalService.sa
 
 export const savePatient = (patientId: string, data: any) => clinicalService.savePatient(patientId, data);
 export const updateAuthorizedUsers = (patientId: string, authorizedUserIds: string[]) => clinicalService.updateAuthorizedUsers(patientId, authorizedUserIds);
-export const provisionSarahMitchell = () => clinicalService.provisionSarahMitchell();
+export const provisionMarcusEverett = () => clinicalService.provisionMarcusEverett();
 
 export const saveClinicalIntake = (patientId: string, intakeId: string, data: any) => clinicalService.saveClinicalIntake(patientId, intakeId, data);
 export const updatePatientVitals = (patientId: string, data: any) => clinicalService.updatePatientVitals(patientId, data);

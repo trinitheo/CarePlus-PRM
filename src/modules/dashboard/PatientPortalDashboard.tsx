@@ -232,7 +232,7 @@ export function PatientPortalDashboard() {
 
   // Patient Booking input fields
   const [isBookingOpen, setIsBookingOpen] = useState(false);
-  const [bookingProviderId, setBookingProviderId] = useState('mitchell_provider');
+  const [bookingProviderId, setBookingProviderId] = useState('theogate_provider');
   const [bookingDate, setBookingDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1); // default to tomorrow
@@ -364,9 +364,9 @@ export function PatientPortalDashboard() {
   const healthFactors = useMemo(() => {
     const scores = {
       vitals: vitalsInNorm ? 20 : 12,
-      history: 18, // Based on managing chronic PCOS & Diabetes stabilized
+      history: 18, // Based on managing chronic Rheumatoid Arthritis stabilized
       medication: medCompliance ? 25 : 10,
-      visits: 12, // Stable routine visits to Mitchell (Primary) & Theodore (Secondary Neurosurgery)
+      visits: 12, // Stable routine visits to Dr. Gregory Theogate & clinical team
       activity: (deviceSynced ? 10 : 0) + (stepGoalMet ? 8 : 4) + (sleepScoreHigh ? 7 : 3)
     };
 
@@ -395,15 +395,15 @@ export function PatientPortalDashboard() {
     };
   }, [deviceSynced, stepGoalMet, medCompliance, sleepScoreHigh, vitalsInNorm]);
 
-  // Healthcare Providers List configured exactly for Current Health issues (PCOS / Diabetes / Neurosurgery checkup)
+  // Healthcare Providers List configured exactly for Current Health issues (Rheumatoid Arthritis & Autoimmune Management)
   const healthcareProviders = [
     { 
-      id: 'mitchell_provider', 
-      name: 'Dr. Sarah Mitchell', 
-      role: 'Consultant Clinical Provider', 
-      specialty: 'Internal Medicine & Endocrinology', 
-      currentIssue: 'Type 2 Diabetes & PCOS Management',
-      avatar: 'SM',
+      id: 'theogate_provider', 
+      name: 'Dr. Gregory Theogate, MD', 
+      role: 'Clinical Rheumatology Lead', 
+      specialty: 'Clinical Immunology & Rheumatology', 
+      currentIssue: 'Rheumatoid Arthritis Management',
+      avatar: 'GT',
       primary: true 
     },
     { 

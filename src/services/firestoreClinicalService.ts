@@ -486,33 +486,32 @@ export const firestoreClinicalService: ClinicalServiceType = {
     }
   },
 
-  async provisionSarahMitchell() {
-    const patientId = 'sarah-mitchell-42';
+  async provisionMarcusEverett() {
+    const patientId = 'pat-marcus-001';
     try {
       const existing = await getDoc(doc(db, 'patients', patientId));
       if (!existing.exists()) {
         await setDoc(doc(db, 'patients', patientId), {
           id: patientId,
-          mrn: 'MRN-77291-SM',
-          firstName: 'Sarah',
-          lastName: 'Mitchell',
-          name: 'Sarah Mitchell',
-          dob: '1984-03-15',
-          gender: 'Female',
-          age: 42,
-          email: 'sarah.mitchell@example.com',
-          phone: '(555) 091-8827',
+          mrn: 'MRN-91283-ME',
+          firstName: 'Marcus',
+          lastName: 'Everett',
+          name: 'Marcus Everett',
+          dob: '1987-10-12',
+          gender: 'Male',
+          age: 39,
+          email: 'marcus.everett@example.com',
+          phone: '(555) 912-8344',
           status: 'active',
           conditions: [
-            'Diabetes Mellitus Type 2 (Newly Diagnosed)',
-            'Obesity',
-            'PCOS (Polycystic Ovary Syndrome)'
+            'Seropositive Rheumatoid Arthritis',
+            'Symmetrical Polyarthritis'
           ],
           createdAt: serverTimestamp()
         });
       }
     } catch (e) {
-      console.error('Failed to provision Sarah Mitchell:', e);
+      console.error('Failed to provision Marcus Everett:', e);
     }
     return patientId;
   },

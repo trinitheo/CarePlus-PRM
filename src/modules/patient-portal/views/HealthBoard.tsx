@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { 
@@ -24,6 +25,8 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   RefreshCw,
   Stethoscope,
@@ -35,12 +38,26 @@ import {
   Apple,
   Watch,
   Utensils,
-  Link2
+  Link2,
+  User,
+  Settings,
+  X,
+  Search,
+  SlidersHorizontal,
+  Star,
+  Phone,
+  MapPin,
+  Award,
+  BookOpen,
+  ShieldCheck,
+  HeartPlus,
+  Edit2,
+  Save
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { transition } from '../../../lib/motion';
 import { DailyActionPlan } from './DailyActionPlan';
-import { updatePatientVitals, updatePatientNudgeAndActionPlan, computeHealthScore, updatePatientHealthScore } from '../../../services/clinicalFirestoreService';
+import { updatePatientVitals, updatePatientNudgeAndActionPlan, computeHealthScore, updatePatientHealthScore, savePatient } from '../../../services/clinicalFirestoreService';
 
 interface HealthBoardProps {
   patientData?: {
@@ -58,6 +75,131 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   const [activeVibe, setActiveVibe] = useState<'holistic' | 'metabolic' | 'activity' | 'circadian'>('holistic');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null);
+  const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [layoutMode, setLayoutMode] = useState<'deck' | 'dossier'>('deck');
+
+  // --- NUTRITION, HYDRATION, AND MOOD SELF-ASSESSMENT STATES ---
+  const [waterGlasses, setWaterGlasses] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('cp_water_glasses_v1');
+      return saved ? parseInt(saved, 10) : 6;
+    } catch {
+      return 6;
+    }
+  });
+
+  const [stressLevel, setStressLevel] = useState<number>(2); // 1-5 scale
+  const [patientMood, setPatientMood] = useState<string>('Calm');
+  const [moodJournal, setMoodJournal] = useState<string>('Doing well with my morning physical therapy routine. Joint pain and fatigue feel manageable today.');
+  const [bypassActive, setBypassActive] = useState<boolean>(true);
+  
+  // Privacy & Sharing permissions states
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(true);
+  const [shareTelemetry, setShareTelemetry] = useState<boolean>(true);
+  const [shareLocation, setShareLocation] = useState<boolean>(false);
+  const [showPrivacySuccessToast, setShowPrivacySuccessToast] = useState<boolean>(false);
+
+  // Health Trends state
+  const [trendsDuration, setTrendsDuration] = useState<'3m' | '6m'>('3m');
+
+  // --- PATIENT PROFILE EDITING STATES & METHODS ---
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editFields, setEditFields] = useState({
+    name: '',
+    dob: '',
+    gender: '',
+    email: '',
+    phone: '',
+    secondaryPhone: '',
+    address: '',
+    nokName: '',
+    nokRelationship: '',
+    nokPhone: '',
+    nokEmail: ''
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleStartEdit = () => {
+    setEditFields({
+      name: patient?.name || 'Marcus Alan Everett',
+      dob: patient?.dob || 'March 14, 1985',
+      gender: patient?.gender || 'Male • Cisgender Male',
+      email: patient?.email || 'marcus.everett@gmail.com',
+      phone: patient?.phone || '(206) 555-0143',
+      secondaryPhone: patient?.secondaryPhone || '(206) 555-0199',
+      address: patient?.address || '1482 Pineview Dr, Seattle, WA 98122',
+      nokName: patient?.nokName || 'Sarah Everett',
+      nokRelationship: patient?.nokRelationship || 'Spouse',
+      nokPhone: patient?.nokPhone || '(206) 555-0172',
+      nokEmail: patient?.nokEmail || 'sarah.everett@gmail.com'
+    });
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    try {
+      await savePatient(patient?.id || 'pat-marcus-001', {
+        name: editFields.name,
+        dob: editFields.dob,
+        gender: editFields.gender,
+        email: editFields.email,
+        phone: editFields.phone,
+        secondaryPhone: editFields.secondaryPhone,
+        address: editFields.address,
+        nokName: editFields.nokName,
+        nokRelationship: editFields.nokRelationship,
+        nokPhone: editFields.nokPhone,
+        nokEmail: editFields.nokEmail
+      });
+      setIsEditingProfile(false);
+    } catch (error) {
+      console.error("Failed to save patient profile edits:", error);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleAddWater = () => {
+    const next = waterGlasses + 1;
+    setWaterGlasses(next);
+    localStorage.setItem('cp_water_glasses_v1', String(next));
+  };
+
+  const handleResetWater = () => {
+    setWaterGlasses(0);
+    localStorage.setItem('cp_water_glasses_v1', '0');
+  };
+  
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [drawerSearchQuery, setDrawerSearchQuery] = useState('');
+  const [pinnedVitals, setPinnedVitals] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('careplus_pinned_vitals_v3');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    // Default to the top critical vitals (Blood Glucose, Blood Pressure, Heart Rate, Oxygen Saturation)
+    return ['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation'];
+  });
+
+  const handleTogglePin = (name: string) => {
+    let next: string[];
+    if (pinnedVitals.includes(name)) {
+      // Must keep at least one vital pinned to avoid empty layout state
+      if (pinnedVitals.length <= 1) return;
+      next = pinnedVitals.filter(n => n !== name);
+    } else {
+      next = [...pinnedVitals, name];
+    }
+    setPinnedVitals(next);
+    localStorage.setItem('careplus_pinned_vitals_v3', JSON.stringify(next));
+  };
 
   // Auto-cycle conversational greeting focus categories every 30 seconds
   useEffect(() => {
@@ -173,9 +315,10 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         });
 
     return {
+      ...rawPatient,
       name,
-      dob: rawPatient.dob || rawPatient.dateOfBirth || 'Mar 14, 1985',
-      age: rawPatient.age || (rawPatient.dateOfBirth ? new Date().getFullYear() - new Date(rawPatient.dateOfBirth).getFullYear() : 39),
+      dob: rawPatient.dob || rawPatient.dateOfBirth || 'March 14, 1985',
+      age: rawPatient.age || (rawPatient.dateOfBirth ? new Date().getFullYear() - new Date(rawPatient.dateOfBirth).getFullYear() : 41),
       conditions: rawPatient.conditions || ['Rheumatoid Arthritis (M05.79)'],
       mrn: rawPatient.mrn || rawPatient.id || rawPatient.patientId || 'pat-marcus-001',
       id: rawPatient.id || rawPatient.patientId || 'pat-marcus-001',
@@ -187,7 +330,16 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       dailySteps,
       bloodGlucose,
       aiGoalsCompleted,
-      willAttend
+      willAttend,
+      gender: rawPatient.gender || 'Male • Cisgender Male',
+      email: rawPatient.email || 'marcus.everett@gmail.com',
+      phone: rawPatient.phone || '(206) 555-0143',
+      secondaryPhone: rawPatient.secondaryPhone || '(206) 555-0199',
+      address: rawPatient.address || '1482 Pineview Dr, Seattle, WA 98122',
+      nokName: rawPatient.nokName || 'Sarah Everett',
+      nokRelationship: rawPatient.nokRelationship || 'Spouse',
+      nokPhone: rawPatient.nokPhone || '(206) 555-0172',
+      nokEmail: rawPatient.nokEmail || 'sarah.everett@gmail.com'
     };
   }, [rawPatient]);
 
@@ -707,6 +859,10 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     return ordered;
   }, [vitalSignsList, vitalsOrder]);
 
+  const displayedVitals = useMemo(() => {
+    return sortedVitals.filter(v => pinnedVitals.includes(v.name));
+  }, [sortedVitals, pinnedVitals]);
+
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -903,7 +1059,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   }, [sortedVitals]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Patient Greeting & Status Bar */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-[#EEF3F0] text-slate-900 rounded-3xl p-6 md:p-8 border border-[#DEE8E0] shadow-sm relative overflow-hidden font-sans">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl" />
@@ -917,48 +1073,104 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 {patient?.name || 'Marcus Everett'}
               </span>
             </h1>
-            <p className="text-xs md:text-sm font-semibold text-slate-500 pt-1">
-              Patient ID: {patient?.mrn || 'MRN-91283-ME'}
-            </p>
+            
+            <div className="pt-2">
+              <button 
+                type="button"
+                onClick={() => setShowProfileDetails(!showProfileDetails)}
+                className="text-xs font-bold text-[#3F5B42]/85 hover:text-[#3F5B42] bg-[#3F5B42]/5 hover:bg-[#3F5B42]/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer transition-all duration-150 focus:outline-none shadow-xs border border-[#DEE8E0]"
+              >
+                <User className="h-3.5 w-3.5 text-[#3F5B42]" />
+                <span>{showProfileDetails ? 'Hide Patient Identity and Contact Info' : 'Show Patient Identity and Contact Info'}</span>
+                {showProfileDetails ? (
+                  <ChevronUp className="h-3 w-3 transition-transform duration-200" />
+                ) : (
+                  <ChevronDown className="h-3 w-3 transition-transform duration-200" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Center section: Massive health score radial dial */}
+        {/* Center section: Massive health score radial dial & behavioral progress rings */}
         <div className="lg:col-span-4 flex flex-col items-center justify-center relative z-10 py-2 border-b border-[#DEE8E0] lg:border-b-0 pb-6 lg:pb-0">
-          <div className="relative w-40 h-40 md:w-44 md:h-44 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-              <defs>
-                <linearGradient id="healthScoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#10B981" />
-                  <stop offset="50%" stopColor="#4F7A54" />
-                  <stop offset="100%" stopColor="#3F5B42" />
-                </linearGradient>
-              </defs>
-              {/* Background circular track - clean, light forest dark track */}
-              <circle cx="50" cy="50" r="40" stroke="#E5ECE7" strokeWidth="10" fill="none" />
-              {/* Progress Track - beautiful glowing custom sage-green gradient stroke */}
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="40" 
-                stroke="url(#healthScoreGradient)" 
-                strokeWidth="10" 
-                fill="none" 
-                strokeLinecap="round"
-                strokeDasharray="251.3" 
-                strokeDashoffset={251.3 - (251.3 * (patient?.healthScore ?? 96)) / 100} 
-                className="transition-all duration-1000 ease-out"
-              />
-            </svg>
-            <div className="absolute text-center flex flex-col items-center justify-center">
-              <span className="text-4xl md:text-5xl font-black font-sans tracking-tight text-slate-900 leading-none">
-                {patient?.healthScore ?? 96}
-              </span>
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mt-1">Health Score</span>
+          <div className="flex flex-row items-center gap-6">
+            <div className="relative w-28 h-28 md:w-32 md:h-32 flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                <defs>
+                  <linearGradient id="healthScoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#10B981" />
+                    <stop offset="50%" stopColor="#4F7A54" />
+                    <stop offset="100%" stopColor="#3F5B42" />
+                  </linearGradient>
+                </defs>
+                {/* Background circular track - clean, light forest dark track */}
+                <circle cx="50" cy="50" r="40" stroke="#E5ECE7" strokeWidth="10" fill="none" />
+                {/* Progress Track - beautiful glowing custom sage-green gradient stroke */}
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="40" 
+                  stroke="url(#healthScoreGradient)" 
+                  strokeWidth="10" 
+                  fill="none" 
+                  strokeLinecap="round"
+                  strokeDasharray="251.3" 
+                  strokeDashoffset={251.3 - (251.3 * (patient?.healthScore ?? 96)) / 100} 
+                  className="transition-all duration-1000 ease-out"
+                />
+              </svg>
+              <div className="absolute text-center flex flex-col items-center justify-center">
+                <span className="text-3xl md:text-3xl font-black font-sans tracking-tight text-slate-900 leading-none">
+                  {patient?.healthScore ?? 96}
+                </span>
+                <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider mt-0.5">Health Score</span>
+              </div>
+            </div>
+
+            {/* Behavior Progress Rings (Diet, Steps, Adherence) as seen in Interface Map */}
+            <div className="flex flex-col gap-2 border-l border-[#DEE8E0] pl-4 font-sans">
+              <span className="text-[9px] font-black uppercase text-[#546e56] tracking-widest mb-1">Behavior Goals</span>
+              
+              {/* Steps Ring */}
+              <div className="flex items-center gap-2">
+                <div className="relative w-7 h-7">
+                  <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#E5ECE7" strokeWidth="4" />
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#10B981" strokeWidth="4" strokeDasharray="88" strokeDashoffset={88 - (88 * 84) / 100} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black font-mono text-emerald-800">84%</span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-650">Steps (8,420 / 10k)</span>
+              </div>
+
+              {/* Diet Progress Ring */}
+              <div className="flex items-center gap-2">
+                <div className="relative w-7 h-7">
+                  <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#E5ECE7" strokeWidth="4" />
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#3B82F6" strokeWidth="4" strokeDasharray="88" strokeDashoffset={88 - (88 * 90) / 100} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black font-mono text-blue-805">90%</span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-650">Diet (2,150 / 2.4k kcal)</span>
+              </div>
+
+              {/* Compliance Ring */}
+              <div className="flex items-center gap-2">
+                <div className="relative w-7 h-7">
+                  <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#E5ECE7" strokeWidth="4" />
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#8B5CF6" strokeWidth="4" strokeDasharray="88" strokeDashoffset={88 - (88 * 80) / 100} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black font-mono text-purple-800">80%</span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-650">Rx Compliance</span>
+              </div>
             </div>
           </div>
-          <div className="text-[10px] md:text-xs font-bold tracking-[0.15em] text-slate-500 uppercase text-center mt-3 font-sans">
-            All 16 Vitals
+          <div className="text-[10px] md:text-xs font-bold tracking-[0.10em] text-[#3F5B42] uppercase text-center mt-3 font-sans opacity-95">
+            Wellness Progress Score
           </div>
         </div>
 
@@ -1185,45 +1397,561 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             </div>
           </div>
           
-          {/* Status metrics grid */}
-          <div className="pt-3 border-t border-[#DEE8E0] flex items-center justify-start gap-8 font-sans">
-            <div>
-              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Optimal</div>
-              <div className="text-2xl font-black text-emerald-700 mt-1">
-                {vitalsSummaryCounts.optimal}
+          {/* Overall Biomarkers Compliance Progress Bar */}
+          <div className="pt-4 border-t border-[#DEE8E0] font-sans space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-650 uppercase tracking-wider">
+              <span>Biometric Targets Compliance</span>
+              <span className="font-extrabold text-[#3F5B42]">
+                {vitalsSummaryCounts.optimal + vitalsSummaryCounts.inRange} / {sortedVitals.length} Stable
+              </span>
+            </div>
+            <div className="w-full bg-[#E5ECE7] h-3 rounded-full overflow-hidden border border-[#DEE8E0]/40 p-[1px] shadow-inner">
+              <div 
+                className="bg-gradient-to-r from-emerald-600 to-[#3F5B42] h-full rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `${Math.min(100, Math.max(0, ((vitalsSummaryCounts.optimal + vitalsSummaryCounts.inRange) / (sortedVitals.length || 16)) * 100))}%` }}
+              />
+            </div>
+            <p className="text-[10.5px] font-semibold text-[#5C6E5E] leading-tight">
+              {vitalsSummaryCounts.outOfRange > 0 
+                ? `${vitalsSummaryCounts.optimal + vitalsSummaryCounts.inRange} of your biometric fields are within normal or optimal margins.`
+                : "All tracked health indices are perfectly stable & balanced."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {showProfileDetails && (
+        <div className="bg-white rounded-3xl p-6 md:p-8 border border-[#DEE8E0] shadow-sm tracking-tight animate-in slide-in-from-top-4 duration-350 ease-out space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-[#3F5B42]/10 rounded-xl">
+                <User className="h-5 w-5 text-[#3F5B42]" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  Patient Identity and Contact Info
+                </h3>
+                <p className="text-xs text-slate-500 font-medium pb-1">
+                  HIPAA Secured Primary Medical Identifiers, Residential Location Mapping, & Care Ring Contact Links.
+                </p>
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-100 rounded-sm text-[10px] text-slate-600 font-mono font-bold">
+                  ID: <span className="text-[#3F5B42] font-black">{patient?.id || 'pat-marcus-001'}</span>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">In range</div>
-              <div className="text-2xl font-black text-blue-700 mt-1">
-                {vitalsSummaryCounts.inRange}
+            
+            <div className="flex items-center gap-2">
+              {!isEditingProfile ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStartEdit}
+                    className="text-xs font-bold text-[#3F5B42] hover:text-[#3F5B42]/80 bg-[#3F5B42]/10 hover:bg-[#3F5B42]/15 px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 focus:outline-none"
+                  >
+                    <Edit2 className="h-3 w-3" /> Edit Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileDetails(false)}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1  focus:outline-none"
+                  >
+                    <X className="h-3.5 w-3.5" /> Close
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile}
+                    className="text-xs font-bold text-white bg-[#3F5B42] hover:bg-[#2D422E] px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 focus:outline-none disabled:opacity-50"
+                  >
+                    <Save className="h-3 w-3 animate-pulse" /> {isSavingProfile ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingProfile(false)}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 focus:outline-none"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {!isEditingProfile ? (
+            // --- DISPLAY MODE ---
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
+              {/* Column 1: Demographics */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block border-l-2 border-[#3F5B42] pl-2 font-mono">
+                  1. Core Demographical Identity
+                </span>
+                <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-150 shadow-2xs space-y-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Full Legal Name:</span>
+                    <strong className="text-sm font-bold text-slate-900">{patient?.name || 'Marcus Alan Everett'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Preferred Name:</span>
+                    <strong className="text-sm font-bold text-[#3F5B42]">{patient?.name?.split(' ')[0] || 'Marcus'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Date of Birth (DOB) & Age:</span>
+                    <strong className="text-xs font-semibold text-slate-900">{patient?.dob || 'March 14, 1985'} (Age {patient?.age || 41})</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Sex & Gender Expression:</span>
+                    <strong className="text-xs font-semibold text-slate-900">{patient?.gender || 'Male • Cisgender Male'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 2: Identifiers & Location Map */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block border-l-2 border-[#3F5B42] pl-2 font-mono">
+                  2. Core System Identifiers & Mapping
+                </span>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 bg-[#EEF3F0] p-3 rounded-2xl border border-[#C5D9C9] text-slate-800">
+                    <div>
+                      <span className="text-[9px] text-slate-550 font-bold block uppercase tracking-wider">Medical Record Number:</span>
+                      <strong className="text-xs font-mono font-black text-[#2D422E] tracking-tight">{patient?.mrn || 'MRN-91283-ME'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-550 font-bold block uppercase tracking-wider">Unified Patient ID:</span>
+                      <strong className="text-xs font-mono font-black text-[#2D422E] tracking-tight">{patient?.id || 'pat-marcus-001'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-150 shadow-2xs space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[9px] text-slate-450 font-bold block uppercase tracking-wider">Residential Address:</span>
+                        <strong className="text-slate-900 font-bold leading-normal text-[11px] block mt-0.5">
+                          {patient?.address || '1482 Pineview Dr, Seattle, WA 98122'}
+                        </strong>
+                      </div>
+                      <MapPin className="h-4.5 w-4.5 text-[#3F5B42] stroke-[2.25] shrink-0" />
+                    </div>
+                    <div className="h-20 bg-slate-200 border border-slate-350 rounded-xl relative overflow-hidden flex items-center justify-center shadow-inner">
+                      <span className="text-[9px] text-slate-550 font-black tracking-widest uppercase">🗺 Embedded Map View</span>
+                      <div className="absolute inset-0 bg-[#3F5B42]/5 backdrop-blur-[0.5px]"></div>
+                      <a 
+                        href={`https://maps.google.com/?q=${encodeURIComponent(patient?.address || '1482 Pineview Dr, Seattle, WA 98122')}`} 
+                        target="_blank" 
+                        referrerPolicy="no-referrer"
+                        className="absolute bottom-1 right-2 px-1.5 py-0.5 bg-white shadow-xs border border-slate-200 rounded text-[9px] font-bold text-slate-700 flex items-center gap-1 hover:text-[#3F5B42] focus:outline-none"
+                      >
+                        🗺 Navigation Link
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 3: Contact & Emergency Ring */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block border-l-2 border-[#3F5B42] pl-2 font-mono">
+                  3. Primary Contacts & Emergency Ring
+                </span>
+                <div className="space-y-3">
+                  <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-150 shadow-2xs space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-750 p-1.5 bg-white rounded-lg border border-slate-100">
+                      <span className="font-semibold text-slate-500 text-[10px] uppercase">✉ Email:</span>
+                      <span className="font-bold text-[#3F5B42] flex items-center gap-1 text-[11px]">
+                        {patient?.email || 'marcus.everett@gmail.com'}
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block animate-pulse" />
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-750 p-1.5 bg-white rounded-lg border border-slate-100">
+                      <span className="font-semibold text-slate-500 text-[10px] uppercase">📞 Primary Phone:</span>
+                      <a href={`tel:${patient?.phone || '2065550143'}`} className="font-bold text-[#3F5B42] hover:underline flex items-center gap-1 text-[11px]">
+                        {patient?.phone || '(206) 555-0143'}
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-750 p-1.5 bg-white rounded-lg border border-slate-100">
+                      <span className="font-semibold text-slate-500 text-[10px] uppercase">📞 Secondary Phone:</span>
+                      <a href={`tel:${patient?.secondaryPhone || '2065550199'}`} className="font-bold text-slate-500 hover:underline flex items-center gap-1 text-[11px]">
+                        {patient?.secondaryPhone || '(206) 555-0199'}
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Emergency Block */}
+                  <div className="bg-[#FFF8F8] p-3.5 rounded-2xl border border-red-100 shadow-2xs text-slate-700 space-y-2">
+                    <div className="flex items-center justify-between border-b border-red-100 pb-1.5">
+                      <span className="text-[9px] font-black uppercase text-red-700 tracking-wider flex items-center gap-1 font-mono">
+                        <Phone className="h-3 w-3 text-red-650" />
+                        Emergency Next of Kin
+                      </span>
+                      <span className="bg-red-50 text-red-700 border border-red-200 text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-sm">Primary</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                      <span>{patient?.nokName || 'Sarah Everett'} ({patient?.nokRelationship || 'Spouse'})</span>
+                      <a href={`tel:${patient?.nokPhone || '2065550172'}`} className="text-red-700 hover:underline flex items-center gap-0.5 px-2 py-0.5 bg-white border border-red-200 rounded text-[9px] font-bold focus:outline-none">
+                        📞 Call
+                      </a>
+                    </div>
+                    <div className="text-[10px] text-slate-550 space-y-0.5">
+                      <div>Direct Phone: <strong className="text-slate-800 font-mono">{patient?.nokPhone || '(206) 555-0172'}</strong></div>
+                      <div>Direct Email: <span className="text-[#3F5B42] font-semibold">{patient?.nokEmail || 'sarah.everett@gmail.com'}</span></div>
+                    </div>
+                    
+                    {/* Emergency Sleep Override Toggle */}
+                    <div className="pt-2 border-t border-red-100 flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-slate-650 flex items-center gap-1">
+                        🚨 bypass sleep focus?
+                      </span>
+                      <div className="flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => setBypassActive(!bypassActive)}
+                          className={`relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            bypassActive ? 'bg-red-650' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              bypassActive ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className={`ml-1.5 font-bold uppercase text-[8px] ${bypassActive ? 'text-red-650' : 'text-slate-450'}`}>
+                          {bypassActive ? 'Active' : 'Disabled'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Out of range</div>
-              <div className="text-2xl font-black text-slate-500 mt-1">
-                {vitalsSummaryCounts.outOfRange}
+          ) : (
+            // --- EDIT MODE FORM layout ---
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
+              
+              {/* Column 1: Demographics Edit */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-extrabold uppercase text-[#3F5B42] tracking-wider block border-l-2 border-[#3F5B42] pl-2 font-mono">
+                  1. Core Demographical Identity (Editing)
+                </span>
+                <div className="bg-slate-50/50 p-4 rounded-2xl border border-[#3F5B42]/25 shadow-2xs space-y-3.5">
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Full Legal Name:</label>
+                    <input 
+                      type="text"
+                      value={editFields.name}
+                      onChange={(e) => setEditFields({ ...editFields, name: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Date of Birth (DOB):</label>
+                    <input 
+                      type="text"
+                      value={editFields.dob}
+                      onChange={(e) => setEditFields({ ...editFields, dob: e.target.value })}
+                      placeholder="e.g. March 14, 1985"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Sex & Gender Expression:</label>
+                    <input 
+                      type="text"
+                      value={editFields.gender}
+                      onChange={(e) => setEditFields({ ...editFields, gender: e.target.value })}
+                      placeholder="e.g. Male • Cisgender Male"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] transition-all"
+                    />
+                  </div>
+                </div>
               </div>
+
+              {/* Column 2: Identifiers & Location Map Edit */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-extrabold uppercase text-[#3F5B42] tracking-wider block border-l-2 border-[#3F5B42] pl-2 font-mono">
+                  2. System Keys & Residential Mapping
+                </span>
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-2 gap-3 bg-[#EEF3F0] p-3 rounded-2xl border border-[#C5D9C9] text-slate-800">
+                    <div>
+                      <span className="text-[9px] text-slate-550 font-bold uppercase tracking-wider flex items-center gap-1">
+                        <Lock className="h-2.5 w-2.5 text-slate-500 shrink-0" />
+                        MRN (Locked)
+                      </span>
+                      <strong className="text-xs font-mono font-black text-[#2D422E] tracking-tight block mt-0.5 opacity-70">
+                        {patient?.mrn || 'MRN-91283-ME'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-550 font-bold uppercase tracking-wider flex items-center gap-1">
+                        <Lock className="h-2.5 w-2.5 text-slate-500 shrink-0" />
+                        ID (Locked)
+                      </span>
+                      <strong className="text-xs font-mono font-black text-[#2D422E] tracking-tight block mt-0.5 opacity-70">
+                        {patient?.id || 'pat-marcus-001'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50/50 p-4 rounded-2xl border border-[#3F5B42]/25 shadow-2xs space-y-3">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Residential Address:</label>
+                      <textarea 
+                        rows={2}
+                        value={editFields.address}
+                        onChange={(e) => setEditFields({ ...editFields, address: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] resize-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 3: Contact & Emergency Ring Edit */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-extrabold uppercase text-[#3F5B42] tracking-wider block border-l-2 border-[#3F5B42] pl-2 font-mono">
+                  3. Primary Contacts & Emergency Ring
+                </span>
+                <div className="space-y-3.5">
+                  <div className="bg-slate-50/50 p-4 rounded-2xl border border-[#3F5B42]/25 shadow-2xs space-y-3">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Verified Email Address:</label>
+                      <input 
+                        type="email"
+                        value={editFields.email}
+                        onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Primary Phone Number:</label>
+                      <input 
+                        type="text"
+                        value={editFields.phone}
+                        onChange={(e) => setEditFields({ ...editFields, phone: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider mb-1">Secondary Phone Number:</label>
+                      <input 
+                        type="text"
+                        value={editFields.secondaryPhone}
+                        onChange={(e) => setEditFields({ ...editFields, secondaryPhone: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42] focus:ring-1 focus:ring-[#3F5B42] transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Emergency Family Block Edit */}
+                  <div className="bg-[#FFF8F8] p-4 rounded-2xl border border-red-200 shadow-2xs space-y-3">
+                    <span className="text-[10px] font-black uppercase text-red-700 tracking-wider flex items-center gap-1 font-mono border-b border-red-100 pb-1.5">
+                      <Phone className="h-3 w-3 text-red-650" />
+                      Emergency Next of Kin Setup
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] text-slate-550 font-bold block uppercase tracking-wider mb-0.5">NOK Name:</label>
+                        <input 
+                          type="text"
+                          value={editFields.nokName}
+                          onChange={(e) => setEditFields({ ...editFields, nokName: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-slate-550 font-bold block uppercase tracking-wider mb-0.5">Relationship:</label>
+                        <input 
+                          type="text"
+                          value={editFields.nokRelationship}
+                          onChange={(e) => setEditFields({ ...editFields, nokRelationship: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42]"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] text-slate-550 font-bold block uppercase tracking-wider mb-0.5">NOK Phone:</label>
+                        <input 
+                          type="text"
+                          value={editFields.nokPhone}
+                          onChange={(e) => setEditFields({ ...editFields, nokPhone: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-slate-550 font-bold block uppercase tracking-wider mb-0.5">NOK Email:</label>
+                        <input 
+                          type="text"
+                          value={editFields.nokEmail}
+                          onChange={(e) => setEditFields({ ...editFields, nokEmail: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-800 font-semibold focus:outline-none focus:border-[#3F5B42]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Interactive Dossier Navigation Bar */}
+      <div className="col-span-full bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans animate-fadeIn">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-[#3F5B42]/10 border border-[#3F5B42]/20 flex items-center justify-center text-[#3F5B42] font-black font-mono shadow-inner text-base">
+            {layoutMode === 'deck' ? currentPage : '★'}
+          </div>
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest leading-none">Health Board Deck</h4>
+            <p className="text-[10px] text-[#3F5B42] font-extrabold uppercase tracking-wider mt-1">
+              {layoutMode === 'deck' ? (
+                `Page ${currentPage} of 5 — ${
+                  currentPage === 1 ? "1. Vitals Focus & AI Clinical Assessment" :
+                  currentPage === 2 ? "2. Clinical Trends & 6. Lifestyle Habits" :
+                  currentPage === 3 ? "3. EHR Assets & 7. Security guard" :
+                  currentPage === 4 ? "4. Wellness Room & 8. Connected Devices" :
+                  "Active Guidance (Daily Action Plan, 9. Sessions & 10. Prescriptions)"
+                }`
+              ) : (
+                "Continuous Flow — Unified Column Layout Model"
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 self-end md:self-auto">
+          {layoutMode === 'deck' ? (
+            <div className="flex items-center gap-1.5">
+              {/* Prev Button */}
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center justify-center h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-45 disabled:hover:bg-slate-50 transition-colors cursor-pointer text-slate-705 text-xs font-bold leading-none select-none focus:outline-none"
+              >
+                <ChevronLeft className="h-4 w-4 mr-0.5" />
+                Prev
+              </button>
+
+              {/* Page Indicators */}
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => {
+                  const pageNum = i + 1;
+                  const isActive = currentPage === pageNum;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`h-8 px-2.5 rounded-lg text-xs font-bold font-sans transition-all border cursor-pointer flex items-center justify-center focus:outline-none ${
+                        isActive 
+                          ? 'bg-[#3F5B42] text-white border-[#3F5B42] shadow-sm font-black' 
+                          : 'bg-white text-slate-505 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
+                      }`}
+                      title={
+                        pageNum === 1 ? "Vitals & AI Assessment" :
+                        pageNum === 2 ? "Trends & Habits" :
+                        pageNum === 3 ? "Clinical EHR & Privacy" :
+                        pageNum === 4 ? "Wellness & Devices" :
+                        "Action & Agenda"
+                      }
+                    >
+                      <span className="font-mono text-xs mr-1">{pageNum}</span>
+                      <span className="hidden lg:inline text-[9px] uppercase tracking-wider">
+                        {
+                          pageNum === 1 ? "Vitals" :
+                          pageNum === 2 ? "Trends" :
+                          pageNum === 3 ? "EHR" :
+                          pageNum === 4 ? "Wellness" :
+                          "Action"
+                        }
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Next Button */}
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.min(5, prev + 1))}
+                disabled={currentPage === 5}
+                className="flex items-center justify-center h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-45 disabled:hover:bg-slate-50 transition-colors cursor-pointer text-[#3F5B42] text-xs font-bold leading-none select-none focus:outline-none"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-0.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-250 px-3 py-1.5 rounded-lg text-xs font-bold font-sans">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+              <span>Full Dossier View • All Cards Standardized</span>
+            </div>
+          )}
+
+          {/* Separator Line */}
+          <div className="hidden md:block w-px h-6 bg-slate-200 mx-1" />
+
+          {/* Layout Switch Toggle */}
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setLayoutMode('deck')}
+              className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${
+                layoutMode === 'deck' 
+                  ? 'bg-[#3F5B42] text-white shadow-xs' 
+                  : 'text-slate-505 hover:text-slate-800'
+              }`}
+            >
+              Card Deck
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayoutMode('dossier')}
+              className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${
+                layoutMode === 'dossier' 
+                  ? 'bg-[#3F5B42] text-white shadow-xs' 
+                  : 'text-slate-505 hover:text-slate-800'
+              }`}
+            >
+              Full Profile
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Grid content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={layoutMode === 'deck' 
+        ? "grid grid-cols-1 gap-6 animate-fadeIn max-w-4xl mx-auto w-full" 
+        : "grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn"
+      }>
         
         {/* Left Column - Vitals & Health Indicators */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border border-slate-200 shadow-sm">
+        <div className={layoutMode === 'deck' ? "space-y-6" : "lg:col-span-2 space-y-6"}>
+          {(layoutMode === 'dossier' || currentPage === 1) && (
+            <motion.div
+              key="page1-left"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm">
             <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-blue-600" />
-                    Your Vitals
+                    <Activity className="h-4 w-4 text-[#3F5B42]" />
+                    1. Your Vitals Focus
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    Drag and drop cards to customize layout order. Saves automatically.
+                  <CardDescription className="text-xs font-semibold text-slate-400">
+                    Key metabolic & hemodynamic markers under focus.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1235,6 +1963,14 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     title="Retrieve the latest vital signs from clinic database"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawerOpen(true)}
+                    className="flex items-center justify-center p-1.5 bg-[#EEF3F0] hover:bg-[#DEE8E0] text-[#3F5B42] hover:text-[#2d422e] border border-[#DEE8E0] rounded transition-colors shadow-sm cursor-pointer"
+                    title="Configure Focus Vitals & View All 16 Vitals"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
                   </button>
                   {syncStatusMessage && (
                     <motion.span
@@ -1249,53 +1985,29 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {(isExpanded ? sortedVitals : sortedVitals.slice(0, 4)).map((vital, idx) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {displayedVitals.map((vital) => {
                   const Icon = vital.icon;
-                  const isDraggingThis = idx === draggedIndex;
-                  const isDragOverThis = idx === dragOverIndex;
                   return (
-                    <div
+                    <motion.div
                       key={vital.name}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, idx)}
-                      onDragOver={(e) => handleDragOver(e, idx)}
-                      onDrop={(e) => handleDrop(e, idx)}
-                      onDragEnd={handleDragEnd}
-                      className="cursor-grab active:cursor-grabbing font-sans"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className={`p-4 rounded-xl border flex flex-col justify-between h-32 relative group select-none transition-all duration-250 hover:shadow-md ${vital.color}`}
                     >
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ 
-                          opacity: isDraggingThis ? 0.35 : 1, 
-                          y: 0,
-                          scale: isDraggingThis ? 0.95 : isDragOverThis ? 1.03 : 1
-                        }}
-                        transition={{ duration: 0.18 }}
-                        className={`p-4 rounded-xl border flex flex-col justify-between h-32 relative group select-none transition-all duration-250 hover:shadow-md ${
-                          isDragOverThis 
-                            ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/50' 
-                            : vital.color
-                        }`}
-                      >
-                        {/* Active Drag Grip icon in top corner */}
-                        <div className="absolute top-2 right-2 opacity-35 group-hover:opacity-100 transition-opacity p-0.5 pointer-events-none">
-                          <GripVertical className="h-4 w-4 text-slate-400" />
+                      <div className="flex justify-between items-start pr-5">
+                        <span className="text-xs font-bold text-slate-500 line-clamp-1">{vital.name}</span>
+                        <Icon className="h-5 w-5 opacity-80" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xl font-bold font-mono tracking-tight text-slate-900">{vital.value}</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 opacity-90">
+                          <CheckCircle2 className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{vital.status}</span>
                         </div>
-
-                        <div className="flex justify-between items-start pr-5">
-                          <span className="text-xs font-bold text-slate-500 line-clamp-1">{vital.name}</span>
-                          <Icon className="h-5 w-5 opacity-80" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-xl font-bold font-mono tracking-tight text-slate-900">{vital.value}</div>
-                          <div className="text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 opacity-90">
-                            <CheckCircle2 className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{vital.status}</span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </div>
+                      </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -1303,43 +2015,1004 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               <div className="flex justify-center mt-6 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="flex items-center gap-2 px-5 py-2 hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold rounded-lg transition-all shadow-sm cursor-pointer"
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="flex items-center gap-2 px-5 py-2 hover:bg-[#EEF3F0]/65 border border-[#DEE8E0] text-slate-705 hover:text-slate-950 text-xs font-bold rounded-lg transition-all shadow-sm cursor-pointer"
                 >
-                  {isExpanded ? (
-                    <>
-                      Collapse Clinical Vitals
-                      <ChevronUp className="h-4 w-4 text-slate-500" />
-                    </>
-                  ) : (
-                    <>
-                      View All 16 Clinical Vitals
-                      <ChevronDown className="h-4 w-4 text-slate-500" />
-                    </>
-                  )}
+                  <SlidersHorizontal className="h-4 w-4 text-[#3F5B42]" />
+                  Access Full Clinical Telemetry Panel
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
                 </button>
               </div>
             </CardContent>
           </Card>
+          </motion.div>
+          )}
+
+
 
           {/* Active Diagnoses / Health Plan focus */}
-          <DailyActionPlan 
-            patient={patient} 
-            latestVitalRecord={latestVitalRecord} 
-            bloodGlucoseStatus={bloodGlucoseStatus} 
-          />
+          {(layoutMode === 'dossier' || currentPage === 5) && (
+            <motion.div
+              key="page5-action-plan"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <DailyActionPlan 
+                patient={patient} 
+                latestVitalRecord={latestVitalRecord} 
+                bloodGlucoseStatus={bloodGlucoseStatus} 
+              />
+            </motion.div>
+          )}
+
+          {/* 1. CLINICAL TRENDS & COMPLIANCE CALENDAR - "Data Visualization" Node */}
+          {(layoutMode === 'dossier' || currentPage === 2) && (
+            <motion.div
+              key="page2-left"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-[#3F5B42]" />
+                    2. Interactive Trends & Adherence Analytics
+                  </CardTitle>
+                  <CardDescription className="text-xs font-semibold text-slate-400">
+                    Correlation analysis between daily activity habits and primary clinical metrics
+                  </CardDescription>
+                </div>
+                <div className="flex bg-[#EEF3F0] p-1 rounded-lg border border-[#DEE8E0]">
+                  <button
+                    onClick={() => setTrendsDuration('3m')}
+                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all cursor-pointer ${
+                      trendsDuration === '3m' ? 'bg-[#3F5B42] text-white shadow-sm' : 'text-slate-650 hover:text-slate-900'
+                    }`}
+                  >
+                    3 Months
+                  </button>
+                  <button
+                    onClick={() => setTrendsDuration('6m')}
+                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all cursor-pointer ${
+                      trendsDuration === '6m' ? 'bg-[#3F5B42] text-white shadow-sm' : 'text-slate-650 hover:text-slate-900'
+                    }`}
+                  >
+                    6 Months
+                  </button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                
+                {/* SVG Live Render Chart */}
+                <div className="md:col-span-8 bg-slate-50 border border-slate-100 p-4 rounded-xl relative">
+                  <div className="flex items-center justify-between text-[11px] mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 font-bold text-slate-700">
+                        <span className="w-2.5 h-2.5 bg-amber-500 rounded-full inline-block" /> Blood Pressure (mmHg)
+                      </span>
+                      <span className="flex items-center gap-1 font-bold text-slate-705">
+                        <span className="w-2.5 h-2.5 bg-blue-500 rounded-full inline-block" /> Weight (kg)
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-slate-200 text-slate-700 font-mono font-bold px-1.5 py-0.5 rounded">
+                      Latest Calibration: Today
+                    </span>
+                  </div>
+
+                  {/* Pure Interactive SVG Chart Vector */}
+                  <div className="w-full h-44 relative bg-white border border-slate-150 rounded shadow-inner p-1">
+                    <svg viewBox="0 0 500 180" className="w-full h-full">
+                      {/* Grid background lines */}
+                      <line x1="50" y1="30" x2="450" y2="30" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3" />
+                      <line x1="50" y1="70" x2="450" y2="70" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3" />
+                      <line x1="50" y1="110" x2="450" y2="110" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3" />
+                      <line x1="50" y1="150" x2="450" y2="150" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3" />
+                      
+                      {/* Axes */}
+                      <line x1="50" y1="20" x2="50" y2="155" stroke="#CBD5E1" strokeWidth="1.5" />
+                      <line x1="45" y1="150" x2="465" y2="150" stroke="#CBD5E1" strokeWidth="1.5" />
+
+                      {/* Content line plotting pathways dynamically based on timeframe */}
+                      {trendsDuration === '3m' ? (
+                        <>
+                          {/* 3M Systolic Path: April, May, June */}
+                          <path
+                            d="M 50,110 L 250,118 L 450,121"
+                            fill="none"
+                            stroke="#F59E0B"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            className="animate-draw"
+                          />
+                          {/* 3M Weight Path */}
+                          <path
+                            d="M 50,60 L 250,82 L 450,88"
+                            fill="none"
+                            stroke="#3B82F6"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            className="animate-draw"
+                          />
+                          {/* Points circles */}
+                          <circle cx="50" cy="110" r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
+                          <circle cx="250" cy="118" r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
+                          <circle cx="450" cy="121" r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
+
+                          <circle cx="50" cy="60" r="5" fill="#3B82F6" stroke="#FFF" strokeWidth="1.5" />
+                          <circle cx="250" cy="82" r="5" fill="#3B82F6" stroke="#FFF" strokeWidth="1.5" />
+                          <circle cx="450" cy="88" r="5" fill="#3B82F6" stroke="#FFF" strokeWidth="1.5" />
+
+                          {/* Labels for X-axis */}
+                          <text x="50" y="168" fontSize="9" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Apr 2026</text>
+                          <text x="250" y="168" fontSize="9" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">May 2026</text>
+                          <text x="450" y="168" fontSize="9" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Jun 2026</text>
+
+                          {/* Value tooltips inline */}
+                          <g transform="translate(50, 100)">
+                            <rect x="-20" y="-12" width="40" height="11" rx="2" fill="#1E293B" opacity="0.8" />
+                            <text x="0" y="-4" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#FFF" fontFamily="monospace">122/78</text>
+                          </g>
+                          <g transform="translate(450, 111)">
+                            <rect x="-20" y="-12" width="40" height="11" rx="2" fill="#1E293B" opacity="0.8" />
+                            <text x="0" y="-4" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#FFF" fontFamily="monospace">118/74</text>
+                          </g>
+                          <g transform="translate(450, 78)">
+                            <rect x="-20" y="-12" width="40" height="11" rx="2" fill="#1E293B" opacity="0.8" />
+                            <text x="0" y="-4" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#FFF" fontFamily="monospace">86.2kg</text>
+                          </g>
+                        </>
+                      ) : (
+                        <>
+                          {/* 6M Systolic Path: Jan to Jun */}
+                          <path
+                            d="M 50,80 L 130,85 L 210,95 L 290,110 L 370,118 L 450,121"
+                            fill="none"
+                            stroke="#F59E0B"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                          {/* 6M Weight Path */}
+                          <path
+                            d="M 50,35 L 130,42 L 210,55 L 290,60 L 370,82 L 450,88"
+                            fill="none"
+                            stroke="#3B82F6"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                          {/* Points */}
+                          {[50, 130, 210, 290, 370, 450].map((cx, idx) => {
+                            const bps = [80, 85, 95, 110, 118, 121];
+                            const wgs = [35, 42, 55, 60, 82, 88];
+                            return (
+                              <g key={idx}>
+                                <circle cx={cx} cy={bps[idx]} r="4.5" fill="#F59E0B" stroke="#FFF" strokeWidth="1" />
+                                <circle cx={cx} cy={wgs[idx]} r="4.5" fill="#3B82F6" stroke="#FFF" strokeWidth="1" />
+                              </g>
+                            );
+                          })}
+                          {/* Labels */}
+                          <text x="50" y="168" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Jan</text>
+                          <text x="130" y="168" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Feb</text>
+                          <text x="210" y="168" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Mar</text>
+                          <text x="290" y="168" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Apr</text>
+                          <text x="370" y="168" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">May</text>
+                          <text x="450" y="168" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#64748B" fontFamily="sans-serif">Jun</text>
+                        </>
+                      )}
+                    </svg>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 font-semibold italic text-center">
+                    Note: Cardiovascular and glycemic calibration signals demonstrate a positive therapeutic response since initiating Metformin and post-meal muscle exercises.
+                  </p>
+                </div>
+
+                {/* Compliance Calendar Grid Section */}
+                <div className="md:col-span-4 space-y-3 font-sans">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-black uppercase text-[#546e56] tracking-wider block">
+                      Compliance Calendar
+                    </span>
+                    <Badge variant="outline" className="bg-[#EEF3F0] text-slate-800 text-[9px] font-bold">
+                      93% Monthly
+                    </Badge>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-normal">
+                    Daily "Check-off" calendar registry of prescribed therapeutic regimen.
+                  </p>
+
+                  <div className="grid grid-cols-5 gap-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-150">
+                    {/* Render visual 15 calendar days */}
+                    {Array.from({ length: 15 }).map((_, i) => {
+                      const dayNumber = i + 1;
+                      const isMissed = dayNumber === 9; // Simulated missed Metformin dose due to fatigue barrier profile
+                      return (
+                        <div
+                          key={dayNumber}
+                          title={isMissed ? `June ${dayNumber} — Missed dose logged (Side-effect fatiguing overlay)` : `June ${dayNumber} — Adherent check logged (Dose verified)`}
+                          className={`aspect-square rounded-md flex flex-col items-center justify-center relative cursor-help transition-all ${
+                            isMissed 
+                              ? 'bg-rose-50 border border-rose-300 text-rose-700 font-extrabold shadow-inner' 
+                              : 'bg-emerald-50 border border-emerald-250 text-emerald-850 font-extrabold'
+                          }`}
+                        >
+                          <span className="text-[9px] font-bold">{dayNumber}</span>
+                          <span className={`text-[8px] mt-0.5 ${isMissed ? 'text-rose-600' : 'text-[#3F5B42]'}`}>
+                            {isMissed ? '❌' : '✓'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="text-[9px] font-semibold text-slate-500 space-y-1 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 bg-emerald-100 border border-emerald-350 rounded" />
+                      <span>✓ Consistently Adherent (Doses check off)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 bg-rose-100 border border-rose-300 rounded" />
+                      <span>❌ Missed Check‑off (9th: Fatigue trigger)</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </CardContent>
+          </Card>
+          </motion.div>
+          )}
+
+          {/* 2. INTEGRATED CLINICAL EHR DATA HUB - "Clinical Medical Records" Node */}
+          {(layoutMode === 'dossier' || currentPage === 3) && (
+            <motion.div
+              key="page3-left"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-emerald-600" />
+                    3. Clinical Record Interoperability Index (EHR Hub)
+                  </CardTitle>
+                  <CardDescription className="text-xs font-semibold text-slate-400">
+                    Live federated clinical assets compiled from hospital portals via HL7 FHIR Release 4
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold text-[10px] flex items-center gap-1 leading-none py-1">
+                  <ShieldCheck className="h-3 w-3 text-emerald-600" /> HIPAA Secure Link
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 font-sans">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* EHR Diagnosed Conditions */}
+                <div className="space-y-3 bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm">
+                  <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block border-b border-[#E3EDE6] pb-1">
+                    Diagnosed Medical Conditions
+                  </span>
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between text-xs p-1.5 bg-white border border-slate-100 rounded">
+                      <div>
+                        <strong className="text-slate-800 block">Type 2 Diabetes Mellitus</strong>
+                        <span className="text-[10px] text-slate-400 font-mono font-semibold">ICD-10 Code: E11.9</span>
+                      </div>
+                      <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold hover:bg-emerald-50 text-[9px] py-0 px-1">Primary Metabolic</Badge>
+                    </div>
+                    <div className="flex items-start justify-between text-xs p-1.5 bg-white border border-slate-100 rounded">
+                      <div>
+                        <strong className="text-slate-800 block">Rheumatoid Arthritis (RF Positive)</strong>
+                        <span className="text-[10px] text-slate-400 font-mono font-semibold">ICD-10 Code: M05.79 (Autoimmune)</span>
+                      </div>
+                      <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold hover:bg-emerald-50 text-[9px] py-0 px-1">Controlled Remission</Badge>
+                    </div>
+                    <div className="flex items-start justify-between text-xs p-1.5 bg-white border border-slate-100 rounded">
+                      <div>
+                        <strong className="text-slate-800 block">Polycystic Ovary Syndrome (PCOS)</strong>
+                        <span className="text-[10px] text-slate-400 font-mono font-semibold">ICD-10 Code: E28.2 (Endocrine)</span>
+                      </div>
+                      <Badge className="bg-blue-50 text-blue-800 border-blue-200 font-bold hover:bg-blue-50 text-[9px] py-0 px-1">Active Monitoring</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Laboratory Panels History */}
+                <div className="space-y-3 bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm">
+                  <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block border-b border-[#E3EDE6] pb-1">
+                    Historical Laboratory Panels (EHR)
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 bg-white rounded border border-slate-100 flex flex-col justify-between">
+                      <span className="text-slate-400 font-bold text-[9px] uppercase">HbA1c Baseline</span>
+                      <strong className="text-[#3F5B42] text-sm mt-0.5">5.7%</strong>
+                      <span className="text-[9px] text-[#5C6E5E] font-medium mt-0.5">Jan 2026 • Optimal</span>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-100 flex flex-col justify-between">
+                      <span className="text-slate-400 font-bold text-[9px] uppercase">CRP Inflammatory</span>
+                      <strong className="text-[#3F5B42] text-sm mt-0.5">3.2 mg/L</strong>
+                      <span className="text-[9px] text-[#5C6E5E] font-medium mt-0.5">May 2026 • Controlled</span>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-100 flex flex-col justify-between">
+                      <span className="text-slate-400 font-bold text-[9px] uppercase">Kidney eGFR Index</span>
+                      <strong className="text-blue-700 text-sm mt-0.5">104 mL/min</strong>
+                      <span className="text-[9px] text-slate-500 font-medium mt-0.5">Jun 2026 • Excellent</span>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-100 flex flex-col justify-between">
+                      <span className="text-slate-400 font-bold text-[9px] uppercase">Lipid Panel LDL-C</span>
+                      <strong className="text-[#3F5B42] text-sm mt-0.5">92 mg/dL</strong>
+                      <span className="text-[9px] text-[#5C6E5E] font-medium mt-0.5">Mar 2026 • Stable</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Historical Surgical Reports */}
+                <div className="space-y-2 bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm col-span-1 md:col-span-2">
+                  <div className="flex items-center justify-between border-b border-[#E3EDE6] pb-1 mb-2">
+                    <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block">
+                      Discharge Summaries & Surgical Procedures History
+                    </span>
+                    <Badge variant="outline" className="text-[8px] bg-white font-semibold">2 Historic Records</Badge>
+                  </div>
+                  <div className="space-y-1.5 text-xs text-slate-700">
+                    <div className="flex items-start gap-2.5 p-1.5 rounded bg-white border border-slate-100 hover:bg-slate-50/50">
+                      <span className="text-slate-450 font-bold font-mono">2025</span>
+                      <div>
+                        <strong className="text-slate-900 block font-semibold">Left Knee Arthroscopy & Joint Lavage</strong>
+                        <p className="text-[10px] text-slate-450 mt-0.5 leading-normal">
+                          Discharged following Day Surgery arthroscopic meniscus cleanup and synovial wash. Uneventful post-anesthesia recovery. Connected physical therapy plan ongoing.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5 p-1.5 rounded bg-white border border-slate-100 hover:bg-slate-50/50">
+                      <span className="text-slate-450 font-bold font-mono">2012</span>
+                      <div>
+                        <strong className="text-slate-900 block font-semibold">Laparoscopic Appendectomy (Acute Inflammatory)</strong>
+                        <p className="text-[10px] text-slate-450 mt-0.5 leading-normal">
+                          Emergency laparoscopic removal of inflamed appendix tissue under full general support. Standard surgical discharge. Fully resolved, no ongoing complications.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Immunization & Vaccination History */}
+                <div className="bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm col-span-1 md:col-span-2 font-sans space-y-2">
+                  <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block border-b border-[#E3EDE6] pb-1">
+                    Verified Immunization Registry (EHR)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div className="p-2 bg-white rounded border border-slate-100">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>COVID-19 Bivalent</span>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Dose log: Oct 2025 • Pfizer</p>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-100">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>Influenza (Annual)</span>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Dose log: Oct 2025 • Clinic</p>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-100">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>Tdap booster</span>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Dose log: Jul 2021 • General</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </CardContent>
+          </Card>
+          </motion.div>
+          )}
+
+          {/* 3. PRIMARY CARE ENGAGEMENT & DAILY MOOD SELF-LOGGER - "Health Protective Behaviors" Node */}
+          {(layoutMode === 'dossier' || currentPage === 4) && (
+            <motion.div
+              key="page4-left"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <HeartPlus className="h-4 w-4 text-[#3F5B42]" />
+                    4. Wellness Engagement & Mood Self‑Assessment Room
+                  </CardTitle>
+                  <CardDescription className="text-xs font-semibold text-slate-400">
+                    Holistic engagement history and real-time cognitive stress-response tracker
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 font-sans space-y-6">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Primary Care past, upcoming, screening reminders */}
+                <div className="space-y-4">
+                  
+                  {/* Past Visits logs */}
+                  <div className="bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm space-y-2">
+                    <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block border-b border-[#E3EDE6] pb-1">
+                      PCP / Endocrinology Consultation History
+                    </span>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between items-center bg-white p-1.5 rounded border border-slate-105">
+                        <span className="font-semibold text-slate-800">🌱 Dr. Aris Vance (PCP Annual Visit)</span>
+                        <Badge className="bg-emerald-50 text-emerald-805 hover:bg-[#EEF3F0] text-[9px]">Completed Mar 2026</Badge>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-1.5 rounded border border-slate-105">
+                        <span className="font-semibold text-slate-800">🧪 Dr. James Wilson (Endocrine Lab Evaluation)</span>
+                        <Badge className="bg-emerald-50 text-emerald-805 hover:bg-[#EEF3F0] text-[9px]">Completed Apr 2026</Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Preventative Screening registry */}
+                  <div className="bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm space-y-2">
+                    <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block border-b border-[#E3EDE6] pb-1">
+                      Preventive Screening Alerts & Status
+                    </span>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between items-center bg-white p-1.5 rounded border border-slate-105">
+                        <span className="font-semibold text-slate-850">Colonoscopy (Targeting Age-standards)</span>
+                        <span className="text-[10px] font-bold text-slate-450 bg-slate-100 px-1.5 rounded">Future (Due 2035)</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-1.5 rounded border border-slate-105">
+                        <span className="font-semibold text-slate-850">Annual Blood Pressure Evaluation Trend</span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 rounded flex items-center gap-1">🟢 Completed Today</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-1.5 rounded border border-slate-105">
+                        <span className="font-semibold text-slate-850">PCP Routine Lipid Screen check</span>
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 rounded">Pending Oct 2026</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Wellness Sessions Attendance logs */}
+                  <div className="bg-[#FAFCFB] p-4 rounded-xl border border-emerald-100/60 shadow-sm space-y-2">
+                    <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-wider block border-b border-[#E3EDE6] pb-1">
+                      Wellness Class Logs & Connected Devices
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2 bg-white rounded border border-slate-100">
+                        <strong className="text-slate-800 block text-[10.5px]">🧘 Mindfulness Meditation</strong>
+                        <span className="text-[9px] font-semibold text-slate-500">Calm App Integration</span>
+                        <span className="text-[10px] text-emerald-700 font-bold block mt-1">✓ Logged 15 mins today</span>
+                      </div>
+                      <div className="p-2 bg-white rounded border border-slate-100">
+                        <strong className="text-slate-800 block text-[10.5px]">🌸 Therapeutic Yoga Class</strong>
+                        <span className="text-[9px] font-semibold text-slate-500">Joint Kinematic Class Support</span>
+                        <span className="text-[10px] text-slate-500 font-bold block mt-1">2/week • Every Tuesday</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Secure EHR Mood and Stress logger FORM */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-3">
+                      <span className="text-[10px] font-black uppercase text-[#3F5B42] tracking-widest block">
+                        Daily Mindful Self-Assessment Log
+                      </span>
+                      <span className="text-[9px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">Portal Direct</span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 leading-normal mb-4">
+                      Log your current cognitive stress-responses and daily outlook. This securely logs directly to your primary EHR file for clinician review.
+                    </p>
+
+                    {/* Mood button selection state */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 block mb-1.5">Current Cognitive Vibe</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { feel: 'Calm', icon: '😊' },
+                            { feel: 'Neutral', icon: '😐' },
+                            { feel: 'Fatigued', icon: '🥱' },
+                            { feel: 'Anxious', icon: '😟' },
+                            { feel: 'Energetic', icon: '⚡' }
+                          ].map((item) => (
+                            <button
+                              key={item.feel}
+                              type="button"
+                              onClick={() => setPatientMood(item.feel)}
+                              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                                patientMood === item.feel 
+                                  ? 'bg-[#3F5B42] text-white border-[#324935] shadow-sm' 
+                                  : 'bg-white text-slate-750 border-slate-205 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span>{item.icon}</span> <span>{item.feel}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Stress level index */}
+                      <div>
+                        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1">
+                          <span>Cognitive Stress Level</span>
+                          <span className="text-slate-800 font-mono font-black">{stressLevel} / 5 ({stressLevel <= 2 ? 'Minimal' : stressLevel === 3 ? 'Moderate' : 'Elevated'})</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="5"
+                          value={stressLevel}
+                          onChange={(e) => setStressLevel(parseInt(e.target.value, 10))}
+                          className="w-full h-1.5 bg-[#E5ECE7] rounded-lg appearance-none cursor-pointer accent-[#3F5B42]"
+                        />
+                        <div className="flex justify-between text-[8px] font-bold text-slate-400 mt-1">
+                          <span>1 (Total Zen)</span>
+                          <span>3 (Balanced Activity)</span>
+                          <span>5 (High Inflammation Barrier)</span>
+                        </div>
+                      </div>
+
+                      {/* Brief journaling textarea */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 block mb-1">EHR Daily Notes Reflection</label>
+                        <textarea
+                          rows={2}
+                          value={moodJournal}
+                          onChange={(e) => setMoodJournal(e.target.value)}
+                          placeholder="Fasting feeling stable today... taking medication exactly as directed."
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#3F5B42] focus:border-[#3F5B42] outline-none font-medium text-slate-800 shadow-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-200 flex items-center justify-between mt-4">
+                    <span className="text-[9px] text-[#5C6E5E] font-semibold italic flex items-center gap-1">
+                      🔒 Local sandboxed secure channel
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPrivacySuccessToast(true);
+                        setTimeout(() => setShowPrivacySuccessToast(false), 3000);
+                      }}
+                      className="px-4 py-2 bg-[#3F5B42] hover:bg-[#324935] text-white text-xs font-bold rounded-lg transition-all shadow cursor-pointer border border-[#2D422E] flex items-center gap-1"
+                    >
+                      ✓ Log to EHR File
+                    </button>
+                  </div>
+
+                  {showPrivacySuccessToast && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-[10px] bg-emerald-100 text-emerald-850 border border-emerald-300 p-2 rounded-lg font-bold text-center mt-2.5"
+                    >
+                      🎉 Mindful Daily Self-Assessment safely serialized directly to Primary EHR file!
+                    </motion.div>
+                  )}
+
+                </div>
+
+              </div>
+              
+            </CardContent>
+          </Card>
+          </motion.div>
+          )}
+
         </div>
 
-        {/* Right Column - Appointments, Rx, Quick Actions */}
+        {/* Right Column - Demographics, Personal Contacts, Habits, Rx, & Sync */}
         <div className="space-y-6 animate-fadeIn">
           
+          {/* Card 1.5: Dynamic AI Vitals Assessment Card */}
+          {(layoutMode === 'dossier' || currentPage === 1) && (
+            <motion.div
+              key="card-1-5-vit-ai"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-[#EEF3F0]/60 hover:bg-[#EEF3F0]/90 transition-colors">
+                <CardHeader className="pb-3 border-b border-[#DEE8E0] bg-[#EEF3F0] p-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-705 flex items-center gap-1.5 font-sans">
+                      <Sparkles className="h-4 w-4 text-[#3F5B42]" />
+                      5. AI Vital Signs & Clinical Assessment
+                    </CardTitle>
+                    <Badge variant="outline" className="bg-[#E2ECE5] text-[#2D422E] border-[#C2D9C6] text-[9px] font-black uppercase font-mono">
+                      HIPAA Verified
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-[11px] font-semibold text-slate-450 leading-relaxed mt-1">
+                    Deep neural insights and diagnostic cross-check of core vitals matching clinical guidelines
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 pb-4 px-4 space-y-4 font-sans text-xs">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Full AI assessment of your integrated telemetry stream over the past 24 hours matches reference care-plan benchmarks:
+                  </p>
+                  
+                  <div className="space-y-2.5">
+                    <div className="flex gap-2.5 p-2.5 bg-white border border-slate-100 rounded-xl shadow-3xs">
+                      <span className="text-emerald-700 font-extrabold text-sm select-none">✓</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">
+                        Blood Glucose stability confirmed. Fasting levels (<strong className="text-slate-900">92 mg/dL</strong>) conform to target ranges under daily workout and active metformin management.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2.5 p-2.5 bg-white border border-slate-100 rounded-xl shadow-3xs">
+                      <span className="text-emerald-700 font-extrabold text-sm select-none">✓</span>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">
+                        Hemodynamic tone balanced. Heart rate (<strong className="text-slate-900">72 bpm</strong>) and blood pressure (<strong className="text-slate-900">118/74 mmHg</strong>) suggest healthy vagal response.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-[#3F5B42]/5 border border-[#3F5B42]/10 rounded-xl text-[10px] text-slate-700 leading-normal flex gap-2">
+                    <span className="text-sm">🤖</span>
+                    <div>
+                      <strong>Automated Care Plan Nudge:</strong> Patient demonstrated consistent biometric adherence. Continue scheduled evening walking routines.
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* B. PATIENT HEALTH BEHAVIOR PROFILE CARD (CALORIES & COGNITIVE WATER TRACKER) - "Patient Health Behavior Profile" Node */}
+          {(layoutMode === 'dossier' || currentPage === 2) && (
+            <motion.div
+              key="page2-right"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50 p-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 font-sans">
+                  <Utensils className="h-4 w-4 text-emerald-650" />
+                  6. Lifestyle, Diet & Hydration Behavior Profile
+                </CardTitle>
+              </div>
+              <CardDescription className="text-[11px] leading-relaxed mt-1">
+                Active tracking of diet macro objectives, calorie limits, and clickable hydration water log checks
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 pb-4 px-4 space-y-4 font-sans text-xs">
+              
+              {/* Habits tracker segment */}
+              <div className="space-y-2.5 bg-[#FAFCFB] p-3 rounded-xl border border-slate-100/80 shadow-sm text-slate-705">
+                <span className="text-[10px] font-black uppercase text-slate-450 tracking-wider block">
+                  Cessation Status & Stand alerts
+                </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11.5px]">
+                    <span className="font-semibold text-slate-500">🚬 Tobacco Status:</span>
+                    <strong className="text-[#3F5B42] font-black uppercase bg-[#EEF3F0] border border-[#DEE8E0] px-1.5 py-0.5 rounded text-[10px]">
+                      Never Smoker
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between text-[11.5px]">
+                    <span className="font-semibold text-slate-500">🍺 Alcohol Intake:</span>
+                    <strong className="text-slate-800 font-bold">
+                      Minimal (Monitored)
+                    </strong>
+                  </div>
+                  {/* Stand goals */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase mt-1">
+                      <span>Sedentary Stand Alert Quotient</span>
+                      <strong className="text-blue-700 font-mono">10 / 12 Hours Done</strong>
+                    </div>
+                    <div className="w-full bg-[#E5ECE7] h-2 rounded-full overflow-hidden">
+                      <div className="bg-[#3B82F6] h-full rounded-full" style={{ width: '83.3%' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nutrition Intake VS Calorie limit */}
+              <div className="space-y-3 bg-[#FAFCFB] p-3 rounded-xl border border-slate-100/80 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-205 pb-1">
+                  <span className="text-[10px] font-black uppercase text-slate-450 tracking-wider">
+                     Diet vs Metabolic Needs
+                  </span>
+                  <span className="text-[10px] text-slate-800 font-bold">Intake Logged</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-650">Daily Calorie Balance:</span>
+                    <strong className="text-slate-800">2,150 / 2,400 kcal</strong>
+                  </div>
+                  <div className="w-full bg-[#E5ECE7] h-2.5 rounded-full overflow-hidden p-[1px]">
+                    <div className="bg-gradient-to-r from-emerald-500 to-[#3F5B42] h-full rounded-full" style={{ width: '89.5%' }} />
+                  </div>
+                  <p className="text-[10px] text-[#5C6E5E] leading-normal italic">
+                    Dietary calorie levels conform perfectly to PCOS‑insulin glycemic boundaries. All meals accounted.
+                  </p>
+                </div>
+
+                {/* Macronutrient breakdown targeting targets */}
+                <div className="pt-2 border-t border-slate-150 space-y-2">
+                  <span className="text-[9.5px] font-black uppercase text-slate-400 tracking-wider block">Target Macromolecule Percentiles</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white p-1.5 border border-slate-110 rounded text-center">
+                      <span className="text-[8px] text-slate-400 font-semibold block">Carbs (40%)</span>
+                      <strong className="text-amber-700 font-mono text-[10.5px]">215g</strong>
+                    </div>
+                    <div className="bg-white p-1.5 border border-slate-110 rounded text-center">
+                      <span className="text-[8px] text-slate-400 font-semibold block">Proteins (30%)</span>
+                      <strong className="text-blue-700 font-mono text-[10.5px]">161g</strong>
+                    </div>
+                    <div className="bg-white p-1.5 border border-slate-110 rounded text-center">
+                      <span className="text-[8px] text-slate-400 font-semibold block">Fats (30%)</span>
+                      <strong className="text-purple-700 font-mono text-[10.5px]">71g</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* INTERACTIVE hydration logging widget */}
+              <div className="bg-[#EEF3F0]/65 p-4 rounded-xl border border-[#DEE8E0] space-y-3 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-8 h-8 opacity-10">
+                  <Droplet className="w-full h-full text-blue-600" />
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-[10.5px] font-black uppercase text-[#3F5B42] tracking-wider block">
+                    Interactive Fluid Hydration Tracker
+                  </span>
+                  <Badge className="bg-blue-100 text-blue-700 font-mono text-[9px] font-black">+250ml per glass</Badge>
+                </div>
+
+                <div className="flex gap-3 items-center">
+                  {/* Pure SVG Water Glass representation */}
+                  <div className="relative w-12 h-16 shrink-0 border-2 border-blue-500 rounded-b-xl rounded-t-sm flex items-end overflow-hidden p-0.5 bg-sky-50 shadow-sm">
+                    {/* Water height based on state */}
+                    <div 
+                      className="w-full bg-blue-400/80 transition-all duration-500 ease-out flex items-center justify-center text-[9px] text-white font-mono font-black"
+                      style={{ height: `${Math.min(100, Math.max(10, (waterGlasses / 8) * 100))}%` }}
+                    >
+                      {Math.round((waterGlasses / 8) * 100)}%
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[11px] text-slate-500 font-semibold block">Logged Water Today:</span>
+                    <strong className="text-slate-900 text-sm font-mono block">
+                      {waterGlasses} / 8 Glasses <span className="text-xs text-slate-400 font-medium">({(waterGlasses * 0.25).toFixed(2)}L logged)</span>
+                    </strong>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddWater}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-705 text-white font-extrabold text-[10px] rounded cursor-pointer transition-colors shadow-sm"
+                      >
+                        + Add Glass
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetWater}
+                        className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 font-bold border border-slate-205 text-[10px] rounded cursor-pointer transition-colors shadow-sm"
+                      >
+                        Reset Log
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[9.5px] font-semibold text-slate-500 leading-tight">
+                  {waterGlasses >= 8 
+                    ? "🎉 Optimal tissue hydration levels fully achieved for your synovial joint lubrication!" 
+                    : `Aim for ${8 - waterGlasses} more glasses to satisfy daily clinical synovial joint lubrication goals.`}
+                </p>
+              </div>
+
+            </CardContent>
+          </Card>
+          </motion.div>
+          )}
+
+          {/* C. PRIVACY SECURITY & BIOMETRIC DATA SHARING CONTROLS - "Privacy and Security UI" Node */}
+          {(layoutMode === 'dossier' || currentPage === 3) && (
+            <motion.div
+              key="page3-right"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50 p-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 font-sans">
+                  <Lock className="h-4 w-4 text-emerald-650" />
+                  7. Privacy & Telemetry Guard Panel
+                </CardTitle>
+              </div>
+              <CardDescription className="text-[11px] leading-relaxed mt-1">
+                Configure patient biometric login bypass permissions and federated provider sharing rules
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 pb-4 px-4 space-y-4 font-sans text-xs">
+              
+              <div className="space-y-3">
+                {/* 1. Biometric toggle status */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <strong className="text-slate-800 block text-[11px]">Biometric Login Bypass (FaceID/Fingerprint)</strong>
+                    <span className="text-[9.5px] text-slate-400 block max-w-[155px]">Use FaceID verification on login triggers</span>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setIsBiometricEnabled(!isBiometricEnabled)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isBiometricEnabled ? 'bg-emerald-600' : 'bg-slate-350'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          isBiometricEnabled ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className={`ml-1.5 font-bold uppercase text-[9px] ${isBiometricEnabled ? 'text-emerald-650' : 'text-slate-450'}`}>
+                      {isBiometricEnabled ? 'Active' : 'Offline'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Federated Data sharing permission */}
+                <div className="flex items-center justify-between pt-2.5 border-t border-slate-100">
+                  <div className="space-y-0.5">
+                    <strong className="text-slate-800 block text-[11px]">Federate Telemetry to Care Team</strong>
+                    <span className="text-[9.5px] text-slate-400 block max-w-[155px]">Auto-share wearables & log feeds to primary PCP files</span>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setShareTelemetry(!shareTelemetry)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        shareTelemetry ? 'bg-emerald-600' : 'bg-slate-350'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          shareTelemetry ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className={`ml-1.5 font-bold uppercase text-[9px] ${shareTelemetry ? 'text-emerald-650' : 'text-slate-450'}`}>
+                      {shareTelemetry ? 'Sharing' : 'Paused'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Location sharing */}
+                <div className="flex items-center justify-between pt-2.5 border-t border-slate-100">
+                  <div className="space-y-0.5">
+                    <strong className="text-slate-800 block text-[11px]">Urgent GPS Localization Sharing</strong>
+                    <span className="text-[9.5px] text-slate-400 block max-w-[155px]">Share coordinates with Next-of-Kin under bypass sirens</span>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setShareLocation(!shareLocation)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        shareLocation ? 'bg-emerald-600' : 'bg-slate-350'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          shareLocation ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className={`ml-1.5 font-bold uppercase text-[9px] ${shareLocation ? 'text-emerald-650' : 'text-slate-450'}`}>
+                      {shareLocation ? 'Online' : 'Restricted'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sync reference index */}
+              <div className="p-2.5 bg-[#FAFCFB] rounded-lg border border-slate-150 text-[10px] text-slate-500 font-semibold">
+                🌐 <strong>Latest Audit Sync Channel:</strong> Connected to secure clinical endpoints. All authorization logs recorded automatically.
+              </div>
+
+            </CardContent>
+          </Card>
+          </motion.div>
+          )}
+
+          {/* Card 7.5: Dynamic HIPAA Compliance Security Audit Log Card (Deck-only filler) */}
+          {layoutMode === 'deck' && currentPage === 3 && (
+            <motion.div
+              key="card-7-5-sec-audit"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className="p-5 rounded-2xl bg-slate-50 border border-slate-200 shadow-sm flex flex-col justify-between h-[450px]"
+            >
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
+                  <div className="flex items-center gap-1.5 text-slate-705">
+                    <ShieldCheck className="h-4 w-4 text-emerald-650" />
+                    <span className="text-[10px] font-black uppercase tracking-widest font-sans">Federated Security Access Audit Logs</span>
+                  </div>
+                  <Badge variant="outline" className="bg-[#EEF3F0] text-slate-805 border-slate-200 text-[8px] font-bold">LIVE FEED</Badge>
+                </div>
+                <p className="text-xs text-slate-500 leading-normal mb-3 font-sans">
+                  Real-time blockchain and cryptographic access log checks verifying privacy compliance:
+                </p>
+                <div className="space-y-2 font-sans text-xs">
+                  <div className="p-2 border border-slate-100 rounded bg-white flex items-center justify-between text-slate-600">
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">PCP Verification check</span>
+                      <strong>Dr. Aris Vance MD</strong>
+                    </div>
+                    <span className="text-[#3F5B42] font-semibold">✓ Authorized</span>
+                  </div>
+                  <div className="p-2 border border-slate-100 rounded bg-white flex items-center justify-between text-slate-600">
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">Wearable Hook Link</span>
+                      <strong>Apple HealthKit Auth</strong>
+                    </div>
+                    <span className="text-[#3F5B42] font-semibold">✓ Token Active</span>
+                  </div>
+                  <div className="p-2 border border-slate-100 rounded bg-white flex items-center justify-between text-[#3f5b42]">
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">Internal Portal Query</span>
+                      <strong>User (Marcus Everett)</strong>
+                    </div>
+                    <span className="text-slate-500 font-semibold">✓ Logged IP</span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 bg-[#FAFCFB] rounded-lg border border-slate-150 text-[10px] text-[#5C6E5E] font-medium leading-relaxed mt-4">
+                🔒 <strong>Consent Record:</strong> Patient-provided consent was updated today (June 15, 2026). Third-party disclosures are blocked by default.
+              </div>
+            </motion.div>
+          )}
+          
           {/* Device & App Sync Hub */}
-          <Card className="border border-[#DEE8E0] shadow-sm overflow-hidden bg-white">
+          {currentPage === 4 && (
+            <motion.div
+              key="page4-right"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-[#DEE8E0] shadow-sm overflow-hidden bg-white">
             <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/70 p-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 font-sans">
                   <Smartphone className="h-4 w-4 text-[#3F5B42]" />
-                  Device & App Sync Hub
+                  8. Device & App Sync Hub
                 </CardTitle>
                 <div className="flex items-center gap-1">
                   {Object.values(appConnections).some(v => v === 'connected') ? (
@@ -1614,13 +3287,23 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
             </CardContent>
           </Card>
+          </motion.div>
+          )}
           
           {/* Scheduling focus */}
-          <Card className="border border-slate-200 shadow-sm">
+          {(layoutMode === 'dossier' || currentPage === 5) && (
+            <motion.div
+              key="page5-right"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-6"
+            >
+              <Card className="border border-slate-200 shadow-sm">
             <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-amber-500" />
-                Upcoming Session
+                9. Upcoming Session
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
@@ -1657,7 +3340,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                 <Pill className="h-4 w-4 text-pink-600" />
-                Active Prescriptions
+                10. Active Prescriptions
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 divide-y divide-slate-100">
@@ -1678,10 +3361,207 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               ))}
             </CardContent>
           </Card>
+          </motion.div>
+          )}
 
         </div>
 
       </div>
+
+      {/* Centered Telemetry Focus & All Vitals Modal */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 font-sans">
+          {/* Underlay / Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            onClick={() => setIsDrawerOpen(false)}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm cursor-pointer"
+          />
+          
+          {/* Modal Box */}
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+            className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col z-10 border border-[#DEE8E0] max-h-[85vh] overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-5 border-b border-[#DEE8E0] bg-[#EEF3F0]/65 flex items-center justify-between shadow-sm">
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-[#3F5B42]" />
+                  Clinical Telemetry Panel
+                </h3>
+                <p className="text-[11px] font-semibold text-[#5C6E5E] mt-0.5">
+                  Configure focus dashboard and explore your complete physiological metrics
+                </p>
+              </div>
+              <button
+                onClick={() => setIsDrawerOpen(false)}
+                className="p-1.5 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer text-slate-500 hover:text-slate-900 border border-transparent hover:border-slate-300/40 focus:outline-none"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Sticky Search bar */}
+            <div className="p-4 border-b border-[#DEE8E0] bg-[#FAFCFB] flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search 16 clinical vitals..."
+                  value={drawerSearchQuery}
+                  onChange={(e) => setDrawerSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-slate-250 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:ring-1 focus:ring-[#3F5B42] focus:border-[#3F5B42] outline-none font-medium text-slate-800 shadow-sm transition-all"
+                />
+                {drawerSearchQuery && (
+                  <button 
+                    onClick={() => setDrawerSearchQuery('')} 
+                    className="absolute right-2.5 top-2 hover:bg-slate-100 rounded-full p-0.5"
+                  >
+                    <X className="h-3.5 w-3.5 text-slate-450" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Content List Scroller */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {(() => {
+                const searchLower = drawerSearchQuery.toLowerCase();
+                const clinicalCategories = [
+                  {
+                    name: 'Metabolic & Hemodynamics',
+                    items: ['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'HbA1c Baseline']
+                  },
+                  {
+                    name: 'Respiration & Core',
+                    items: ['Oxygen Saturation', 'Respiratory Rate', 'Temperature']
+                  },
+                  {
+                    name: 'Body Indices',
+                    items: ['Body Weight', 'Height', 'BMI Quotient']
+                  },
+                  {
+                    name: 'Clinical & Neuro Scales',
+                    items: ['Glasgow Coma Scale', 'AVPU Response', 'Pain Index']
+                  },
+                  {
+                    name: 'Lifestyle & Habits',
+                    items: ['Sleep Log', 'Daily Target Steps', 'Hydration Status']
+                  }
+                ];
+
+                let matchesAny = false;
+
+                const categoryBlocks = clinicalCategories.map((cat) => {
+                  const matchedVitals = sortedVitals.filter(v => {
+                    const isInCategory = cat.items.includes(v.name);
+                    const matchesSearch = v.name.toLowerCase().includes(searchLower) || (v.value || '').toLowerCase().includes(searchLower) || (v.status || '').toLowerCase().includes(searchLower);
+                    return isInCategory && matchesSearch;
+                  });
+
+                  if (matchedVitals.length === 0) return null;
+                  matchesAny = true;
+
+                  return (
+                    <div key={cat.name} className="space-y-2.5">
+                      <h4 className="text-[10px] font-black text-[#5C6E5E] uppercase tracking-wider border-b border-dashed border-[#DEE8E0] pb-1">
+                        {cat.name}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {matchedVitals.map((v) => {
+                          const VIcon = v.icon;
+                          const isPinned = pinnedVitals.includes(v.name);
+                          return (
+                            <div 
+                              key={v.name} 
+                              className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white hover:bg-[#FAFCFB] hover:border-slate-200 transition-all shadow-sm"
+                            >
+                              <div className="flex items-center gap-3 max-w-[70%]">
+                                <div className={`p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-800`}>
+                                  <VIcon className="h-4 w-4 shrink-0 opacity-80" />
+                                </div>
+                                <div className="truncate">
+                                  <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1.5">
+                                    {v.name}
+                                    {isPinned && (
+                                      <span className="text-[8px] font-extrabold uppercase bg-amber-50 text-amber-800 border border-amber-200 px-1 rounded">
+                                        Pinned
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] font-medium text-[#5C6E5E] leading-relaxed flex items-center gap-1 mt-0.5">
+                                    <span className="truncate">{v.status || 'Active Tracking'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-right">
+                                  <div className="text-xs font-black font-mono text-slate-800">{v.value}</div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePin(v.name)}
+                                  title={isPinned ? "Unpin from main telemetry focus" : "Pin to main telemetry focus"}
+                                  className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                                >
+                                  {isPinned ? (
+                                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+                                  ) : (
+                                    <Star className="h-3.5 w-3.5 text-slate-300 hover:text-amber-500 transition-colors" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                });
+
+                if (!matchesAny) {
+                  return (
+                    <div className="p-8 text-center text-slate-400 space-y-2">
+                      <AlertCircle className="h-8 w-8 text-slate-300 mx-auto" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-705">No matches found</p>
+                        <p className="text-[11px] text-slate-400">Try searching for other clinical synonyms</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return <div className="space-y-6">{categoryBlocks}</div>;
+              })()}
+            </div>
+
+            {/* Sticky Modal Footer actions */}
+            <div className="p-4 border-t border-[#DEE8E0] bg-[#EEF3F0]/35 flex items-center justify-between gap-3 shadow-inner">
+              <button
+                type="button"
+                onClick={() => {
+                  setPinnedVitals(['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation']);
+                  localStorage.setItem('careplus_pinned_vitals_v3', JSON.stringify(['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation']));
+                }}
+                className="px-3.5 py-1.5 bg-white border border-slate-205 text-slate-650 hover:text-slate-900 text-[10.5px] font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Reset Pins to Default
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDrawerOpen(false)}
+                className="px-5 py-2 bg-[#3F5B42] hover:bg-[#324935] text-white text-xs font-bold rounded-lg transition-all border border-[#2D422E] cursor-pointer shadow-sm"
+              >
+                Apply Layout & Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Security & HIPAA Compliance Notice */}
       <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">

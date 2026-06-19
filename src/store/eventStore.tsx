@@ -136,17 +136,17 @@ const initialState: AppState = {
     'p-1': {
       id: 'intake-1',
       patientId: 'p-1',
-      chiefComplaint: 'New onset Diabetes management & PCOS follow-up',
-      historyOfPresentIllness: 'Sarah is a 42-year-old female with a known history of PCOS and obesity. Recently diagnosed with Diabetes Mellitus Type 2. Currently starting Metformin and continuing HRT (Estrogen/Progesterone).',
-      medicalHistory: 'PCOS, Obesity, Type 2 Diabetes (New)',
-      familyHistory: 'Father with early MI',
-      socialHistory: 'Active, uses Android Wear and Health Connect',
-      surgicalHistory: 'Appendectomy',
-      immunizations: 'Up to date with COVID and Flu',
+      chiefComplaint: 'Symmetrical joint stiffness and pain in fingers and wrists',
+      historyOfPresentIllness: 'Marcus is a 39-year-old male presenting with bilateral symmetrical joint pain and morning stiffness in the MCP and PIP joints of both hands. Morning stiffness lasts more than 90 minutes. Initial workup confirms early seropositive Rheumatoid Arthritis.',
+      medicalHistory: 'Seropositive Rheumatoid Arthritis, Symmetrical Polyarthritis',
+      familyHistory: 'Maternal grandmother with Rheumatoid Arthritis',
+      socialHistory: 'Active, uses Android Wear and health syncing tools',
+      surgicalHistory: 'None',
+      immunizations: 'Up to date with all standard boosters',
       hospitalizations: 'None in last 5 years',
-      reviewOfSystems: 'Negative for weight loss, positive for irregular cycles',
-      medications: 'Metformin 500mg BID, HRT (Combined)',
-      allergies: 'Penicillin',
+      reviewOfSystems: 'Bilateral hand and wrist stiffness/pain, no fever, no rash, negative for chest pain',
+      medications: 'Methotrexate 10mg weekly, Folic Acid 5mg weekly',
+      allergies: 'None known',
       timestamp: Date.now() - 86400000
     }
   },
@@ -273,7 +273,7 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
         if (!userData?.role) return; 
 
         const role = userData.role;
-        const isStaffRole = ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'read_only'].includes(role);
+        const isStaffRole = ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'front_desk', 'read_only'].includes(role);
 
         // Clear existing collection-level syncs before starting new ones (avoids duplicates if role updates)
         unsubs.slice(1).forEach(u => u());

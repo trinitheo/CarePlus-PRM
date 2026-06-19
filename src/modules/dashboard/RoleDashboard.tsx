@@ -8,8 +8,6 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
-import { collection, query, onSnapshot, orderBy, limit, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import {
   PhoneCall, MessageSquare, ClipboardList, Pill, FlaskConical,
   Calendar, ChevronRight, Check, X, Thermometer, Heart, Activity,
@@ -24,7 +22,8 @@ import {
   markMessageRead, 
   createReminder, 
   completeReminder,
-  updateUserDashboardSettings 
+  updateUserDashboardSettings,
+  subscribeToCollection 
 } from '../../services/clinicalFirestoreService';
 import { DEFAULT_DASHBOARD_SETTINGS } from '../../constants';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
@@ -612,21 +611,21 @@ function MedicationFlagsWidget({ onNavigate }: { onNavigate?: (id: string) => vo
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     Object.keys(patients).forEach(pid => {
-      const q = query(
-        collection(db, `patients/${pid}/prescriptions`),
-        where('status', '==', 'active')
-      );
-      unsubs.push(onSnapshot(q, snap => {
-        const meds = snap.docs
-          .map(d => ({ id: d.id, patientId: pid, patientName: (patients as any)[pid]?.name, ...d.data() }))
-          .filter((m: any) => m.adherenceStatus && m.adherenceStatus !== 'optimal');
+      const unsub = subscribeToCollection('prescriptions', (items) => {
+        const meds = items
+          .filter((m: any) => m.status === 'active' && m.adherenceStatus && m.adherenceStatus !== 'optimal')
+          .map((m: any) => ({
+            id: m.id,
+            patientId: pid,
+            patientName: (patients as any)[pid]?.name || 'Unknown',
+            ...m
+          }));
         setFlagged(prev => [...prev.filter(m => m.patientId !== pid), ...meds]);
-      }, (error) => {
-        console.error(`Medication Flags error for patient ${pid}:`, error);
-      }));
+      }, pid);
+      unsubs.push(unsub);
     });
     return () => unsubs.forEach(u => u());
-  }, []);
+  }, [patients]);
 
   const adherenceBg: Record<string, string> = {
     poor: 'bg-red-50 border-red-200 text-red-800',
@@ -672,21 +671,29 @@ function TodayScheduleWidget({ onNavigate, patientId }: { onNavigate?: (id: stri
   const { appointments, patients } = useQueryModel();
   const today = new Date().toDateString();
 
+  const parseTime = (timeVal: any) => {
+    if (!timeVal) return new Date();
+    if (timeVal.toDate) return timeVal.toDate();
+    if (timeVal.seconds) return new Date(timeVal.seconds * 1000);
+    return new Date(timeVal);
+  };
+
   const todayAppts = useMemo(() =>
     Object.values(appointments as any)
       .filter((a: any) => {
-        const isToday = new Date(a.time).toDateString() === today;
+        const ad = parseTime(a.time);
+        const isToday = ad.toDateString() === today;
         const matchesPatient = patientId ? a.patientId === patientId : true;
         return isToday && matchesPatient;
       })
-      .map((a: any) => ({ ...a, patientName: (patients as any)[a.patientId]?.name || 'Unknown Patient' }))
-      .sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()),
+      .map((a: any) => ({ ...a, patientName: (patients as any)[a.patientId]?.name || `Patient #${a.patientId?.slice(0, 8).toUpperCase()}` }))
+      .sort((a: any, b: any) => parseTime(a.time).getTime() - parseTime(b.time).getTime()),
     [appointments, patients, today, patientId]
   );
 
   const now = new Date();
   const statusOf = (appt: any) => {
-    const t = new Date(appt.time);
+    const t = parseTime(appt.time);
     if (appt.status === 'completed') return 'done';
     if (appt.status === 'in_progress') return 'active';
     if (appt.status === 'checked_in') return 'ready';
@@ -724,10 +731,10 @@ function TodayScheduleWidget({ onNavigate, patientId }: { onNavigate?: (id: stri
                 {/* Time block */}
                 <div className="shrink-0 text-center min-w-[44px]">
                   <p className="text-[14px] font-black text-[#242424] leading-none">
-                    {new Date(appt.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {parseTime(appt.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   <p className="text-[9px] text-[#A19F9D] font-medium mt-0.5">
-                    {appt.visitType === 'telehealth' ? '📱 Virtual' : '🏥 Clinic'}
+                    {appt.visitType === 'virtual' ? '📱 Virtual' : '🏥 Clinic'}
                   </p>
                 </div>
                 <div className="w-px h-8 bg-[#EDEBE9] shrink-0" />
@@ -758,21 +765,27 @@ function PendingResultsWidget({ onNavigate }: { onNavigate?: (id: string) => voi
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     Object.keys(patients).forEach(pid => {
-      const q = query(
-        collection(db, `patients/${pid}/investigations`),
-        where('status', 'in', ['ordered', 'sample_collected']),
-        orderBy('createdAt', 'desc'), limit(10)
-      );
-      unsubs.push(onSnapshot(q, snap => {
-        const items = snap.docs.map(d => ({
-          id: d.id, patientId: pid,
-          patientName: (patients as any)[pid]?.name || 'Unknown',
-          ...d.data()
-        }));
-        setResults(prev => [...prev.filter(r => r.patientId !== pid), ...items]);
-      }, (error) => {
-        console.error(`Pending Results error for patient ${pid}:`, error);
-      }));
+      const unsub = subscribeToCollection('investigations', (items) => {
+        const activeResults = items
+          .filter((r: any) => ['ordered', 'sample_collected'].includes(r.status))
+          .map((r: any) => ({
+            id: r.id,
+            patientId: pid,
+            patientName: (patients as any)[pid]?.name || 'Unknown',
+            ...r
+          }));
+        setResults(prev => {
+          const filtered = prev.filter(r => r.patientId !== pid);
+          const combined = [...filtered, ...activeResults];
+          combined.sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA;
+          });
+          return combined.slice(0, 10);
+        });
+      }, pid);
+      unsubs.push(unsub);
     });
     return () => unsubs.forEach(u => u());
   }, [patients]);
@@ -825,16 +838,22 @@ function MyPatientsWidget({ userId, onNavigate }: { userId: string; onNavigate?:
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     Object.keys(patients).forEach(pid => {
-      const q = query(collection(db, `patients/${pid}/care_teams`), where('userId', '==', userId), where('status', '==', 'active'));
-      unsubs.push(onSnapshot(q, snap => {
-        if (!snap.empty) setAssigned(prev => new Set([...prev, pid]));
-        else setAssigned(prev => { const n = new Set(prev); n.delete(pid); return n; });
-      }, (error) => {
-        console.error(`My Patients error for patient ${pid}:`, error);
-      }));
+      const unsub = subscribeToCollection('care_teams', (items) => {
+        const isAssigned = items.some((ct: any) => ct.userId === userId && ct.status === 'active');
+        if (isAssigned) {
+          setAssigned(prev => new Set([...prev, pid]));
+        } else {
+          setAssigned(prev => {
+            const n = new Set(prev);
+            n.delete(pid);
+            return n;
+          });
+        }
+      }, pid);
+      unsubs.push(unsub);
     });
     return () => unsubs.forEach(u => u());
-  }, [userId]);
+  }, [userId, patients]);
 
   const myPatients = Object.values(patients as Record<string, any>).filter(p => assigned.has(p.id));
 
@@ -870,16 +889,25 @@ function ReferralsWidget({ specialty, onNavigate }: { specialty?: string; onNavi
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     Object.keys(patients).forEach(pid => {
-      const q = query(collection(db, `patients/${pid}/referrals`), orderBy('createdAt', 'desc'), limit(5));
-      unsubs.push(onSnapshot(q, snap => {
-        const items = snap.docs
-          .map(d => ({ id: d.id, patientId: pid, patientName: (patients as any)[pid]?.name, ...d.data() }))
+      const unsub = subscribeToCollection('referrals', (items) => {
+        const processed = items
+          .map((r: any) => ({ id: r.id, patientId: pid, patientName: (patients as any)[pid]?.name || 'Unknown', ...r }))
           .filter((r: any) => !specialty || r.specialty?.toLowerCase().includes(specialty.toLowerCase()));
-        setRefs(prev => [...prev.filter(r => r.patientId !== pid), ...items]);
-      }, () => {}));
+        setRefs(prev => {
+          const filtered = prev.filter(r => r.patientId !== pid);
+          const combined = [...filtered, ...processed];
+          combined.sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA;
+          });
+          return combined;
+        });
+      }, pid);
+      unsubs.push(unsub);
     });
     return () => unsubs.forEach(u => u());
-  }, [specialty]);
+  }, [specialty, patients]);
 
   return (
     <DashCard>
@@ -916,8 +944,9 @@ function SystemOverviewWidget() {
   const [staffCount, setStaffCount] = useState(0);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), limit(50));
-    return onSnapshot(q, snap => setStaffCount(snap.size), () => {});
+    return subscribeToCollection('users', (usersList) => {
+      setStaffCount(usersList.length);
+    });
   }, []);
 
   const pts = Object.values(patients as any);
@@ -960,8 +989,9 @@ function SystemOverviewWidget() {
 function StaffDirectoryWidget() {
   const [users, setUsers] = useState<any[]>([]);
   useEffect(() => {
-    const q = query(collection(db, 'users'), limit(30));
-    return onSnapshot(q, snap => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+    return subscribeToCollection('users', (usersList) => {
+      setUsers(usersList.slice(0, 30));
+    });
   }, []);
 
   const roleColor: Record<string, string> = {
@@ -1082,8 +1112,9 @@ function MyMedicationsWidget({ onNavigate }: { onNavigate?: (id: string) => void
   
   useEffect(() => {
     if (!userProfile?.id) return;
-    const q = query(collection(db, `patients/${userProfile.id}/prescriptions`), where('status', '==', 'active'));
-    return onSnapshot(q, snap => setMeds(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+    return subscribeToCollection('prescriptions', (items) => {
+      setMeds(items.filter((m: any) => m.status === 'active'));
+    }, userProfile.id);
   }, [userProfile?.id]);
 
   return (
@@ -1413,6 +1444,15 @@ export function RoleDashboard({ onNavigateToPatient, onNavigate }: {
       billing: <BillingWidget />,
       patients: <MyPatientsWidget userId={userProfile?.id || ''} onNavigate={onNavigateToPatient} />, // For identifiers
       calls: <CourtesyCallsWidget tasks={courtesyCalls} onComplete={handleComplete} />,
+    },
+    front_desk: {
+      messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,
+      reminders: <RemindersWidget reminders={reminders} onComplete={handleCompleteReminder} onCreate={handleCreateReminder} />,
+      overview: <SystemOverviewWidget />,
+      directory: <StaffDirectoryWidget />,
+      queue: <CheckInQueueWidget onNavigate={onNavigateToPatient} />,
+      schedule: <TodayScheduleWidget onNavigate={onNavigateToPatient} />,
+      audit: <AdministratorAuditWidget />,
     },
     patient: {
       messages: <MessagesWidget messages={messages} onRead={handleRead} onNavigate={onNavigate} />,

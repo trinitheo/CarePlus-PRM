@@ -51,7 +51,7 @@ service cloud.firestore {
     function isManager() { return isAdmin() || hasRole('manager'); }
 
     function isStaff() {
-      return isSignedIn() && (getRole() in ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'read_only']);
+      return isSignedIn() && (getRole() in ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'front_desk', 'read_only']);
     }
 
     // Role-specific staff helpers
