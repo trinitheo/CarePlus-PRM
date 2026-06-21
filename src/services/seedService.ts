@@ -921,7 +921,6 @@ export const SeedService = {
       visitType: 'in_clinic',
       priority: 'routine'
     };
-
     const apptObj1 = mapObject(rawAppt1);
     const apptObj2 = mapObject(rawAppt2);
 
@@ -932,6 +931,7 @@ export const SeedService = {
 
     onProgress?.({ step: 'Generating Rehabilitation Interactions', count: interactionsData.length, total: interactionsData.length });
 
+    import('../lib/mockDatabase').then(m => m.persistMockDb());
     console.log('Seeding Marcus Everett Case Completed perfectly.');
   }
 };

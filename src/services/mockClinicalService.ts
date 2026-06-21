@@ -28,6 +28,7 @@ export const mockClinicalService: ClinicalServiceType = {
         }
       }
     });
+    import('../lib/mockDatabase').then(m => m.persistMockDb());
 
     localStorage.clear();
     sessionStorage.clear();
@@ -229,6 +230,20 @@ export const mockClinicalService: ClinicalServiceType = {
   },
 
   async provisionMarcusEverett() {
+    const patientDoc = mockDbService.getDoc('patients', 'pat-marcus-001');
+    if (!patientDoc) {
+      mockDbService.updateItem('patients', 'pat-marcus-001', {
+        id: 'pat-marcus-001',
+        patientId: 'pat-marcus-001',
+        firstName: 'Marcus',
+        lastName: 'Everett',
+        name: 'Marcus Everett',
+        email: 'm.everett@personal.com',
+        status: 'active',
+        createdAt: new Date().toISOString()
+      });
+      notifyListeners();
+    }
     return 'pat-marcus-001';
   },
 

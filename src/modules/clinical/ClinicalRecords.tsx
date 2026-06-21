@@ -769,6 +769,15 @@ export function ClinicalRecords({
                     <Network className="h-4 w-4" />
                     Insights
                   </TabsTrigger>
+                  {(userProfile?.role === 'admin' || userProfile?.role === 'front_desk' || userProfile?.role === 'billing') && (
+                    <TabsTrigger 
+                      value="financial" 
+                      className="data-[state=active]:bg-[#F3F2F1] data-[state=active]:text-[#242424] px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all gap-2"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Financial
+                    </TabsTrigger>
+                  )}
                 </TabsList>
               </div>
 
@@ -971,6 +980,19 @@ export function ClinicalRecords({
                   </DialogContent>
                </Dialog>
             </TabsContent>
+
+            {(userProfile?.role === 'admin' || userProfile?.role === 'front_desk' || userProfile?.role === 'billing') && (
+              <TabsContent value="financial" className="flex-1 min-h-0 mt-0 data-[state=active]:flex flex-col gap-2">
+                <Card className="flex-1 flex flex-col border-[#EDEBE9] shadow-sm rounded-lg overflow-hidden bg-white p-6 justify-center items-center">
+                  <FileText className="h-10 w-10 text-[#616161] mb-2" />
+                  <h3 className="font-bold text-lg text-[#242424]">Financial & Billing Records</h3>
+                  <p className="text-sm text-[#616161] mt-1 mb-4 text-center">Invoices, copays, and insurance verification documents are securely processed here for Front-Desk and Billing Teams.</p>
+                  <Button variant="outline" className="text-xs font-bold uppercase tracking-widest" onClick={() => window.location.hash = '#billing'}>
+                    Go to Billing Dashboard
+                  </Button>
+                </Card>
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>

@@ -112,7 +112,29 @@ const INITIAL_DB: MockDb = {
       appleHealthDeviceModel: 'Apple Watch Series 9 + iPhone 15 Pro',
       appleHealthDataSourceId: 'com.apple.health::uid-patient-001',
       conditions: ['Rheumatoid Arthritis'],
-      createdAt: '2025-01-08T09:10:00Z'
+      createdAt: '2025-01-08T09:10:00Z',
+      healthScore: 78,
+      wearable: {
+        sleepHours: { value: 7.2, lastUpdated: Date.now() },
+        dailySteps: { value: 8500, lastUpdated: Date.now() },
+        bloodGlucose: { value: 5.4, lastUpdated: Date.now() }
+      },
+      manual: {
+        medsDays: { value: 2, lastUpdated: Date.now() },
+        aiGoalsCompleted: { value: true, lastUpdated: Date.now() },
+        willAttend: { value: true, lastUpdated: Date.now() }
+      },
+      activeNudge: {
+        title: 'Pending Labs',
+        description: 'Complete FBC before your next dose',
+        type: 'warning',
+        actionRequired: true,
+        dueDate: new Date(Date.now() + 86400000).toISOString()
+      },
+      actionPlan: [
+        { id: '1', task: 'Take Methotrexate 15mg', completed: false, category: 'Medication' },
+        { id: '2', task: 'Complete daily joint exercises', completed: true, category: 'Physical Therapy' }
+      ]
     },
     'pat-vance-001': {
       id: 'pat-vance-001',
@@ -489,8 +511,34 @@ const INITIAL_DB: MockDb = {
 
 // Global singleton for the mock DB in development
 const globalForMock = globalThis as unknown as { mockDb: MockDb };
-export const mockDb = globalForMock.mockDb || INITIAL_DB;
-if (process.env.NODE_ENV !== 'production') globalForMock.mockDb = mockDb;
+
+function loadMockDb(): MockDb {
+  if (globalForMock.mockDb) return globalForMock.mockDb;
+  
+  try {
+    const saved = localStorage.getItem('careplus_mockDb');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn("Failed to load mockDb from localStorage", e);
+  }
+  return INITIAL_DB;
+}
+
+export const mockDb = loadMockDb();
+if (process.env.NODE_ENV !== 'production') {
+  globalForMock.mockDb = mockDb;
+}
+
+export function persistMockDb() {
+  try {
+    localStorage.setItem('careplus_mockDb', JSON.stringify(mockDb));
+  } catch (e) {
+    console.warn("Failed to save mockDb to localStorage", e);
+  }
+}
+
 
 export const mockDbService = {
   getCollection: (path: keyof MockDb, patientId?: string): any[] => {
@@ -515,6 +563,7 @@ export const mockDbService = {
       (mockDb[path] as any[]).unshift(item);
     }
     
+    persistMockDb();
     return id;
   },
 
@@ -534,6 +583,7 @@ export const mockDbService = {
     } else if (mockDb[path] && typeof mockDb[path] === 'object' && !Array.isArray(mockDb[path])) {
       (mockDb[path] as Record<string, any>)[id] = { ...(mockDb[path] as Record<string, any>)[id], ...data };
     }
+    persistMockDb();
   },
 
   getDoc: (path: keyof MockDb, id: string) => {

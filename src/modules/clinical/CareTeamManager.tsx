@@ -47,6 +47,9 @@ export function CareTeamManager({ patientId }: CareTeamManagerProps) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CareTeamMember)));
       setIsLoading(false);
+    }, (error) => {
+      console.warn("CareTeamManager active care teams subscription error:", error);
+      setIsLoading(false);
     });
     return unsubscribe;
   }, [patientId]);
@@ -58,6 +61,8 @@ export function CareTeamManager({ patientId }: CareTeamManagerProps) {
         const d = docSnap.data();
         setPatientName(d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Patient');
       }
+    }, (error) => {
+      console.warn("CareTeamManager patient doc subscription error:", error);
     });
     return unsub;
   }, [patientId]);

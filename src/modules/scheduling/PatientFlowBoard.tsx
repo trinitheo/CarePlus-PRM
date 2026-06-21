@@ -48,6 +48,9 @@ export function PatientFlowBoard() {
       });
       setAppointments(list);
       setLoading(false);
+    }, (error) => {
+      console.warn("PatientFlowBoard appointments subscription error:", error);
+      setLoading(false);
     });
 
     // Listen to rooms
@@ -57,6 +60,8 @@ export function PatientFlowBoard() {
         list.push({ id: doc.id, ...doc.data() } as Room);
       });
       setRooms(list);
+    }, (error) => {
+      console.warn("PatientFlowBoard rooms subscription error:", error);
     });
 
     return () => {

@@ -84,6 +84,7 @@ export const authService = {
         const finalUser = { id: mockId, ...payload, patientId: role === 'patient' ? 'pat-marcus-001' : undefined };
         mockDb.users[mockId] = finalUser;
         mockDb.roles[mockId] = { userId: mockId, role, assignedBy: 'system' };
+        import('../lib/mockDatabase').then(m => m.persistMockDb());
         return finalUser;
       }
     } catch (err: any) {

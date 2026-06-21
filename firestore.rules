@@ -103,8 +103,8 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
-      allow list: if isSignedIn() && isStaff(); 
+      allow get: if isSignedIn();
+      allow list: if isSignedIn(); 
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data);
       allow delete: if isAdmin();
@@ -121,11 +121,10 @@ service cloud.firestore {
     }
 
     match /patients/{patientId} {
-      // Allow clinicians/staff, the patient itself, or authorized proxy users to see the record
       allow get: if isSignedIn() && (isStaff() || isLinkedPatient(patientId));
       allow list: if isSignedIn() && isStaff();
-      allow create: if isSignedIn() && (isStaff() || request.auth.uid == patientId);
-      allow update: if isSignedIn() && (isStaff() || isLinkedPatient(patientId));
+      allow create: if isSignedIn() && (hasRole('admin') || hasRole('front_desk') || hasRole('manager') || request.auth.uid == patientId);
+      allow update: if isSignedIn() && (hasRole('admin') || hasRole('front_desk') || hasRole('manager') || request.auth.uid == patientId);
       
       match /care_teams/{memberId} {
         allow read: if isSignedIn() && (isStaff() || isLinkedPatient(patientId));
@@ -183,11 +182,20 @@ service cloud.firestore {
     }
 
     match /charges/{chargeId} {
-      allow read, write: if isFinancialStaff();
+      allow read, write: if isFinancialStaff() || hasRole('front_desk');
     }
 
     match /invoices/{invoiceId} {
-      allow read, write: if isFinancialStaff();
+      allow read, write: if isFinancialStaff() || hasRole('front_desk');
+    }
+
+    match /billing/{document=**} {
+      allow read, write: if isFinancialStaff() || hasRole('front_desk');
+    }
+
+    match /auditLogs/{logId} {
+      allow write: if false; // Only server/admin functions
+      allow read: if isAdmin();
     }
 
     match /appointments/{appointmentId} {

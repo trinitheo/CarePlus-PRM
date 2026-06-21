@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Search, UserPlus, ArrowRight, User, Users, Activity, FileText } from 'lucide-react';
 import { Badge } from '../../../components/ui/badge';
 import { ScrollArea } from '../../../components/ui/scroll-area';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 interface PatientExplorerProps {
   onSelectPatient: (id: string) => void;
@@ -18,6 +19,9 @@ interface PatientExplorerProps {
 export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId }: PatientExplorerProps) {
   const { patients } = useQueryModel();
   const [searchTerm, setSearchTerm] = useState('');
+  const { userProfile } = useCurrentUser();
+
+  const isFrontDeskOrAdmin = userProfile?.role === 'front_desk' || userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
   const filteredPatients = (Object.values(patients) as (Patient & { tags?: string[] })[]).filter(p => 
     (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -33,7 +37,7 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
           </h2>
           {!compact && <p className="text-[#616161] text-[13px] mt-1">Cross-enterprise medical record management.</p>}
         </div>
-        {!compact && (
+        {!compact && isFrontDeskOrAdmin && (
           <Button onClick={onAddNew} size="default" className="gap-2 shrink-0 bg-[#0078D4] hover:bg-[#006ABD] text-white rounded-md shadow-sm font-semibold text-sm">
             <UserPlus className="h-4 w-4" />
             Enroll Patient
@@ -49,7 +53,8 @@ export function PatientExplorer({ onSelectPatient, onAddNew, compact, selectedId
               placeholder="Filter by name or MRN..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className={`pl-9 font-medium text-[13px] bg-white border-[#E0E0E0] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 transition-all ${compact ? 'rounded-md h-9' : 'rounded-md h-10'}`}
+              disabled={!isFrontDeskOrAdmin && !compact}
+              className={`pl-9 font-medium text-[13px] bg-white border-[#E0E0E0] focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4]/20 transition-all ${compact ? 'rounded-md h-9' : 'rounded-md h-10'} ${!isFrontDeskOrAdmin && !compact ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
           </div>
         </CardHeader>
