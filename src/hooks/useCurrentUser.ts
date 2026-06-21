@@ -7,13 +7,12 @@ import { saveUserProfile } from '../services/clinicalFirestoreService';
 
 export function useCurrentUser() {
   const [userProfile, setUserProfile] = useState<CurrentUser | null>(() => authService.getCurrentUser());
-  const [loading, setLoading] = useState(() => !authService.getCurrentUser());
+  const [loading, setLoading] = useState(true);
 
   const refreshProfile = () => {
     const demoUser = authService.getCurrentUser();
     if (demoUser) {
       setUserProfile(demoUser);
-      setLoading(false);
     } else {
       setUserProfile(null);
     }
@@ -77,6 +76,7 @@ export function useCurrentUser() {
               id: cred.user.uid,
               originalId: demoUser.id
             });
+            setLoading(false);
           }).catch(err => {
             console.warn("Auto-signin on session load failed:", err);
             setLoading(false);

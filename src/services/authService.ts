@@ -77,6 +77,19 @@ export const authService = {
         }
 
         const docRef = await addDoc(collection(db, 'registered_users'), payload);
+        
+        if (auth.currentUser) {
+          try {
+            await setDoc(doc(db, 'users', auth.currentUser.uid), {
+              ...payload,
+              id: docRef.id,
+              originalId: docRef.id,
+            }, { merge: true });
+          } catch (syncErr) {
+            console.warn("Could not sync user profile to users collection:", syncErr);
+          }
+        }
+
         return { id: docRef.id, ...payload };
       } else {
         // Mock save
@@ -108,6 +121,18 @@ export const authService = {
         if (!qSnap.empty) {
           const docSnap = qSnap.docs[0];
           const userMatched = docSnap.data();
+
+          if (auth.currentUser) {
+            try {
+              await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                ...userMatched,
+                id: docSnap.id,
+                originalId: docSnap.id,
+              }, { merge: true });
+            } catch (syncErr) {
+              console.warn("Could not sync user profile to users collection:", syncErr);
+            }
+          }
 
           const user: CurrentUser = {
             id: docSnap.id,
