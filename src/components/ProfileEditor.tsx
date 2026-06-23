@@ -70,6 +70,15 @@ export function ProfileEditor({ initialProfile, onSave, onCancel }: ProfileEdito
     setError('');
     setSuccess(false);
 
+    if (formData.phone && formData.phone.trim() !== '') {
+      const phoneRegex = /^\(\d{3}\)-\d{3}-\d{3}$/;
+      if (!phoneRegex.test(formData.phone.trim())) {
+        setError('Direct Phone must be in the format (Area code)-XXX-XXX (e.g., (555)-123-456).');
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
       // Reconstitute displayName
       const resolvedDisplayName = `${formData.firstName} ${formData.lastName}`.trim();
@@ -257,7 +266,7 @@ export function ProfileEditor({ initialProfile, onSave, onCancel }: ProfileEdito
                     </div>
                   </div>
                   <div className="group">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-[#A19F9D] mb-2 group-focus-within:text-sky-600 transition-colors">
+                    <label htmlFor="profile-phone-input" className="block text-[10px] font-black uppercase tracking-widest text-[#A19F9D] mb-2 group-focus-within:text-sky-600 transition-colors">
                       Direct Phone
                     </label>
                     <div className="relative">
@@ -265,14 +274,18 @@ export function ProfileEditor({ initialProfile, onSave, onCancel }: ProfileEdito
                         <Phone size={16} strokeWidth={2.5} />
                       </div>
                       <input
+                        id="profile-phone-input"
                         name="phone"
                         type="tel"
                         value={formData.phone || ''}
                         onChange={handleChange}
-                        placeholder="(555) 000-0000"
+                        placeholder="(555)-123-456"
                         className="w-full pl-11 pr-4 py-3.5 bg-[#FAF9F8] border border-[#EDEBE9] rounded-xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-600 transition-all text-slate-900 text-sm font-bold"
                       />
                     </div>
+                    <span className="text-[11px] text-[#757370] font-medium block mt-1.5 pl-1">
+                      Required Format: (Area code)-XXX-XXX (e.g., (206)-555-014)
+                    </span>
                   </div>
                 </div>
               </div>
