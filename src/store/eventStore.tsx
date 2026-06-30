@@ -273,7 +273,7 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
         if (!userData?.role) return; 
 
         const role = userData.role;
-        const isStaffRole = ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'front_desk', 'read_only'].includes(role);
+        const isStaffRole = ['admin', 'manager', 'clinician', 'nurse', 'allied_health', 'billing', 'front_desk', 'read_only', 'pt'].includes(role);
 
         // Clear existing collection-level syncs before starting new ones (avoids duplicates if role updates)
         unsubs.slice(1).forEach(u => u());

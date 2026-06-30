@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { HealthBoard } from './views/HealthBoard';
 import { WellnessClasses } from './views/WellnessClasses';
 import { MyConsultations } from './views/MyConsultations';
+import Home2 from './views/Home2';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { useQueryModel } from '../../store/eventStore';
 
-type PortalView = 'board' | 'classes' | 'consultations';
+type PortalView = 'board' | 'classes' | 'consultations' | 'home2';
 
 export function PatientPortalRoot() {
   const [activeTab, setActiveTab ] = useState<PortalView>('board');
@@ -26,6 +27,12 @@ export function PatientPortalRoot() {
             className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'board' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             My Health Board
+          </button>
+          <button 
+            onClick={() => setActiveTab('home2')}
+            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'home2' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Home 2
           </button>
           <button 
             onClick={() => setActiveTab('consultations')}
@@ -55,6 +62,7 @@ export function PatientPortalRoot() {
             }} 
           />
         )}
+        {activeTab === 'home2' && <Home2 />}
         {activeTab === 'consultations' && <MyConsultations patientData={patientData} />}
         {activeTab === 'classes' && <WellnessClasses />}
       </div>

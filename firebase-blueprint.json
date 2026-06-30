@@ -10,7 +10,7 @@
         "displayName": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["clinician", "nurse", "allied_health", "admin", "billing", "patient", "manager", "front_desk", "read_only"] 
+          "enum": ["clinician", "nurse", "allied_health", "admin", "billing", "patient", "manager", "front_desk", "read_only", "pt"] 
         },
         "patientId": { "type": "string", "description": "Connected patient record ID for linked charting" },
         "specialty": { "type": "string", "description": "e.g. Physiotherapist, Psychologist, Optometrist" },

@@ -23,6 +23,7 @@ import { useCurrentUser } from './hooks/useCurrentUser';
 import { savePatient, saveUserProfile } from './services/clinicalFirestoreService';
 import { ProfileEditor } from './components/ProfileEditor';
 import { PatientPortalRoot } from './modules/patient-portal/PatientPortalRoot';
+import { Settings } from './modules/patient-portal/views/Settings';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
@@ -72,6 +73,11 @@ export default function App() {
         <HIPAAMonitorProvider>
           <Shell currentModule={currentModule} onNavigate={handleNavigate}>
             {currentModule === 'dashboard' && <PatientPortalRoot />}
+            {currentModule === 'settings' && (
+              <div className="flex-1 min-h-0 overflow-auto h-full">
+                <Settings />
+              </div>
+            )}
             {currentModule === 'messages' && (
               <div className="flex-1 min-h-0 overflow-hidden h-full">
                 <MessagesModule />
@@ -292,6 +298,12 @@ export default function App() {
         {currentModule === 'governance' && (
           <div className="flex-1 min-h-0 overflow-hidden h-full">
             <AdminGovernanceConsole />
+          </div>
+        )}
+
+        {currentModule === 'settings' && (
+          <div className="flex-1 min-h-0 overflow-auto h-full">
+            <Settings />
           </div>
         )}
 

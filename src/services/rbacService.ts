@@ -1,6 +1,6 @@
 import { auth, clinicalService } from './clinicalFirestoreService';
 
-export type AppRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient' | 'manager' | 'front_desk' | 'read_only';
+export type AppRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient' | 'manager' | 'front_desk' | 'read_only' | 'pt';
 
 export interface UserRoleRecord {
   userId: string;

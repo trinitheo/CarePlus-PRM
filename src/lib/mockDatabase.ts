@@ -80,6 +80,46 @@ const INITIAL_DB: MockDb = {
       phone: '(555) 567-8901',
       avatar: 'https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop',
       createdAt: '2025-01-08T09:00:00Z'
+    },
+    'user-clinic-001': {
+      id: 'user-clinic-001',
+      email: 'sarah.chen@careplus.local',
+      displayName: 'Dr. Sarah Chen',
+      role: 'clinician',
+      avatar: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop',
+      clinic: 'clinic-main',
+      status: 'Active',
+      createdAt: '2025-01-08T09:00:00Z'
+    },
+    'user-clinic-002': {
+      id: 'user-clinic-002',
+      email: 'mark.davis@careplus.local',
+      displayName: 'Mark Davis',
+      role: 'nurse',
+      avatar: 'https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop',
+      clinic: 'clinic-main',
+      status: 'Active',
+      createdAt: '2025-01-08T09:00:00Z'
+    },
+    'user-clinic-003': {
+      id: 'user-clinic-003',
+      email: 'jane.smith@careplus.local',
+      displayName: 'Jane Smith',
+      role: 'pt',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop',
+      clinic: 'clinic-main',
+      status: 'Active',
+      createdAt: '2025-01-08T09:00:00Z'
+    },
+    'user-clinic-004': {
+      id: 'user-clinic-004',
+      email: 'admin@careplus.local',
+      displayName: 'Admin Panel',
+      role: 'admin',
+      avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=200&auto=format&fit=crop',
+      clinic: 'clinic-main',
+      status: 'Active',
+      createdAt: '2025-01-08T09:00:00Z'
     }
   },
   roles: {
@@ -87,7 +127,11 @@ const INITIAL_DB: MockDb = {
     'uid-frontdesk-001': { userId: 'uid-frontdesk-001', role: 'front_desk', assignedBy: 'system' },
     'uid-nurse-001': { userId: 'uid-nurse-001', role: 'nurse', assignedBy: 'system' },
     'uid-clinician-001': { userId: 'uid-clinician-001', role: 'clinician', assignedBy: 'system' },
-    'uid-admin-001': { userId: 'uid-admin-001', role: 'admin', assignedBy: 'system' }
+    'uid-admin-001': { userId: 'uid-admin-001', role: 'admin', assignedBy: 'system' },
+    'user-clinic-001': { userId: 'user-clinic-001', role: 'clinician', assignedBy: 'system' },
+    'user-clinic-002': { userId: 'user-clinic-002', role: 'nurse', assignedBy: 'system' },
+    'user-clinic-003': { userId: 'user-clinic-003', role: 'pt', assignedBy: 'system' },
+    'user-clinic-004': { userId: 'user-clinic-004', role: 'admin', assignedBy: 'system' }
   },
   patients: {
     'pat-marcus-001': {
@@ -518,7 +562,20 @@ function loadMockDb(): MockDb {
   try {
     const saved = localStorage.getItem('careplus_mockDb');
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        // Merge missing users and roles from INITIAL_DB to parsed.users and parsed.roles
+        parsed.users = { ...INITIAL_DB.users, ...parsed.users };
+        parsed.roles = { ...INITIAL_DB.roles, ...parsed.roles };
+        
+        // Ensure all top-level keys from INITIAL_DB exist in parsed
+        for (const key of Object.keys(INITIAL_DB)) {
+          if (parsed[key] === undefined) {
+            parsed[key] = INITIAL_DB[key as keyof MockDb];
+          }
+        }
+        return parsed;
+      }
     }
   } catch (e) {
     console.warn("Failed to load mockDb from localStorage", e);

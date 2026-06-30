@@ -1,4 +1,4 @@
-export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient' | 'manager' | 'front_desk';
+export type UserRole = 'clinician' | 'nurse' | 'allied_health' | 'admin' | 'billing' | 'patient' | 'manager' | 'front_desk' | 'pt' | 'read_only';
 
 export type AlliedHealthSpecialty = 
   | 'Physiotherapist' 

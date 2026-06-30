@@ -49,7 +49,7 @@ export function BillingDashboard() {
       unsubInvoices();
       unsubCharges();
     };
-  }, []);
+  }, [userProfile]);
 
   const stats = [
     { label: 'Pending Claims', value: '$24,502', change: '+12.5%', icon: FileText, color: '#0078D4' },

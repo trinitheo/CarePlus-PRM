@@ -14,7 +14,8 @@ export type AppRole =
   | 'patient'
   | 'manager'
   | 'front_desk'
-  | 'read_only';
+  | 'read_only'
+  | 'pt';
 
 // ─── Zone visibility ────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ export function canViewDemographics(role: AppRole): boolean {
  *  procedures, referrals, care team, interactions.
  *  Clinician and Nurse only (Admin gets read-only oversight). */
 export function canViewClinical(role: AppRole): boolean {
-  return ['clinician', 'nurse', 'allied_health', 'admin'].includes(role);
+  return ['clinician', 'nurse', 'allied_health', 'admin', 'pt'].includes(role);
 }
 
 /** Financial zone: insurance policy details, copay, charges, invoices,
@@ -42,7 +43,7 @@ export function canViewFinancial(role: AppRole): boolean {
 
 /** Who can write clinical data (SOAP, Rx, investigations, vitals). */
 export function canWriteClinical(role: AppRole): boolean {
-  return ['clinician', 'nurse', 'allied_health', 'admin'].includes(role);
+  return ['clinician', 'nurse', 'allied_health', 'admin', 'pt'].includes(role);
 }
 
 /** Who can edit demographics. */

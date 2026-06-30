@@ -86,7 +86,7 @@ export function ClinicalRecords({
 
   const isHealthcareProvider = useMemo(() => {
     if (!userProfile) return false;
-    return ['admin', 'clinician', 'nurse', 'allied_health'].includes(userProfile.role);
+    return ['admin', 'clinician', 'nurse', 'allied_health', 'pt'].includes(userProfile.role);
   }, [userProfile]);
 
   useEffect(() => {

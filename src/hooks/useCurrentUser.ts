@@ -40,11 +40,13 @@ export function useCurrentUser() {
               id: user.uid,
               ...docSnap.data()
             } as CurrentUser);
+            setLoading(false);
           } else {
             // Fallback to local storage if doc doesn't exist yet
             const demoUser = authService.getCurrentUser();
             if (demoUser) {
               setUserProfile(demoUser);
+              setLoading(false); // Non-blocking: Allow user to interact immediately
               // CRITICAL: Auto-re-sync profile to real Firestore if it's missing in the cloud!
               saveUserProfile(user.uid, {
                 ...demoUser,
@@ -53,9 +55,10 @@ export function useCurrentUser() {
               }).catch(err => {
                 console.warn("Failed to auto-resync user profile:", err);
               });
+            } else {
+              setLoading(false);
             }
           }
-          setLoading(false);
         }, (error) => {
           console.error("User profile snapshot error (permission or network):", error);
           setLoading(false);
@@ -70,16 +73,15 @@ export function useCurrentUser() {
         const demoUser = authService.getCurrentUser();
         if (demoUser) {
           setUserProfile(demoUser);
+          setLoading(false); // Non-blocking: Allow user to interact immediately
           signInAnonymously(auth).then(async (cred) => {
             await saveUserProfile(cred.user.uid, {
               ...demoUser,
               id: cred.user.uid,
               originalId: demoUser.id
             });
-            setLoading(false);
           }).catch(err => {
             console.warn("Auto-signin on session load failed:", err);
-            setLoading(false);
           });
         } else {
           refreshProfile();

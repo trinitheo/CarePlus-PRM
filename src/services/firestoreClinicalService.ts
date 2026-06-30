@@ -92,7 +92,7 @@ export const firestoreClinicalService: ClinicalServiceType = {
   auth,
 
   async resetAppToNewInstall() {
-    const collectionsToWipe = ['users', 'roles', 'appointments', 'messages', 'audit_logs', 'clinical_records', 'registered_users'];
+    const collectionsToWipe = ['users', 'roles', 'appointments', 'messages', 'audit_logs', 'clinical_records'];
     
     for (const collName of collectionsToWipe) {
       try {

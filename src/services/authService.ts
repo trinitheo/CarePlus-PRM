@@ -23,7 +23,7 @@ export const authService = {
         if (!auth.currentUser) {
           await signInAnonymously(auth);
         }
-        const qSnap = await getDocs(collection(db, 'registered_users'));
+        const qSnap = await getDocs(collection(db, 'users'));
         if (!qSnap.empty) {
           return qSnap.docs.map(docSnap => ({
             id: docSnap.id,
@@ -70,27 +70,22 @@ export const authService = {
         }
         
         // Check if user already exists
-        const q = query(collection(db, 'registered_users'), where('email', '==', emailLower));
+        const q = query(collection(db, 'users'), where('email', '==', emailLower));
         const qSnap = await getDocs(q);
         if (!qSnap.empty) {
           throw new Error("A profile with this email address already exists.");
         }
 
-        const docRef = await addDoc(collection(db, 'registered_users'), payload);
-        
-        if (auth.currentUser) {
-          try {
-            await setDoc(doc(db, 'users', auth.currentUser.uid), {
-              ...payload,
-              id: docRef.id,
-              originalId: docRef.id,
-            }, { merge: true });
-          } catch (syncErr) {
-            console.warn("Could not sync user profile to users collection:", syncErr);
-          }
-        }
+        const docId = auth.currentUser ? auth.currentUser.uid : `user-${Date.now()}`;
+        const finalPayload = {
+          ...payload,
+          id: docId,
+          originalId: docId
+        };
 
-        return { id: docRef.id, ...payload };
+        await setDoc(doc(db, 'users', docId), finalPayload, { merge: true });
+
+        return finalPayload;
       } else {
         // Mock save
         const mockId = `uid-user-${Date.now()}`;
@@ -115,7 +110,7 @@ export const authService = {
           await signInAnonymously(auth);
         }
         
-        const q = query(collection(db, 'registered_users'), where('email', '==', emailLower));
+        const q = query(collection(db, 'users'), where('email', '==', emailLower));
         const qSnap = await getDocs(q);
         
         if (!qSnap.empty) {
@@ -146,6 +141,46 @@ export const authService = {
 
           localStorage.setItem(SESSION_KEY, JSON.stringify(user));
           return user;
+        } else {
+          // Fallback: If not found in firestore collection but exists in mockDatabase, write it to firestore
+          const mockUser = Object.values(mockDb.users).find(u => u.email.toLowerCase().trim() === emailLower);
+          if (mockUser) {
+            const docId = mockUser.id;
+            const payload = {
+              id: docId,
+              email: mockUser.email.toLowerCase().trim(),
+              displayName: mockUser.displayName,
+              role: mockUser.role,
+              avatar: mockUser.avatar || '',
+              patientId: mockUser.patientId || (mockUser.role === 'patient' ? 'pat-marcus-001' : null),
+              status: 'Active',
+              createdAt: mockUser.createdAt || new Date().toISOString()
+            };
+            
+            // Set the doc in users so future logins work
+            await setDoc(doc(db, 'users', docId), payload, { merge: true });
+            
+            // Sync to users collection for RBAC
+            if (auth.currentUser) {
+              await setDoc(doc(db, 'users', auth.currentUser.uid), {
+                ...payload,
+                id: docId,
+                originalId: docId,
+              }, { merge: true });
+            }
+
+            const user: CurrentUser = {
+              id: docId,
+              displayName: payload.displayName,
+              email: payload.email,
+              role: payload.role as UserRole,
+              avatar: payload.avatar,
+              patientId: payload.patientId || undefined,
+              createdAt: payload.createdAt
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+            return user;
+          }
         }
       }
     } catch (err: any) {

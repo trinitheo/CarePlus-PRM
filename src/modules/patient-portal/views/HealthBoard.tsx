@@ -52,11 +52,13 @@ import {
   ShieldCheck,
   HeartPlus,
   Edit2,
-  Save
+  Save,
+  FileText
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { transition } from '../../../lib/motion';
 import { DailyActionPlan } from './DailyActionPlan';
+import { MobileHealthDashboard } from '../components/MobileHealthDashboard';
 import { updatePatientVitals, updatePatientNudgeAndActionPlan, computeHealthScore, updatePatientHealthScore, savePatient } from '../../../services/clinicalFirestoreService';
 
 interface HealthBoardProps {
@@ -78,6 +80,37 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [layoutMode, setLayoutMode] = useState<'deck' | 'dossier'>('deck');
+
+  // --- MOBILE LAYOUT & SWIPING STATES ---
+  const [isMobile, setIsMobile] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX - touchEndX;
+    if (diff > 60) {
+      // Swipe left -> next page
+      setCurrentPage(prev => Math.min(6, prev + 1));
+    } else if (diff < -60) {
+      // Swipe right -> prev page
+      setCurrentPage(prev => Math.max(1, prev - 1));
+    }
+    setTouchStartX(null);
+  };
 
   // --- NUTRITION, HYDRATION, AND MOOD SELF-ASSESSMENT STATES ---
   const [waterGlasses, setWaterGlasses] = useState<number>(() => {
@@ -102,6 +135,52 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
   // Health Trends state
   const [trendsDuration, setTrendsDuration] = useState<'3m' | '6m'>('3m');
+
+  // --- PERSONAL NOTES STATES ---
+  const [personalNotes, setPersonalNotes] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('cp_personal_notes_v1');
+      return saved ? JSON.parse(saved) : [
+        "Dr. Theodore: Continue Metformin 500mg, track daily blood pressure after morning exercise.",
+        "June 14: Felt slightly fatigued in evening, will discuss with care team.",
+        "June 12: Joint pain 2/10. Stretching helper was amazing!"
+      ];
+    } catch {
+      return [
+        "Dr. Theodore: Continue Metformin 500mg, track daily blood pressure after morning exercise.",
+        "June 14: Felt slightly fatigued in evening, will discuss with care team.",
+        "June 12: Joint pain 2/10. Stretching helper was amazing!"
+      ];
+    }
+  });
+  const [newNoteText, setNewNoteText] = useState('');
+
+  const handleAddNote = () => {
+    if (!newNoteText.trim()) return;
+    const updated = [newNoteText.trim(), ...personalNotes];
+    setPersonalNotes(updated);
+    try {
+      localStorage.setItem('cp_personal_notes_v1', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    setNewNoteText('');
+  };
+
+  // --- INTERACTIVE COMPLIANCE TRACKER STATES & SCORE CALCULATION ---
+  const [hasMedRoutine, setHasMedRoutine] = useState<boolean>(false); // default false highlights lack of routine
+  const [hasProviderVisit, setHasProviderVisit] = useState<boolean>(false); // default false highlights delayed visits
+  const [hasLoggedVitals, setHasLoggedVitals] = useState<boolean>(true);
+  const [hasExercisePlan, setHasExercisePlan] = useState<boolean>(true);
+
+  const complianceScore = useMemo(() => {
+    let score = 100;
+    if (!hasMedRoutine) score -= 15;
+    if (!hasProviderVisit) score -= 18;
+    if (!hasLoggedVitals) score -= 10;
+    if (!hasExercisePlan) score -= 12;
+    return score;
+  }, [hasMedRoutine, hasProviderVisit, hasLoggedVitals, hasExercisePlan]);
 
   // --- PATIENT PROFILE EDITING STATES & METHODS ---
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -388,6 +467,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   };
   const vitals = patientData?.vitals || [];
   const prescriptions = patientData?.prescriptions || [];
+  const clinical_records = patientData?.clinical_records || [];
 
   // Sort and extract the latest vital record from the list
   const latestVitalRecord = useMemo(() => {
@@ -1059,9 +1139,70 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   }, [sortedVitals]);
 
   return (
-    <div className="space-y-6 w-full">
+    <div 
+      className="space-y-6 w-full"
+      onTouchStart={isMobile ? handleTouchStart : undefined}
+      onTouchEnd={isMobile ? handleTouchEnd : undefined}
+    >
+      {/* Mobile Swipe Instructions & Progress Bar */}
+      {isMobile && currentPage !== 1 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col gap-3 shadow-xs font-sans animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-[#3F5B42]/10 flex items-center justify-center text-[#3F5B42] font-black text-xs font-mono">
+                {currentPage}
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider leading-none">Health Board View</h4>
+                <p className="text-[10px] text-[#3F5B42] font-bold uppercase tracking-wider mt-1">
+                  {currentPage === 1 ? 'Home (Health Board)' :
+                   currentPage === 2 ? '1. Vitals & 5. AI Assessment' :
+                   currentPage === 3 ? '2. Clinical Trends & 6. Lifestyle Habits' :
+                   currentPage === 4 ? '3. EHR Interoperability & 7. Security' :
+                   currentPage === 5 ? '4. Wellness & 8. Connected Devices' :
+                   'Daily Actions & 10. Active Prescriptions'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5, 6].map(p => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`h-2.5 w-2.5 rounded-full transition-all duration-300 cursor-pointer ${currentPage === p ? 'bg-[#3F5B42] w-5' : 'bg-slate-200'}`}
+                  title={`Go to page ${p}`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center flex items-center justify-center gap-1 bg-[#EEF3F0]/40 py-1.5 rounded border border-emerald-100/50">
+            <span>👉 Swipe left / right to browse pages</span>
+          </div>
+        </div>
+      )}
+
+      {/* Unified Adaptive Health Dashboard on Page 1 */}
+      {currentPage === 1 && (
+        <MobileHealthDashboard
+          patientData={patientData}
+          appointments={appointments}
+          onOpenMedicationCompliance={() => {
+            // Navigate to page 6 which has the medication tracking details
+            setCurrentPage(6);
+          }}
+          onOpenConsultationNotes={() => {
+            // Trigger navigation to consultation notes tab
+            onNavigateTab?.('consultations');
+          }}
+          onNavigatePage={(p) => {
+            setCurrentPage(p);
+          }}
+        />
+      )}
+
       {/* Patient Greeting & Status Bar */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-[#EEF3F0] text-slate-900 rounded-3xl p-6 md:p-8 border border-[#DEE8E0] shadow-sm relative overflow-hidden font-sans">
+      {!isMobile && false && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 bg-[#EEF3F0] text-slate-900 rounded-3xl p-6 md:p-8 border border-[#DEE8E0] shadow-sm relative overflow-hidden font-sans">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl" />
         
         {/* Left section (Greeting & ID) */}
@@ -1396,6 +1537,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               })()}
             </div>
           </div>
+          </div>
           
           {/* Overall Biomarkers Compliance Progress Bar */}
           <div className="pt-4 border-t border-[#DEE8E0] font-sans space-y-2">
@@ -1418,9 +1560,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             </p>
           </div>
         </div>
-      </div>
+      )}
 
-      {showProfileDetails && (
+      {showProfileDetails && !isMobile && (
         <div className="bg-white rounded-3xl p-6 md:p-8 border border-[#DEE8E0] shadow-sm tracking-tight animate-in slide-in-from-top-4 duration-350 ease-out space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
             <div className="flex items-center gap-3">
@@ -1796,14 +1938,12 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                   </div>
                 </div>
               </div>
-
             </div>
           )}
         </div>
       )}
-
-      {/* Interactive Dossier Navigation Bar */}
-      <div className="col-span-full bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans animate-fadeIn">
+      {!isMobile && (
+        <div className="col-span-full bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans animate-fadeIn">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-[#3F5B42]/10 border border-[#3F5B42]/20 flex items-center justify-center text-[#3F5B42] font-black font-mono shadow-inner text-base">
             {layoutMode === 'deck' ? currentPage : '★'}
@@ -1812,11 +1952,12 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest leading-none">Health Board Deck</h4>
             <p className="text-[10px] text-[#3F5B42] font-extrabold uppercase tracking-wider mt-1">
               {layoutMode === 'deck' ? (
-                `Page ${currentPage} of 5 — ${
-                  currentPage === 1 ? "1. Vitals Focus & AI Clinical Assessment" :
-                  currentPage === 2 ? "2. Clinical Trends & 6. Lifestyle Habits" :
-                  currentPage === 3 ? "3. EHR Assets & 7. Security guard" :
-                  currentPage === 4 ? "4. Wellness Room & 8. Connected Devices" :
+                `Page ${currentPage} of 6 — ${
+                  currentPage === 1 ? "Personal Wellness Home Dashboard" :
+                  currentPage === 2 ? "1. Vitals Focus & AI Clinical Assessment" :
+                  currentPage === 3 ? "2. Clinical Trends & 6. Lifestyle Habits" :
+                  currentPage === 4 ? "3. EHR Assets & 7. Security guard" :
+                  currentPage === 5 ? "4. Wellness Room & 8. Connected Devices" :
                   "Active Guidance (Daily Action Plan, 9. Sessions & 10. Prescriptions)"
                 }`
               ) : (
@@ -1827,6 +1968,18 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         </div>
 
         <div className="flex flex-wrap items-center gap-3 self-end md:self-auto">
+          {/* Light-themed View Profile toggler */}
+          <button 
+            type="button"
+            onClick={() => setShowProfileDetails(!showProfileDetails)}
+            className="flex items-center gap-1.5 h-8 px-2.5 bg-slate-50 hover:bg-slate-100 text-slate-650 border border-slate-200 rounded-lg text-xs font-bold leading-none select-none focus:outline-none cursor-pointer transition-colors"
+          >
+            <User className="h-3.5 w-3.5 text-[#3F5B42]" />
+            <span>{showProfileDetails ? 'Hide Profile' : 'View Profile'}</span>
+          </button>
+
+          <div className="w-px h-6 bg-slate-200" />
+
           {layoutMode === 'deck' ? (
             <div className="flex items-center gap-1.5">
               {/* Prev Button */}
@@ -1842,7 +1995,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
               {/* Page Indicators */}
               <div className="flex items-center gap-1">
-                {[...Array(5)].map((_, i) => {
+                {[...Array(6)].map((_, i) => {
                   const pageNum = i + 1;
                   const isActive = currentPage === pageNum;
                   return (
@@ -1856,20 +2009,22 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                           : 'bg-white text-slate-505 hover:text-slate-800 hover:bg-slate-50 border-slate-200'
                       }`}
                       title={
-                        pageNum === 1 ? "Vitals & AI Assessment" :
-                        pageNum === 2 ? "Trends & Habits" :
-                        pageNum === 3 ? "Clinical EHR & Privacy" :
-                        pageNum === 4 ? "Wellness & Devices" :
+                        pageNum === 1 ? "Home Dashboard" :
+                        pageNum === 2 ? "Vitals & AI Assessment" :
+                        pageNum === 3 ? "Trends & Habits" :
+                        pageNum === 4 ? "Clinical EHR & Privacy" :
+                        pageNum === 5 ? "Wellness & Devices" :
                         "Action & Agenda"
                       }
                     >
                       <span className="font-mono text-xs mr-1">{pageNum}</span>
                       <span className="hidden lg:inline text-[9px] uppercase tracking-wider">
                         {
-                          pageNum === 1 ? "Vitals" :
-                          pageNum === 2 ? "Trends" :
-                          pageNum === 3 ? "EHR" :
-                          pageNum === 4 ? "Wellness" :
+                          pageNum === 1 ? "Home" :
+                          pageNum === 2 ? "Vitals" :
+                          pageNum === 3 ? "Trends" :
+                          pageNum === 4 ? "EHR" :
+                          pageNum === 5 ? "Wellness" :
                           "Action"
                         }
                       </span>
@@ -1881,8 +2036,8 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               {/* Next Button */}
               <button
                 type="button"
-                onClick={() => setCurrentPage(prev => Math.min(5, prev + 1))}
-                disabled={currentPage === 5}
+                onClick={() => setCurrentPage(prev => Math.min(6, prev + 1))}
+                disabled={currentPage === 6}
                 className="flex items-center justify-center h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-45 disabled:hover:bg-slate-50 transition-colors cursor-pointer text-[#3F5B42] text-xs font-bold leading-none select-none focus:outline-none"
               >
                 Next
@@ -1926,6 +2081,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Grid content */}
       <div className={layoutMode === 'deck' 
@@ -1935,9 +2091,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         
         {/* Left Column - Vitals & Health Indicators */}
         <div className={layoutMode === 'deck' ? "space-y-6" : "lg:col-span-2 space-y-6"}>
-          {(layoutMode === 'dossier' || currentPage === 1) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 2)) || (isMobile && currentPage === 2)) && (
             <motion.div
-              key="page1-left"
+              key="page2-left"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2031,9 +2187,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
 
           {/* Active Diagnoses / Health Plan focus */}
-          {(layoutMode === 'dossier' || currentPage === 5) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 6)) || (isMobile && currentPage === 6)) && (
             <motion.div
-              key="page5-action-plan"
+              key="page6-action-plan"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2047,9 +2203,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
 
           {/* 1. CLINICAL TRENDS & COMPLIANCE CALENDAR - "Data Visualization" Node */}
-          {(layoutMode === 'dossier' || currentPage === 2) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 3)) || (isMobile && currentPage === 3)) && (
             <motion.div
-              key="page2-left"
+              key="page3-left"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2060,13 +2216,14 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 <div>
                   <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-[#3F5B42]" />
-                    2. Interactive Trends & Adherence Analytics
+                    {isMobile && currentPage === 1 ? 'Compliance Calendar' : '2. Interactive Trends & Adherence Analytics'}
                   </CardTitle>
                   <CardDescription className="text-xs font-semibold text-slate-400">
-                    Correlation analysis between daily activity habits and primary clinical metrics
+                    {isMobile && currentPage === 1 ? 'Daily "Check-off" calendar registry of prescribed therapeutic regimen' : 'Correlation analysis between daily activity habits and primary clinical metrics'}
                   </CardDescription>
                 </div>
-                <div className="flex bg-[#EEF3F0] p-1 rounded-lg border border-[#DEE8E0]">
+                {(!isMobile || currentPage !== 1) && (
+                  <div className="flex bg-[#EEF3F0] p-1 rounded-lg border border-[#DEE8E0]">
                   <button
                     onClick={() => setTrendsDuration('3m')}
                     className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all cursor-pointer ${
@@ -2084,6 +2241,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     6 Months
                   </button>
                 </div>
+              )}
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
@@ -2091,7 +2249,8 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
                 
                 {/* SVG Live Render Chart */}
-                <div className="md:col-span-8 bg-slate-50 border border-slate-100 p-4 rounded-xl relative">
+                {(!isMobile || currentPage !== 1) && (
+                  <div className="md:col-span-8 bg-slate-50 border border-slate-100 p-4 rounded-xl relative">
                   <div className="flex items-center justify-between text-[11px] mb-3">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1 font-bold text-slate-700">
@@ -2212,57 +2371,228 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     Note: Cardiovascular and glycemic calibration signals demonstrate a positive therapeutic response since initiating Metformin and post-meal muscle exercises.
                   </p>
                 </div>
+              )}
 
-                {/* Compliance Calendar Grid Section */}
-                <div className="md:col-span-4 space-y-3 font-sans">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10.5px] font-black uppercase text-[#546e56] tracking-wider block">
-                      Compliance Calendar
-                    </span>
-                    <Badge variant="outline" className="bg-[#EEF3F0] text-slate-800 text-[9px] font-bold">
-                      93% Monthly
-                    </Badge>
-                  </div>
+              {/* Compliance Tracker Section */}
+              {!isMobile && (
+                  <div className={`${isMobile ? 'col-span-full' : 'md:col-span-4'} space-y-3 font-sans`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10.5px] font-black uppercase text-[#546e56] tracking-wider block">
+                        Compliance Tracker
+                      </span>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                          complianceScore >= 85 
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                            : complianceScore >= 70 
+                            ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                            : 'bg-rose-50 text-rose-800 border-rose-200'
+                        }`}
+                      >
+                        {complianceScore}% Adherence
+                      </Badge>
+                    </div>
 
-                  <p className="text-[11px] text-slate-500 leading-normal">
-                    Daily "Check-off" calendar registry of prescribed therapeutic regimen.
-                  </p>
+                    {/* Progress Bar Display */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-700">
+                        <span>Overall Health Compliance</span>
+                        <span className={
+                          complianceScore >= 85 ? 'text-emerald-600' :
+                          complianceScore >= 70 ? 'text-amber-600' : 'text-rose-600'
+                        }>{complianceScore}%</span>
+                      </div>
+                      <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                        <motion.div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            complianceScore >= 85 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' :
+                            complianceScore >= 70 ? 'bg-gradient-to-r from-amber-500 to-orange-400' :
+                            'bg-gradient-to-r from-rose-500 to-red-500'
+                          }`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${complianceScore}%` }}
+                        />
+                      </div>
+                    </div>
 
-                  <div className="grid grid-cols-5 gap-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-150">
-                    {/* Render visual 15 calendar days */}
-                    {Array.from({ length: 15 }).map((_, i) => {
-                      const dayNumber = i + 1;
-                      const isMissed = dayNumber === 9; // Simulated missed Metformin dose due to fatigue barrier profile
-                      return (
-                        <div
-                          key={dayNumber}
-                          title={isMissed ? `June ${dayNumber} — Missed dose logged (Side-effect fatiguing overlay)` : `June ${dayNumber} — Adherent check logged (Dose verified)`}
-                          className={`aspect-square rounded-md flex flex-col items-center justify-center relative cursor-help transition-all ${
-                            isMissed 
-                              ? 'bg-rose-50 border border-rose-300 text-rose-700 font-extrabold shadow-inner' 
-                              : 'bg-emerald-50 border border-emerald-250 text-emerald-850 font-extrabold'
+                    {/* Status Note card */}
+                    <div className={`p-2.5 rounded-xl border text-[11px] leading-normal font-medium flex items-start gap-2 ${
+                      complianceScore >= 85 ? 'bg-emerald-50/50 border-emerald-150 text-emerald-850' :
+                      complianceScore >= 70 ? 'bg-amber-50/50 border-amber-150 text-amber-850' :
+                      'bg-rose-50/50 border-rose-150 text-rose-850'
+                    }`}>
+                      <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-slate-500" />
+                      <div>
+                        {complianceScore >= 85 && "Excellent therapeutic fidelity! Doses and follow-ups are highly aligned with your plan."}
+                        {complianceScore >= 70 && complianceScore < 85 && "Sub-optimal compliance detected. Resolve barriers below to optimize clinical outcomes."}
+                        {complianceScore < 70 && "Critical adherence levels. Identified risk-barriers significantly threaten metabolic stability."}
+                      </div>
+                    </div>
+
+                    {/* Highlight Areas contributing to poor score */}
+                    <div className="space-y-2">
+                      <span className="text-[9.5px] font-black uppercase text-slate-500 tracking-wider block">
+                        Risk factors / Barriers to Resolve
+                      </span>
+
+                      <div className="space-y-2">
+                        {/* 1. Medication Routine */}
+                        <div 
+                          onClick={() => setHasMedRoutine(!hasMedRoutine)}
+                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            hasMedRoutine 
+                              ? 'bg-slate-50/50 border-slate-200 hover:bg-slate-50' 
+                              : 'bg-rose-50/20 border-rose-200/60 hover:bg-rose-50/30 animate-pulse'
                           }`}
                         >
-                          <span className="text-[9px] font-bold">{dayNumber}</span>
-                          <span className={`text-[8px] mt-0.5 ${isMissed ? 'text-rose-600' : 'text-[#3F5B42]'}`}>
-                            {isMissed ? '❌' : '✓'}
-                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              {hasMedRoutine ? (
+                                <span className="text-xs">✅</span>
+                              ) : (
+                                <span className="text-xs">⚠️</span>
+                              )}
+                              <span className={`text-[11px] font-bold ${hasMedRoutine ? 'text-slate-700' : 'text-rose-950'}`}>
+                                Structured Medication Routine
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              {hasMedRoutine 
+                                ? "Habit configured (dose associated with daily routine cue)" 
+                                : "No automatic medication habit cue configured. Easily forgotten (-15%)"}
+                            </p>
+                          </div>
+                          <button 
+                            type="button"
+                            className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${
+                              hasMedRoutine 
+                                ? 'bg-slate-200 text-slate-700' 
+                                : 'bg-rose-500 hover:bg-rose-600 text-white shadow-xs'
+                            }`}
+                          >
+                            {hasMedRoutine ? "Active" : "Set Routine"}
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
 
-                  <div className="text-[9px] font-semibold text-slate-500 space-y-1 pt-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 bg-emerald-100 border border-emerald-350 rounded" />
-                      <span>✓ Consistently Adherent (Doses check off)</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 bg-rose-100 border border-rose-300 rounded" />
-                      <span>❌ Missed Check‑off (9th: Fatigue trigger)</span>
+                        {/* 2. Provider Visits */}
+                        <div 
+                          onClick={() => setHasProviderVisit(!hasProviderVisit)}
+                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            hasProviderVisit 
+                              ? 'bg-slate-50/50 border-slate-200 hover:bg-slate-50' 
+                              : 'bg-rose-50/20 border-rose-200/60 hover:bg-rose-50/30 animate-pulse'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              {hasProviderVisit ? (
+                                <span className="text-xs">✅</span>
+                              ) : (
+                                <span className="text-xs">⚠️</span>
+                              )}
+                              <span className={`text-[11px] font-bold ${hasProviderVisit ? 'text-slate-700' : 'text-rose-950'}`}>
+                                Healthcare Provider Follow-ups
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              {hasProviderVisit 
+                                ? "Follow-up visit scheduled and on file" 
+                                : "Delayed follow-up with clinical care team (-18%)"}
+                            </p>
+                          </div>
+                          <button 
+                            type="button"
+                            className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${
+                              hasProviderVisit 
+                                ? 'bg-slate-200 text-slate-700' 
+                                : 'bg-rose-500 hover:bg-rose-600 text-white shadow-xs'
+                            }`}
+                          >
+                            {hasProviderVisit ? "Scheduled" : "Schedule Visit"}
+                          </button>
+                        </div>
+
+                        {/* 3. Daily Biometrics Logging */}
+                        <div 
+                          onClick={() => setHasLoggedVitals(!hasLoggedVitals)}
+                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            hasLoggedVitals 
+                              ? 'bg-slate-50/50 border-slate-200 hover:bg-slate-50' 
+                              : 'bg-rose-50/20 border-rose-200/60 hover:bg-rose-50/30'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              {hasLoggedVitals ? (
+                                <span className="text-xs">✅</span>
+                              ) : (
+                                <span className="text-xs">⚠️</span>
+                              )}
+                              <span className={`text-[11px] font-bold ${hasLoggedVitals ? 'text-slate-700' : 'text-rose-950'}`}>
+                                Daily Biometric Calibration
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              {hasLoggedVitals 
+                                ? "Vitals logged regularly over the last week" 
+                                : "Inconsistent recording of vital biomarkers (-10%)"}
+                            </p>
+                          </div>
+                          <button 
+                            type="button"
+                            className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${
+                              hasLoggedVitals 
+                                ? 'bg-slate-200 text-slate-700' 
+                                : 'bg-rose-500 hover:bg-rose-600 text-white shadow-xs'
+                            }`}
+                          >
+                            {hasLoggedVitals ? "Tracking On" : "Track Vitals"}
+                          </button>
+                        </div>
+
+                        {/* 4. Physical Exercise Routine */}
+                        <div 
+                          onClick={() => setHasExercisePlan(!hasExercisePlan)}
+                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            hasExercisePlan 
+                              ? 'bg-slate-50/50 border-slate-200 hover:bg-slate-50' 
+                              : 'bg-rose-50/20 border-rose-200/60 hover:bg-rose-50/30'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              {hasExercisePlan ? (
+                                <span className="text-xs">✅</span>
+                              ) : (
+                                <span className="text-xs">⚠️</span>
+                              )}
+                              <span className={`text-[11px] font-bold ${hasExercisePlan ? 'text-slate-700' : 'text-rose-950'}`}>
+                                Active Physical Therapy / Exercise
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              {hasExercisePlan 
+                                ? "Consistently hitting walking and stretch targets" 
+                                : "Sedentary indicators present, missing post-meal exercises (-12%)"}
+                            </p>
+                          </div>
+                          <button 
+                            type="button"
+                            className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-colors ${
+                              hasExercisePlan 
+                                ? 'bg-slate-200 text-slate-700' 
+                                : 'bg-rose-500 hover:bg-rose-600 text-white shadow-xs'
+                            }`}
+                          >
+                            {hasExercisePlan ? "Active" : "Log Exercise"}
+                          </button>
+                        </div>
+
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
               </div>
 
@@ -2272,9 +2602,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
 
           {/* 2. INTEGRATED CLINICAL EHR DATA HUB - "Clinical Medical Records" Node */}
-          {(layoutMode === 'dossier' || currentPage === 3) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 4)) || (isMobile && currentPage === 4)) && (
             <motion.div
-              key="page3-left"
+              key="page4-left"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2425,9 +2755,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
 
           {/* 3. PRIMARY CARE ENGAGEMENT & DAILY MOOD SELF-LOGGER - "Health Protective Behaviors" Node */}
-          {(layoutMode === 'dossier' || currentPage === 4) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 5)) || (isMobile && currentPage === 5)) && (
             <motion.div
-              key="page4-left"
+              key="page5-left"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2624,13 +2954,69 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           </motion.div>
           )}
 
+          {/* Mobile Only: My Notes Card */}
+          {(isMobile && currentPage === 6) && (
+            <motion.div
+              key="mobile-my-notes"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+                <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50 p-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 font-sans">
+                      <FileText className="h-4 w-4 text-[#3F5B42]" />
+                      My Consultation Notes
+                    </CardTitle>
+                    <Badge variant="outline" className="bg-[#EEF3F0] text-[#3F5B42] text-[9px] font-bold">
+                      {personalNotes.length} Saved
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {/* Notes input form */}
+                  <div className="space-y-2">
+                    <textarea
+                      rows={2}
+                      value={newNoteText}
+                      onChange={(e) => setNewNoteText(e.target.value)}
+                      placeholder="Type a new personal note or daily reflection here..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-[#3F5B42] focus:border-[#3F5B42] outline-none font-medium text-slate-800 shadow-inner"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleAddNote}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#3F5B42] hover:bg-[#324935] text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        Save Note
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Notes list */}
+                  <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
+                    {personalNotes.map((note, idx) => (
+                      <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-150 text-xs text-slate-700 font-medium relative pl-7">
+                        <span className="absolute left-2.5 top-3 text-slate-400">📝</span>
+                        <p className="leading-normal">{note}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
         </div>
 
         {/* Right Column - Demographics, Personal Contacts, Habits, Rx, & Sync */}
         <div className="space-y-6 animate-fadeIn">
           
           {/* Card 1.5: Dynamic AI Vitals Assessment Card */}
-          {(layoutMode === 'dossier' || currentPage === 1) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 2)) || (isMobile && currentPage === 2)) && (
             <motion.div
               key="card-1-5-vit-ai"
               initial={{ opacity: 0, y: 15 }}
@@ -2685,9 +3071,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
 
           {/* B. PATIENT HEALTH BEHAVIOR PROFILE CARD (CALORIES & COGNITIVE WATER TRACKER) - "Patient Health Behavior Profile" Node */}
-          {(layoutMode === 'dossier' || currentPage === 2) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 3)) || (isMobile && currentPage === 3)) && (
             <motion.div
-              key="page2-right"
+              key="page3-right"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2841,9 +3227,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
 
           {/* C. PRIVACY SECURITY & BIOMETRIC DATA SHARING CONTROLS - "Privacy and Security UI" Node */}
-          {(layoutMode === 'dossier' || currentPage === 3) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 4)) || (isMobile && currentPage === 4)) && (
             <motion.div
-              key="page3-right"
+              key="page4-right"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -2950,7 +3336,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
 
           {/* Card 7.5: Dynamic HIPAA Compliance Security Audit Log Card (Deck-only filler) */}
-          {layoutMode === 'deck' && currentPage === 3 && (
+          {((layoutMode === 'deck' && !isMobile && currentPage === 4) || (isMobile && currentPage === 4)) && (
             <motion.div
               key="card-7-5-sec-audit"
               initial={{ opacity: 0, y: 15 }}
@@ -3000,9 +3386,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
           
           {/* Device & App Sync Hub */}
-          {currentPage === 4 && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 5)) || (isMobile && currentPage === 5)) && (
             <motion.div
-              key="page4-right"
+              key="page5-right"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
@@ -3291,82 +3677,147 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           )}
           
           {/* Scheduling focus */}
-          {(layoutMode === 'dossier' || currentPage === 5) && (
+          {((!isMobile && (layoutMode === 'dossier' || currentPage === 6)) || (isMobile && currentPage === 6)) && (
             <motion.div
-              key="page5-right"
+              key="page6-right"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
               className="space-y-6"
             >
-              <Card className="border border-slate-200 shadow-sm">
-            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-amber-500" />
-                9. Upcoming Session
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              {patientAppointments.map((apt: any, i: number) => (
-                <div key={i} className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 space-y-3 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-2 h-full bg-amber-400" />
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-slate-900 text-sm">{apt.providerName}</h3>
-                    <p className="text-xs text-slate-500 font-medium">{apt.specialty}</p>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 text-xs font-mono bg-white p-2.5 rounded-lg border border-amber-100">
-                    <div>
-                      <span className="text-[10px] uppercase text-amber-600 block font-semibold">Date</span>
-                      <strong className="text-slate-800">{apt.date}</strong>
+              {(!isMobile || currentPage === 6) && (
+                <Card className="border border-slate-200 shadow-sm">
+              <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+                <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-amber-500" />
+                  9. Upcoming Session
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                {patientAppointments.map((apt: any, i: number) => (
+                  <div key={i} className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-2 h-full bg-amber-400" />
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-slate-900 text-sm">{apt.providerName}</h3>
+                      <p className="text-xs text-slate-500 font-medium">{apt.specialty}</p>
                     </div>
-                    <div className="w-px h-6 bg-slate-200" />
-                    <div>
-                      <span className="text-[10px] uppercase text-amber-600 block font-semibold">Time</span>
-                      <strong className="text-slate-800">{apt.time}</strong>
+                    
+                    <div className="flex items-center gap-4 text-xs font-mono bg-white p-2.5 rounded-lg border border-amber-100">
+                      <div>
+                        <span className="text-[10px] uppercase text-amber-600 block font-semibold">Date</span>
+                        <strong className="text-slate-800">{apt.date}</strong>
+                      </div>
+                      <div className="w-px h-6 bg-slate-200" />
+                      <div>
+                        <span className="text-[10px] uppercase text-amber-600 block font-semibold">Time</span>
+                        <strong className="text-slate-800">{apt.time}</strong>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans">
-                    📍 {apt.room} • <span className="text-amber-700">{apt.typeLabel}</span>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Active Medications & Refills */}
-          <Card className="border border-slate-200 shadow-sm">
-            <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                <Pill className="h-4 w-4 text-pink-600" />
-                10. Active Prescriptions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 divide-y divide-slate-100">
-              {activePrescriptions.map((rx: any) => (
-                <div key={rx.id} className="py-3.5 first:pt-0 last:pb-0 flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 shrink-0 font-bold text-xs uppercase">
-                    Rx
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-xs">{rx.medicationName}</span>
-                      <span className="text-[10px] bg-slate-100 text-slate-600 font-mono px-1 rounded">{rx.dosage}</span>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans">
+                      📍 {apt.room} • <span className="text-amber-700">{apt.typeLabel}</span>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">{rx.frequency}</p>
-                    <p className="text-[10px] text-slate-400">Prescribed for: {rx.condition || 'General Indications'}</p>
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-          </motion.div>
+                ))}
+              </CardContent>
+            </Card>
+              )}
+
+              {/* Active Medications & Refills */}
+              {(!isMobile || currentPage === 6) && (
+                <Card className="border border-slate-200 shadow-sm">
+              <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+                <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <Pill className="h-4 w-4 text-pink-600" />
+                  10. Active Prescriptions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 divide-y divide-slate-100">
+                {activePrescriptions.map((rx: any) => (
+                  <div key={rx.id} className="py-3.5 first:pt-0 last:pb-0 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 shrink-0 font-bold text-xs uppercase">
+                      Rx
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-xs">{rx.medicationName}</span>
+                        <span className="text-[10px] bg-slate-100 text-slate-600 font-mono px-1 rounded">{rx.dosage}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium">{rx.frequency}</p>
+                      <p className="text-[10px] text-slate-400">Prescribed for: {rx.condition || 'General Indications'}</p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+              )}
+            </motion.div>
           )}
 
         </div>
 
       </div>
+
+      {/* Mobile Only: Beautiful Interactive Page Footer Navigation Controls */}
+      {isMobile && currentPage !== 1 && (
+        <div className="mt-8 mb-6 p-4 bg-white border border-slate-250 rounded-2xl shadow-xs font-sans flex flex-col items-center gap-3 animate-fadeIn">
+          <div className="flex items-center justify-between w-full">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="flex items-center justify-center h-8 px-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-705 font-bold hover:bg-slate-100 disabled:opacity-45 disabled:hover:bg-slate-50 text-xs transition-colors cursor-pointer select-none focus:outline-none"
+            >
+              <ChevronLeft className="h-4 w-4 mr-0.5" />
+              Prev
+            </button>
+
+            <span className="text-[11px] font-black uppercase text-[#3F5B42] tracking-wider font-sans">
+              {
+                currentPage === 1 ? "1. Health Board" :
+                currentPage === 2 ? "2. Biometric Vitals" :
+                currentPage === 3 ? "3. Trends & Habits" :
+                currentPage === 4 ? "4. EHR Data & Privacy" :
+                currentPage === 5 ? "5. Engagement & Devices" :
+                "6. Daily Action Plan"
+              }
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(prev => Math.min(6, prev + 1))}
+              disabled={currentPage === 6}
+              className="flex items-center justify-center h-8 px-3 bg-[#3F5B42] hover:bg-[#324935] text-white rounded-lg font-bold disabled:opacity-45 disabled:hover:bg-[#3F5B42] text-xs transition-colors cursor-pointer select-none focus:outline-none"
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-0.5" />
+            </button>
+          </div>
+
+          {/* Dots Indicator */}
+          <div className="flex items-center gap-2 mt-1">
+            {[...Array(6)].map((_, i) => {
+              const p = i + 1;
+              const active = currentPage === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setCurrentPage(p)}
+                  className={`w-3.5 h-1.5 rounded-full transition-all focus:outline-none ${
+                    active ? 'w-6 bg-[#3F5B42]' : 'bg-slate-200 hover:bg-slate-350'
+                  }`}
+                  title={`Go to Page ${p}`}
+                />
+              );
+            })}
+          </div>
+
+          <p className="text-[9px] text-slate-400 font-medium tracking-wider uppercase mt-1">
+            Swipe left/right or use controls to browse the clinical board
+          </p>
+        </div>
+      )}
 
       {/* Centered Telemetry Focus & All Vitals Modal */}
       {isDrawerOpen && (
@@ -3563,13 +4014,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         </div>
       )}
 
-      {/* Security & HIPAA Compliance Notice */}
-      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
-        <Lock className="h-5 w-5 text-slate-400 shrink-0 mt-0.5" />
-        <p className="text-[11px] text-slate-500 leading-relaxed">
-          <strong>HIPAA Secure Workspace Shield:</strong> This page renders medical-grade clinical information retrieved securely on behalf of the credentialed user. All modifications are recorded to the system audit records automatically.
-        </p>
-      </div>
+
 
     </div>
   );

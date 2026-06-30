@@ -140,5 +140,39 @@ export const DEFAULT_DASHBOARD_SETTINGS: Record<UserRole, Record<'compact' | 'me
       visibility: { vitals: true, medications: true, messages: true, reminders: true, schedule: true, health_sync: true },
       sizes: { vitals: '2x2', medications: '2x2', messages: '2x2', reminders: '1x2', schedule: '1x1', health_sync: '1x1' }
     }
+  },
+  pt: {
+    compact: {
+      order: ['patients', 'messages', 'reminders', 'referrals', 'schedule', 'calls'],
+      visibility: { patients: true, messages: true, reminders: true, referrals: true, schedule: true, calls: true },
+      sizes: { patients: '2x2', messages: '2x2', reminders: '2x2', referrals: '1x1', schedule: '1x1', calls: '1x1' }
+    },
+    medium: {
+      order: ['patients', 'messages', 'reminders', 'referrals', 'schedule', 'calls'],
+      visibility: { patients: true, messages: true, reminders: true, referrals: true, schedule: true, calls: true },
+      sizes: { patients: '2x2', messages: '2x2', reminders: '2x2', referrals: '2x1', schedule: '2x1', calls: '2x1' }
+    },
+    expanded: {
+      order: ['patients', 'messages', 'reminders', 'referrals', 'schedule', 'calls'],
+      visibility: { patients: true, messages: true, reminders: true, referrals: true, schedule: true, calls: true },
+      sizes: { patients: '2x2', messages: '2x2', reminders: '2x2', referrals: '2x1', schedule: '2x1', calls: '2x1' }
+    }
+  },
+  read_only: {
+    compact: {
+      order: ['patients', 'messages', 'reminders', 'referrals', 'schedule', 'calls'],
+      visibility: { patients: true, messages: true, reminders: true, referrals: true, schedule: true, calls: true },
+      sizes: { patients: '2x2', messages: '2x2', reminders: '2x2', referrals: '1x1', schedule: '1x1', calls: '1x1' }
+    },
+    medium: {
+      order: ['patients', 'messages', 'reminders', 'referrals', 'schedule', 'calls'],
+      visibility: { patients: true, messages: true, reminders: true, referrals: true, schedule: true, calls: true },
+      sizes: { patients: '2x2', messages: '2x2', reminders: '2x2', referrals: '2x1', schedule: '2x1', calls: '2x1' }
+    },
+    expanded: {
+      order: ['patients', 'messages', 'reminders', 'referrals', 'schedule', 'calls'],
+      visibility: { patients: true, messages: true, reminders: true, referrals: true, schedule: true, calls: true },
+      sizes: { patients: '2x2', messages: '2x2', reminders: '2x2', referrals: '2x1', schedule: '2x1', calls: '2x1' }
+    }
   }
 };

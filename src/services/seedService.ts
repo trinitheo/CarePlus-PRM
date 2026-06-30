@@ -214,7 +214,43 @@ export const SeedService = {
       createdAt: "2025-01-08T09:10:00Z"
     };
 
-    const usersToSeed = [theogateObj, frontdeskObj, riveraObj, adminObj, marcusPortalUser];
+    const docSarahObj = {
+      id: "user-clinic-001",
+      email: "sarah.chen@careplus.local",
+      displayName: "Dr. Sarah Chen",
+      role: "clinician" as AppRole,
+      avatar: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop",
+      createdAt: "2025-01-08T09:00:00Z"
+    };
+
+    const markNurseObj = {
+      id: "user-clinic-002",
+      email: "mark.davis@careplus.local",
+      displayName: "Mark Davis",
+      role: "nurse" as AppRole,
+      avatar: "https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop",
+      createdAt: "2025-01-08T09:00:00Z"
+    };
+
+    const janePtObj = {
+      id: "user-clinic-003",
+      email: "jane.smith@careplus.local",
+      displayName: "Jane Smith",
+      role: "pt" as AppRole,
+      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop",
+      createdAt: "2025-01-08T09:00:00Z"
+    };
+
+    const adminPanelObj = {
+      id: "user-clinic-004",
+      email: "admin@careplus.local",
+      displayName: "Admin Panel",
+      role: "admin" as AppRole,
+      avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=200&auto=format&fit=crop",
+      createdAt: "2025-01-08T09:00:00Z"
+    };
+
+    const usersToSeed = [theogateObj, frontdeskObj, riveraObj, adminObj, marcusPortalUser, docSarahObj, markNurseObj, janePtObj, adminPanelObj];
     for (let idx = 0; idx < usersToSeed.length; idx++) {
       const u = usersToSeed[idx];
       // Save in mock DB cache
@@ -224,24 +260,6 @@ export const SeedService = {
       // Sync to Firestore for RBAC verification and login listing
       await setDoc(doc(db, 'users', u.id), u);
       await setDoc(doc(db, 'roles', u.id), { userId: u.id, role: u.role, assignedBy: 'system' });
-      await setDoc(doc(db, 'registered_users', u.id), {
-        id: u.id,
-        displayName: u.displayName,
-        email: u.email.toLowerCase(),
-        role: u.role,
-        patientId: u.role === 'patient' ? 'pat-marcus-001' : undefined,
-        avatar: u.role === 'patient' 
-          ? 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=200&auto=format&fit=crop'
-          : u.id === 'uid-clinician-001'
-            ? 'https://images.unsplash.com/photo-1622253692010-333f2da60710?q=80&w=200&auto=format&fit=crop'
-            : u.id === 'uid-nurse-001'
-              ? 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop'
-              : u.id === 'uid-frontdesk-001'
-                ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop'
-                : 'https://images.unsplash.com/photo-1537368910025-7003507965b6?q=80&w=200&auto=format&fit=crop',
-        status: 'Active',
-        createdAt: u.createdAt
-      });
 
       onProgress?.({ step: 'Injecting Case Users & Roles', count: idx + 1, total: usersToSeed.length });
     }

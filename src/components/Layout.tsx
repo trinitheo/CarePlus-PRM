@@ -11,16 +11,17 @@ import { auth } from '../lib/firebase';
 import { authService } from '../services/authService';
 
 const ALL_NAV_ITEMS = [
-  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient'] },
-  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health'] },
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient', 'read_only', 'pt'] },
+  { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'read_only', 'pt'] },
   { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'front_desk'] }, 
-  { id: 'messages', icon: MessageSquare, label: 'Inbox', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient'] },
+  { id: 'messages', icon: MessageSquare, label: 'Inbox', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient', 'pt'] },
   { id: 'health-record', icon: FileText, label: 'My Record', roles: ['patient'] },
   { id: 'care-network', icon: Share2, label: 'Networks', roles: ['admin', 'manager', 'clinician'] },
   { id: 'billing', icon: CreditCard, label: 'Billing', roles: ['admin', 'manager', 'billing'] },
-  { id: 'care-team', icon: FileText, label: 'Workflows', roles: ['admin', 'manager', 'nurse', 'allied_health'] },
+  { id: 'care-team', icon: FileText, label: 'Workflows', roles: ['admin', 'manager', 'nurse', 'allied_health', 'pt'] },
   { id: 'frontdesk', icon: Signature, label: 'Access', roles: ['admin', 'manager', 'front_desk'] },
   { id: 'governance', icon: ShieldCheck, label: 'Control', roles: ['admin', 'manager'] },
+  { id: 'settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient', 'read_only', 'pt', 'front_desk'] },
 ];
 
 function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
