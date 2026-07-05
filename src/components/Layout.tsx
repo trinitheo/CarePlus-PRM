@@ -59,7 +59,7 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
               >
                 <div className={`
                   flex items-center justify-center h-8 w-14 rounded-full transition-all duration-200
-                  ${active ? 'bg-[#0078D4]/10 text-[#0078D4]' : 'text-[#616161] hover:bg-[#F3F2F1] hover:text-[#242424]'}
+                  ${active ? 'bg-[#0078D4]/10 text-[#0078D4]' : 'text-[#616161]'}
                 `}>
                   <Icon className={`h-[22px] w-[22px] ${active ? 'scale-110' : ''} transition-transform`} />
                 </div>
@@ -79,15 +79,17 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
       </div>
 
       <div className="mt-auto pb-6 flex flex-col items-center gap-6">
-        <button 
-          onClick={onOpenHipaa}
-          className="flex flex-col items-center gap-1 text-emerald-600 hover:opacity-80 transition-opacity"
-        >
-          <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-emerald-50">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
-          <span className="hidden lg:block text-[9px] font-bold uppercase tracking-widest text-center">SECURE</span>
-        </button>
+        {userProfile?.role !== 'patient' && (
+          <button 
+            onClick={onOpenHipaa}
+            className="flex flex-col items-center gap-1 text-emerald-600 hover:opacity-80 transition-opacity"
+          >
+            <div className="h-8 w-14 rounded-full flex items-center justify-center hover:bg-emerald-50">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <span className="hidden lg:block text-[9px] font-bold uppercase tracking-widest text-center">SECURE</span>
+          </button>
+        )}
 
         <button 
           className="flex flex-col items-center gap-1 text-red-600 hover:opacity-80 transition-opacity"
@@ -100,17 +102,19 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
           <span className="text-[9px] font-bold uppercase tracking-widest text-center">LOGOUT</span>
         </button>
 
-        <button
-          onClick={() => onNavigate('profile')}
-          title="Edit Profile"
-          className={`h-10 w-10 rounded-full border-2 p-0.5 shadow-sm overflow-hidden bg-white group cursor-pointer transition-all duration-200 ${
-            currentModule === 'profile' ? 'border-[#0078D4] ring-4 ring-[#0078D4]/10' : 'border-[#EDEBE9] hover:border-[#0078D4]'
-          }`}
-        >
-          <div className="w-full h-full rounded-full bg-[#F3F2F1] flex items-center justify-center font-black text-[#0078D4] text-[10px]">
-            {userProfile?.displayName?.[0] || 'U'}
-          </div>
-        </button>
+        {userProfile?.role !== 'patient' && (
+          <button
+            onClick={() => onNavigate('profile')}
+            title="Edit Profile"
+            className={`h-10 w-10 rounded-full border-2 p-0.5 shadow-sm overflow-hidden bg-white group cursor-pointer transition-all duration-200 ${
+              currentModule === 'profile' ? 'border-[#0078D4] ring-4 ring-[#0078D4]/10' : 'border-[#EDEBE9] hover:border-[#0078D4]'
+            }`}
+          >
+            <div className="w-full h-full rounded-full bg-[#F3F2F1] flex items-center justify-center font-black text-[#0078D4] text-[10px]">
+              {userProfile?.displayName?.[0] || 'U'}
+            </div>
+          </button>
+        )}
       </div>
     </aside>
   );
@@ -119,10 +123,6 @@ function NavigationRail({ currentModule, onNavigate, onOpenHipaa }: { currentMod
 function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: string, onNavigate: (module: string) => void, onOpenHipaa: () => void }) {
   const { userProfile } = useCurrentUser();
 
-  const navItems = ALL_NAV_ITEMS.filter(item => 
-    !item.roles || (userProfile?.role && item.roles.includes(userProfile.role))
-  );
-
   const handleLogout = async () => {
     authService.logout();
     await auth.signOut();
@@ -130,6 +130,61 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
     sessionStorage.removeItem('precison_health_view_state');
     window.location.reload();
   };
+
+  // If the user is a patient, render the highly customized mockup bottom nav
+  if (userProfile?.role === 'patient') {
+    const items = [
+      { id: 'dashboard', label: 'HOME', icon: LayoutDashboard },
+      { id: 'messages', label: 'INBOX', icon: MessageSquare },
+      { id: 'consultations', label: 'Clinical Notes', icon: FileText },
+      { id: 'wellness', label: 'WELLNESS', icon: Sparkles },
+      { id: 'settings', label: 'SETTINGS', icon: Settings },
+    ];
+
+    return (
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-2 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]" id="patient-custom-bottom-nav">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = currentModule === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onNavigate(item.id)}
+              className={`flex-1 flex flex-col items-center justify-center h-full transition-all duration-150 relative ${
+                active ? 'text-[#0078D4]' : 'text-[#616161]'
+              }`}
+            >
+              <div className={`p-1 rounded-lg transition-colors flex items-center justify-center ${active ? 'bg-[#0078D4]/10 text-[#0078D4]' : 'text-slate-500'}`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <span className={`text-[9px] font-black tracking-tight mt-0.5 whitespace-nowrap ${active ? 'text-[#0078D4]' : 'text-slate-400'}`}>
+                {item.label}
+              </span>
+              {active && (
+                <div className="absolute top-0 left-4 right-4 h-0.5 bg-[#0078D4] rounded-full" />
+              )}
+            </button>
+          );
+        })}
+
+        <button
+          onClick={handleLogout}
+          className="flex-1 flex flex-col items-center justify-center h-full text-red-600 transition-all duration-150"
+        >
+          <div className="p-1 rounded-lg hover:bg-red-50 flex items-center justify-center">
+            <LogOut className="h-5 w-5 animate-pulse" />
+          </div>
+          <span className="text-[9px] font-black tracking-tight mt-0.5 uppercase">
+            LOGOUT
+          </span>
+        </button>
+      </nav>
+    );
+  }
+
+  const navItems = ALL_NAV_ITEMS.filter(item => 
+    !item.roles || (userProfile?.role && item.roles.includes(userProfile.role))
+  );
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-4 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">

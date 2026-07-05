@@ -52,7 +52,6 @@ import { subscribeToAuditLogs } from '../../services/auditService';
 import { VitalsCard } from '../clinical/VitalsCard';
 import { HealthConnectManager } from '../clinical/HealthConnectManager';
 import { ComposeMessageModal } from './ComposeMessageModal';
-import { PatientPortalDashboard } from './PatientPortalDashboard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(ts: any): string {
@@ -1589,7 +1588,7 @@ export function RoleDashboard({ onNavigateToPatient, onNavigate }: {
   );
 
   if (role === 'patient') {
-    return <PatientPortalDashboard />;
+    return <div className="p-6 text-center text-slate-500 font-medium">Please access the patient portal from the sidebar.</div>;
   }
 
   return (

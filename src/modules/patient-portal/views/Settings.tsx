@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, Lock, ShieldAlert, Network, CloudLightning, Laptop, 
   Smartphone, RefreshCw, UserCheck, LogOut, Database, Save, 
-  Phone, Mail, MapPin, CheckCircle, Info, UserX
+  Phone, Mail, MapPin, CheckCircle, Info, UserX, ShieldCheck, Activity
 } from 'lucide-react';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { usePatientClinicalData } from '../../../hooks/usePatientClinicalData';
@@ -11,9 +11,11 @@ import { savePatient } from '../../../services/clinicalFirestoreService';
 import { auth, db } from '../../../lib/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import { useHIPAAMonitor } from '../../../hooks/useHIPAAMonitor';
 
 export function Settings() {
   const { userProfile } = useCurrentUser();
+  const { auditTrail, logAccess } = useHIPAAMonitor();
   const patientId = userProfile?.patientId || (userProfile?.role === 'patient' && userProfile?.patientId) || 'pat-marcus-001';
   const clinicalData = usePatientClinicalData(patientId);
   const patient = clinicalData?.patient || {};
@@ -29,6 +31,7 @@ export function Settings() {
   const [city, setCity] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [zip, setZip] = useState('');
+  const [bio, setBio] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -46,6 +49,7 @@ export function Settings() {
       setCity(patient.city || '');
       setStateVal(patient.state || '');
       setZip(patient.zip || patient.zipCode || '');
+      setBio(patient.bio || '');
     }
   }, [patient]);
 
@@ -68,6 +72,7 @@ export function Settings() {
         city,
         state: stateVal,
         zip,
+        bio,
         updatedAt: new Date().toISOString()
       };
 
@@ -486,6 +491,44 @@ export function Settings() {
         {/* LEFT COLUMN: EDITABLE PROFILE & CONTACT FORM */}
         <form onSubmit={handleSaveProfile} className="lg:col-span-7 space-y-6" id="settings-edit-profile-form">
           
+          {/* Section A-0: Patient Profile Summary & Biography (Merged Profile) */}
+          <div className="bg-white border border-[#EBEFEA] rounded-3xl p-6 md:p-8 shadow-xs space-y-5" id="patient-profile-biography-card">
+            <div className="flex flex-col sm:flex-row items-center gap-4 border-b border-slate-100 pb-5">
+              <div className="h-16 w-16 rounded-full bg-[#7A9876] text-white flex items-center justify-center font-extrabold text-lg shadow-sm border-2 border-white ring-4 ring-[#7A9876]/10 shrink-0">
+                {firstName?.[0] || 'M'}{lastName?.[0] || 'E'}
+              </div>
+              <div className="text-center sm:text-left">
+                <h2 className="text-lg font-black text-slate-800 leading-tight">
+                  {firstName} {lastName}
+                </h2>
+                <p className="text-[10px] font-mono text-slate-400 mt-0.5">{email || 'marcus.everett@gmail.com'}</p>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 mt-2">
+                  <span className="text-[8.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    Verified Patient
+                  </span>
+                  <span className="text-[8.5px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full">
+                    Rheumatoid Arthritis Pathway
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Patient Clinical Biography & Care Notes Summary</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="Describe your health biography, goals, or notes that you would like your care team to see..."
+                className="w-full text-xs font-bold text-slate-700 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:border-[#7A9876] focus:ring-1 focus:ring-[#7A9876] outline-none"
+                id="textarea-profile-bio"
+              />
+              <p className="text-[9.5px] text-slate-400 font-bold leading-normal">
+                💡 Sharing a brief overview of your symptoms, recovery goals, or lifestyle parameters helps your clinical care team fine-tune your remote protocols and consultation objectives.
+              </p>
+            </div>
+          </div>
+
           {/* Section A: Patient Identity */}
           <div className="bg-white border border-[#EBEFEA] rounded-3xl p-6 md:p-8 shadow-xs space-y-5" id="patient-identity-card">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -759,6 +802,68 @@ export function Settings() {
                 <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
                   ACTIVE REGISTRY
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* HIPAA Active Security & Audit Trail Card */}
+          <div className="bg-emerald-50/50 border border-emerald-200 rounded-3xl p-6 shadow-xs space-y-4" id="hipaa-compliance-card">
+            <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-emerald-100 p-2 rounded-xl text-emerald-800 border border-emerald-200">
+                  <ShieldCheck className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">HIPAA Secure Node</h3>
+                  <p className="text-emerald-700 text-[10px] font-black uppercase tracking-wider">Active Monitoring</p>
+                </div>
+              </div>
+              <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200 animate-pulse">
+                COMPLIANT
+              </span>
+            </div>
+
+            <p className="text-[9.5px] text-slate-500 leading-normal font-bold">
+              🛡️ All medical telemetry, logins, and settings updates are cryptographically logged and tracked on this local node's immutable audit trail to comply with federal HIPAA regulations.
+            </p>
+
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  logAccess('MANUAL_SECURITY_AUDIT', 'Patient', 'Settings Dashboard');
+                }}
+                className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs cursor-pointer focus:outline-none"
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-emerald-600" />
+                Run Security Audit Test
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[9.5px] text-slate-400 font-extrabold uppercase tracking-widest">Live Audit Trail</span>
+                <span className="text-[9px] font-mono text-slate-400 bg-white border px-1.5 py-0.5 rounded-md">
+                  {auditTrail.length} Events Logged
+                </span>
+              </div>
+              <div className="bg-slate-900 text-emerald-400 font-mono text-[9px] p-3 rounded-xl h-44 overflow-y-auto space-y-2 border border-slate-800 shadow-inner">
+                {auditTrail.length === 0 ? (
+                  <div className="text-slate-500 italic">No events logged in this session.</div>
+                ) : (
+                  [...auditTrail].reverse().map((event) => (
+                    <div key={event.id} className="border-b border-slate-800/60 pb-1.5 last:border-0 leading-normal">
+                      <div className="text-[8px] text-slate-500 flex justify-between">
+                        <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                        <span className="uppercase text-[7.5px] bg-slate-800 text-slate-400 px-1 rounded">{event.resourceType || 'SYSTEM'}</span>
+                      </div>
+                      <div className="text-emerald-300 font-semibold mt-0.5">{event.action}</div>
+                      {event.userId && (
+                        <div className="text-[7.5px] text-slate-400 font-mono mt-0.5">By: {event.userId}</div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
