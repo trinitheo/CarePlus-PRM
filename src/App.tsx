@@ -24,11 +24,17 @@ import { savePatient, saveUserProfile } from './services/clinicalFirestoreServic
 import { ProfileEditor } from './components/ProfileEditor';
 import { PatientPortalRoot } from './modules/patient-portal/PatientPortalRoot';
 import { Settings } from './modules/patient-portal/views/Settings';
+import { WellnessClasses } from './modules/patient-portal/views/WellnessClasses';
+import { MyConsultations } from './modules/patient-portal/views/MyConsultations';
+import { usePatientClinicalData } from './hooks/usePatientClinicalData';
 
 export default function App() {
   const sizeClass = useWindowSizeClass();
   const { userProfile, loading, refreshProfile } = useCurrentUser();
   const [currentModule, setCurrentModule] = useState('dashboard');
+
+  const patientId = userProfile?.patientId || userProfile?.id || '';
+  const patientData = usePatientClinicalData(patientId);
 
   const [viewState, setViewState] = useState<{
     subView: 'explorer' | 'detail' | 'onboarding';
@@ -83,12 +89,14 @@ export default function App() {
                 <MessagesModule />
               </div>
             )}
-            {currentModule === 'health-record' && (
+            {currentModule === 'consultations' && (
               <div className="flex-1 min-h-0 overflow-auto h-full">
-                <ClinicalRecords 
-                  patientId={userProfile.patientId || userProfile.id || 'p-1'} 
-                  showBackButton={false} 
-                />
+                <MyConsultations patientData={patientData} />
+              </div>
+            )}
+            {currentModule === 'wellness' && (
+              <div className="flex-1 min-h-0 overflow-auto h-full">
+                <WellnessClasses />
               </div>
             )}
             {currentModule === 'profile' && (

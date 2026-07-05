@@ -153,7 +153,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         mrn: 'pat-marcus-001',
         id: 'pat-marcus-001',
         actionPlan: [],
-        activeNudge: null,
+        activeNudge: {
+          message: 'Decrypted biometrics verify optimal glucose at 104 mg/dL. Your 15-minute muscle contractions have stabilized post-meal blood sugar levels. Keep walking!'
+        },
         healthScore: computedDefault,
         medsDays,
         sleepHours,
@@ -181,7 +183,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       mrn: rawPatient.mrn || rawPatient.id || 'pat-marcus-001',
       id: rawPatient.id || 'pat-marcus-001',
       actionPlan: rawPatient.actionPlan || [],
-      activeNudge: rawPatient.activeNudge || null,
+      activeNudge: rawPatient.activeNudge || {
+        message: 'Decrypted biometrics verify optimal glucose at 104 mg/dL. Your 15-minute muscle contractions have stabilized post-meal blood sugar levels. Keep walking!'
+      },
       healthScore,
       medsDays,
       sleepHours,
@@ -680,13 +684,13 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       {/* Fluent 2 Breadcrumb & Segmented Page Navigation Controls */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 pb-4 bg-white/75 backdrop-blur-md sticky top-0 z-40">
         <div>
-          <div className="flex items-center gap-1 text-[11px] text-[#0078d4] font-bold uppercase tracking-wider font-mono">
-            <Smartphone className="h-3.5 w-3.5" />
-            <span>CarePlus Portal</span>
+          <div className="flex items-center gap-1.5 text-[10.5px] text-[#0078d4] font-bold uppercase tracking-wider font-sans">
+            <Smartphone className="h-3.5 w-3.5 text-[#0078d4] stroke-[2.5]" />
+            <span>CAREPLUS PORTAL</span>
             <span className="text-slate-300">/</span>
-            <span>{patient.name}</span>
+            <span className="text-[#0078d4]/90">{patient.name?.toUpperCase().replace(' ALAN ', ' ')}</span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 mt-0.5">Clinical Care Center</h1>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">Clinical Care Center</h1>
         </div>
 
         {/* Fluent 2 Pivot Segments Control */}
@@ -729,15 +733,15 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
           
           {/* TOP LEFT: VITAL FOCUS */}
-          <div className="lg:col-span-7 space-y-6">
+          <div className="lg:col-span-7 space-y-4">
             <Card className="border border-slate-100 shadow-xs bg-white rounded-2xl overflow-hidden">
               <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <CardTitle className="text-xs font-bold uppercase tracking-widest text-[#0078d4] flex items-center gap-1.5">
                     <Activity className="h-4 w-4 text-[#0078d4]" />
-                    Vital Focus
+                    VITAL FOCUS
                   </CardTitle>
-                  <CardDescription className="text-xs">
+                  <CardDescription className="text-xs text-slate-500 font-medium">
                     Configure, pin, and drag-order your live healthcare telemetry variables
                   </CardDescription>
                 </div>
@@ -747,14 +751,14 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                     size="xs"
                     variant="outline"
                     onClick={() => setShowConfigVitals(!showConfigVitals)}
-                    className="h-7 text-[10.5px] font-bold border-slate-200 hover:bg-slate-50 px-2 cursor-pointer"
+                    className="h-8 text-[11px] font-bold border-slate-200 hover:bg-slate-50 px-3 cursor-pointer rounded-lg text-slate-700"
                   >
                     Configure Pins
                   </Button>
                   <Button
                     size="xs"
                     onClick={() => setShowLogModal(true)}
-                    className="h-7 text-[10.5px] font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white px-2.5 cursor-pointer"
+                    className="h-8 text-[11px] font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white px-3 cursor-pointer rounded-lg"
                   >
                     + Log Vital
                   </Button>
@@ -783,26 +787,33 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 )}
 
                 {/* Live Pinned Vitals grid list */}
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {sortedVitals
                     .filter(v => pinnedVitals.includes(v.name))
                     .map((vital, index, arr) => {
                       const Icon = vital.icon;
+                      
+                      // Split number and units for custom design
+                      const parts = vital.value.split(' ');
+                      const numPart = parts[0] || '';
+                      const unitPart = parts.slice(1).join(' ');
+
                       return (
                         <div 
                           key={vital.name}
-                          className="flex items-center justify-between p-3.5 border border-slate-100 rounded-xl hover:shadow-xs transition-shadow bg-white font-sans group"
+                          className="flex items-center justify-between p-4 border border-slate-100/80 rounded-2xl bg-white hover:shadow-xs transition-all duration-200 font-sans group"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="p-2.5 bg-slate-50 text-slate-700 rounded-lg border border-slate-100 shrink-0">
-                              <Icon className="h-4.5 w-4.5 text-[#0078d4]" />
+                            <div className="w-11 h-11 bg-sky-50/55 text-[#0078d4] rounded-2xl border border-sky-100/50 flex items-center justify-center shrink-0">
+                              <Icon className="h-5 w-5 stroke-[2]" />
                             </div>
                             
                             <div className="min-w-0">
                               <h4 className="text-xs font-bold text-slate-500 leading-none">{vital.name}</h4>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-base font-bold font-mono text-slate-900 tracking-tight">{vital.value}</span>
-                                <span className={`text-[9.5px] font-bold font-mono px-1.5 py-0.25 rounded-md border ${vital.statusColor}`}>
+                                <span className="text-base font-extrabold font-sans text-slate-900 tracking-tight">{numPart}</span>
+                                {unitPart && <span className="text-[11px] font-bold text-slate-500 font-mono">{unitPart}</span>}
+                                <span className={`text-[9.5px] font-bold font-sans px-2 py-0.5 rounded-full border ${vital.statusColor}`}>
                                   {vital.status}
                                 </span>
                               </div>
@@ -813,7 +824,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                           <div className="flex items-center gap-4">
                             {/* Simple inline Sparkline SVG */}
                             <svg className="h-6 w-24 hidden sm:block overflow-visible" stroke={vital.colorHex} strokeWidth="2" fill="none">
-                              <path d={`M 0,${30 - vital.spark[0]/Math.max(...vital.spark)*20} L 24,${30 - vital.spark[1]/Math.max(...vital.spark)*20} L 48,${30 - vital.spark[2]/Math.max(...vital.spark)*20} L 72,${30 - vital.spark[3]/Math.max(...vital.spark)*20} L 96,${30 - vital.spark[4]/Math.max(...vital.spark)*20}`} />
+                              <path d={`M 0,${30 - vital.spark[0]/Math.max(...vital.spark)*20} L 24,${30 - vital.spark[1]/Math.max(...vital.spark)*20} L 48,${30 - vital.spark[2]/Math.max(...vital.spark)*20} L 72,${30 - vital.spark[3]/Math.max(...vital.spark)*20} L 96,${30 - vital.spark[4]/Math.max(...vital.spark)*20}`} strokeLinecap="round" strokeLinejoin="round" />
                               <circle cx="96" cy={30 - vital.spark[4]/Math.max(...vital.spark)*20} r="2.5" fill={vital.colorHex} />
                             </svg>
 
@@ -839,185 +850,193 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                       );
                     })}
                 </div>
-
-                {/* WEARABLE HEALTH DEVICE SYNCHRONIZATION HUB */}
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Smartphone className="h-4 w-4 text-[#0078d4]" />
-                      Wearable & App Sync Hub
-                    </h3>
-                    
-                    {/* Device selector */}
-                    <div className="flex border border-[#edebe9] bg-[#f3f2f1] p-0.5 rounded-md text-[10.5px]">
-                      <button
-                        onClick={() => setActiveDevice('apple')}
-                        className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                          activeDevice === 'apple' ? 'bg-white text-[#0078d4]' : 'text-slate-500'
-                        }`}
-                      >
-                        Apple HealthKit
-                      </button>
-                      <button
-                        onClick={() => setActiveDevice('android')}
-                        className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                          activeDevice === 'android' ? 'bg-white text-[#0078d4]' : 'text-slate-500'
-                        }`}
-                      >
-                        Android Connect
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                    Synchronize your physical telemetry database. Synchronizing imports real-time biometric loops directly from your smart sensors and dynamically updates your care indicators.
-                  </p>
-
-                  {syncProgress >= 0 ? (
-                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
-                      <div className="flex justify-between items-center text-xs font-bold">
-                        <span className="text-[#0078d4] animate-pulse flex items-center gap-1.5">
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          {syncStageText}
-                        </span>
-                        <span className="font-mono text-[#0078d4]">{syncProgress}%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-1 rounded-full overflow-hidden">
-                        <div className="bg-[#0078d4] h-full transition-all duration-300" style={{ width: `${syncProgress}%` }} />
-                      </div>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={triggerWearableSync}
-                      className="w-full h-9 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {activeDevice === 'apple' ? <Apple className="h-4 w-4 text-slate-900" /> : <Smartphone className="h-4 w-4 text-slate-900" />}
-                      Sync Biometric Sensors Now
-                    </Button>
-                  )}
-                </div>
-
               </CardContent>
             </Card>
+
+            {/* WEARABLE HEALTH DEVICE SYNCHRONIZATION BAR */}
+            <div className="pt-2">
+              {syncProgress >= 0 ? (
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-[#0078d4] animate-pulse flex items-center gap-1.5">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      {syncStageText}
+                    </span>
+                    <span className="font-mono text-[#0078d4]">{syncProgress}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 h-1 rounded-full overflow-hidden">
+                    <div className="bg-[#0078d4] h-full transition-all duration-300" style={{ width: `${syncProgress}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-1.5 bg-slate-50/50 border border-slate-100 rounded-2xl">
+                  <button
+                    onClick={triggerWearableSync}
+                    className="flex-1 h-11 bg-slate-50 hover:bg-slate-100 border-none text-slate-700 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer rounded-xl transition-all font-sans"
+                  >
+                    <Smartphone className="h-4.5 w-4.5 text-slate-800" />
+                    Sync Biometric Sensors Now
+                  </button>
+                  <div className="flex border border-slate-200/60 bg-white p-0.5 rounded-lg text-[10px] mr-1.5 shrink-0">
+                    <button
+                      onClick={() => setActiveDevice('apple')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        activeDevice === 'apple' ? 'bg-[#0078d4]/10 text-[#0078d4]' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      Apple HealthKit
+                    </button>
+                    <button
+                      onClick={() => setActiveDevice('android')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        activeDevice === 'android' ? 'bg-[#0078d4]/10 text-[#0078d4]' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      Android Connect
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* TOP RIGHT: HEALTH SCORE */}
           <div className="lg:col-span-5 space-y-6">
             <Card className="border border-slate-100 shadow-xs bg-white rounded-2xl overflow-hidden">
               <CardHeader className="pb-3 border-b border-slate-100">
-                <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <CardTitle className="text-xs font-bold uppercase tracking-widest text-[#0078d4] flex items-center gap-1.5">
                   <Award className="h-4 w-4 text-[#107c41]" />
-                  Health Score
+                  HEALTH SCORE
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs text-slate-500 font-medium">
                   A dynamic, telemetry-calculated index indicating current compliance and recovery
                 </CardDescription>
               </CardHeader>
               
-              <CardContent className="pt-6 space-y-6 flex flex-col items-center justify-center">
+              <CardContent className="pt-6 space-y-4">
                 
-                {/* Semi-circular circular progress indicator */}
-                <div className="relative flex items-center justify-center h-40 w-40">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    {/* Background Arc */}
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      stroke="#f3f2f1" 
-                      strokeWidth="8" 
-                      fill="none"
-                      strokeDasharray="251.2"
-                      strokeDashoffset="62.8" /* represents a 3/4 circle arc */
-                      strokeLinecap="round"
-                    />
-                    {/* Foreground Arc */}
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      stroke={calculatedHealthScore >= 80 ? '#107c41' : calculatedHealthScore >= 60 ? '#b25900' : '#a80000'}
-                      strokeWidth="8" 
-                      fill="none"
-                      strokeDasharray="251.2"
-                      strokeDashoffset={251.2 - (calculatedHealthScore / 100) * 188.4} /* maps to 3/4 circle arc */
-                      strokeLinecap="round"
-                      className="transition-all duration-700 ease-out"
-                    />
-                  </svg>
-                  <div className="absolute text-center">
-                    <div className="text-4xl font-extrabold font-mono text-slate-900 leading-none tracking-tight">
-                      {calculatedHealthScore}
-                    </div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Score Index</div>
-                  </div>
-                </div>
-
-                {/* Live Interactive Checklist to manipulate factors and save */}
-                <div className="w-full space-y-3 border-t border-slate-100 pt-4 font-sans text-xs">
-                  <h4 className="font-bold text-slate-700 uppercase text-[10px] tracking-wider mb-2">Today's Telemetry Factors Checklist:</h4>
+                {/* Split layout: Dial on left, Checklist on right */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center w-full">
                   
-                  <div 
-                    onClick={() => handleToggleAdherenceFactor('meds')}
-                    className="flex items-center justify-between p-2 rounded-lg border border-slate-50 hover:bg-slate-50 cursor-pointer select-none"
-                  >
-                    <span className="font-medium text-slate-600 flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${adherenceMeds ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
-                      Medications logged (+10 pts)
-                    </span>
-                    <Badge className={adherenceMeds ? 'bg-emerald-50 text-[#107c41]' : 'bg-slate-100 text-slate-500'}>
-                      {adherenceMeds ? 'Active' : 'Unchecked'}
-                    </Badge>
+                  {/* Left: Dial */}
+                  <div className="md:col-span-5 flex flex-col items-center justify-center shrink-0">
+                    <div className="relative flex items-center justify-center h-36 w-36">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        {/* Background Ring */}
+                        <circle 
+                          cx="50" 
+                          cy="50" 
+                          r="40" 
+                          stroke="#f3f2f1" 
+                          strokeWidth="8" 
+                          fill="none"
+                        />
+                        {/* Foreground Ring */}
+                        <circle 
+                          cx="50" 
+                          cy="50" 
+                          r="40" 
+                          stroke={calculatedHealthScore >= 80 ? '#107c41' : calculatedHealthScore >= 60 ? '#b25900' : '#a80000'}
+                          strokeWidth="8" 
+                          fill="none"
+                          strokeDasharray="251.2"
+                          strokeDashoffset={251.2 - (calculatedHealthScore / 100) * 251.2}
+                          strokeLinecap="round"
+                          className="transition-all duration-700 ease-out"
+                        />
+                      </svg>
+                      <div className="absolute text-center">
+                        <div className="text-4xl font-extrabold font-sans text-slate-900 leading-none tracking-tight">
+                          {calculatedHealthScore}
+                        </div>
+                        <div className="text-[8.5px] font-bold text-slate-400 uppercase tracking-widest mt-1">SCORE INDEX</div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div 
-                    onClick={() => handleToggleAdherenceFactor('steps')}
-                    className="flex items-center justify-between p-2 rounded-lg border border-slate-50 hover:bg-slate-50 cursor-pointer select-none"
-                  >
-                    <span className="font-medium text-slate-600 flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${adherenceSteps ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
-                      Daily steps goal met (+10 pts)
-                    </span>
-                    <Badge className={adherenceSteps ? 'bg-emerald-50 text-[#107c41]' : 'bg-slate-100 text-slate-500'}>
-                      {adherenceSteps ? 'Active' : 'Unchecked'}
-                    </Badge>
-                  </div>
+                  {/* Right: Checklist */}
+                  <div className="md:col-span-7 space-y-2">
+                    <h4 className="font-bold text-slate-500 uppercase text-[9.5px] tracking-widest mb-1">TODAY'S TELEMETRY FACTORS CHECKLIST:</h4>
+                    
+                    <div 
+                      onClick={() => handleToggleAdherenceFactor('meds')}
+                      className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100/70 bg-slate-50/20 hover:bg-slate-50 hover:border-slate-200/50 cursor-pointer select-none transition-all duration-150"
+                    >
+                      <span className="font-semibold text-slate-700 flex items-center gap-2 text-[11px] leading-tight">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${adherenceMeds ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
+                        <span>Medications logged (+10 pts)</span>
+                      </span>
+                      <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border leading-none shrink-0 ${
+                        adherenceMeds 
+                          ? 'bg-emerald-50 text-[#107c41] border-emerald-100/50' 
+                          : 'bg-slate-100 text-slate-400 border-slate-200/50'
+                      }`}>
+                        {adherenceMeds ? 'Active' : 'Unchecked'}
+                      </span>
+                    </div>
 
-                  <div 
-                    onClick={() => handleToggleAdherenceFactor('glucose')}
-                    className="flex items-center justify-between p-2 rounded-lg border border-slate-50 hover:bg-slate-50 cursor-pointer select-none"
-                  >
-                    <span className="font-medium text-slate-600 flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${adherenceGlucose ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
-                      Glycemic bounds target (+10 pts)
-                    </span>
-                    <Badge className={adherenceGlucose ? 'bg-emerald-50 text-[#107c41]' : 'bg-slate-100 text-slate-500'}>
-                      {adherenceGlucose ? 'Active' : 'Unchecked'}
-                    </Badge>
-                  </div>
+                    <div 
+                      onClick={() => handleToggleAdherenceFactor('steps')}
+                      className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100/70 bg-slate-50/20 hover:bg-slate-50 hover:border-slate-200/50 cursor-pointer select-none transition-all duration-150"
+                    >
+                      <span className="font-semibold text-slate-700 flex items-center gap-2 text-[11px] leading-tight">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${adherenceSteps ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
+                        <span>Daily steps goal met (+10 pts)</span>
+                      </span>
+                      <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border leading-none shrink-0 ${
+                        adherenceSteps 
+                          ? 'bg-emerald-50 text-[#107c41] border-emerald-100/50' 
+                          : 'bg-slate-100 text-slate-400 border-slate-200/50'
+                      }`}>
+                        {adherenceSteps ? 'Active' : 'Unchecked'}
+                      </span>
+                    </div>
 
-                  <div 
-                    onClick={() => handleToggleAdherenceFactor('sleep')}
-                    className="flex items-center justify-between p-2 rounded-lg border border-slate-50 hover:bg-slate-50 cursor-pointer select-none"
-                  >
-                    <span className="font-medium text-slate-600 flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${adherenceSleep ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
-                      7.5 hrs restorative sleep (+10 pts)
-                    </span>
-                    <Badge className={adherenceSleep ? 'bg-emerald-50 text-[#107c41]' : 'bg-slate-100 text-slate-500'}>
-                      {adherenceSleep ? 'Active' : 'Unchecked'}
-                    </Badge>
+                    <div 
+                      onClick={() => handleToggleAdherenceFactor('glucose')}
+                      className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100/70 bg-slate-50/20 hover:bg-slate-50 hover:border-slate-200/50 cursor-pointer select-none transition-all duration-150"
+                    >
+                      <span className="font-semibold text-slate-700 flex items-center gap-2 text-[11px] leading-tight">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${adherenceGlucose ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
+                        <span>Glycemic bounds target (+10 pts)</span>
+                      </span>
+                      <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border leading-none shrink-0 ${
+                        adherenceGlucose 
+                          ? 'bg-emerald-50 text-[#107c41] border-emerald-100/50' 
+                          : 'bg-slate-100 text-slate-400 border-slate-200/50'
+                      }`}>
+                        {adherenceGlucose ? 'Active' : 'Unchecked'}
+                      </span>
+                    </div>
+
+                    <div 
+                      onClick={() => handleToggleAdherenceFactor('sleep')}
+                      className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100/70 bg-slate-50/20 hover:bg-slate-50 hover:border-slate-200/50 cursor-pointer select-none transition-all duration-150"
+                    >
+                      <span className="font-semibold text-slate-700 flex items-center gap-2 text-[11px] leading-tight">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${adherenceSleep ? 'bg-[#107c41]' : 'bg-slate-300'}`} />
+                        <span>7.5 hrs restorative sleep (+10 pts)</span>
+                      </span>
+                      <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border leading-none shrink-0 ${
+                        adherenceSleep 
+                          ? 'bg-emerald-50 text-[#107c41] border-emerald-100/50' 
+                          : 'bg-slate-100 text-slate-400 border-slate-200/50'
+                      }`}>
+                        {adherenceSleep ? 'Active' : 'Unchecked'}
+                      </span>
+                    </div>
+
                   </div>
                 </div>
 
                 {/* JITAI SMART NUDGE BOX */}
                 {patient.activeNudge && (
-                  <div className="w-full p-4 bg-blue-50/50 border border-blue-100 rounded-xl mt-4 space-y-1.5 text-xs font-sans">
-                    <div className="font-bold text-[#0078d4] uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-                      Smart Nudge Active
+                  <div className="w-full p-4 bg-sky-50/45 border border-sky-100/50 rounded-2xl mt-4 space-y-1 text-xs font-sans">
+                    <div className="font-bold text-[#0078d4] uppercase tracking-widest text-[10px] flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-[#0078d4]" />
+                      SMART NUDGE ACTIVE
                     </div>
-                    <p className="text-slate-700 leading-relaxed font-medium">
+                    <p className="text-slate-700 leading-relaxed font-semibold">
                       "{patient.activeNudge.message}"
                     </p>
                   </div>

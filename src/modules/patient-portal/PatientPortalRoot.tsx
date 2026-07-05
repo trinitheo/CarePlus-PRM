@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { HealthBoard } from './views/HealthBoard';
-import { WellnessClasses } from './views/WellnessClasses';
-import { MyConsultations } from './views/MyConsultations';
 import Home2 from './views/Home2';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { useQueryModel } from '../../store/eventStore';
 
-type PortalView = 'board' | 'classes' | 'consultations' | 'home2';
+type PortalView = 'board' | 'home2';
 
 export function PatientPortalRoot() {
   const [activeTab, setActiveTab ] = useState<PortalView>('board');
@@ -34,18 +32,6 @@ export function PatientPortalRoot() {
           >
             Home 2
           </button>
-          <button 
-            onClick={() => setActiveTab('consultations')}
-            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'consultations' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            My Consultation Notes
-          </button>
-          <button 
-            onClick={() => setActiveTab('classes')}
-            className={`py-5 text-sm font-bold tracking-wide transition-colors border-b-4 cursor-pointer ${activeTab === 'classes' ? 'border-[#7A9876] text-slate-900 font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            Classes & Wellness
-          </button>
         </div>
       </div>
 
@@ -56,15 +42,13 @@ export function PatientPortalRoot() {
             patientData={patientData} 
             appointments={Object.values(appointments)} 
             onNavigateTab={(tab) => {
-              if (tab !== 'simulator') {
+              if (tab !== 'simulator' && (tab === 'board' || tab === 'home2')) {
                 setActiveTab(tab as PortalView);
               }
             }} 
           />
         )}
         {activeTab === 'home2' && <Home2 />}
-        {activeTab === 'consultations' && <MyConsultations patientData={patientData} />}
-        {activeTab === 'classes' && <WellnessClasses />}
       </div>
     </div>
   );
