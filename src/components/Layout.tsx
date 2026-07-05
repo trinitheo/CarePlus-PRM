@@ -142,39 +142,52 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
     ];
 
     return (
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#EDEBE9] px-2 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]" id="patient-custom-bottom-nav">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[76px] bg-[#E2ECF7]/95 backdrop-blur-md border-t border-[#D0DFEF] px-2 flex items-center justify-around z-50 shadow-[0_-8px_24px_rgba(15,108,189,0.06)]" id="patient-custom-bottom-nav">
         {items.map((item) => {
           const Icon = item.icon;
           const active = currentModule === item.id;
+          
+          let iconColor = 'text-slate-600';
+          let textColor = 'text-slate-500';
+          if (active) {
+            iconColor = 'text-[#0078D4]';
+            textColor = 'text-[#0078D4] font-black';
+          } else if (item.id === 'wellness') {
+            iconColor = 'text-purple-600';
+            textColor = 'text-slate-500 font-bold';
+          } else {
+            textColor = 'text-slate-500 font-bold';
+          }
+
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex-1 flex flex-col items-center justify-center h-full transition-all duration-150 relative ${
-                active ? 'text-[#0078D4]' : 'text-[#616161]'
-              }`}
+              className="flex-1 flex flex-col items-center justify-center h-full transition-all duration-200 relative group active:scale-95 cursor-pointer"
             >
-              <div className={`p-1 rounded-lg transition-colors flex items-center justify-center ${active ? 'bg-[#0078D4]/10 text-[#0078D4]' : 'text-slate-500'}`}>
-                <Icon className="h-5 w-5" />
+              {/* High-fidelity white card icon wrapper */}
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-xs border transition-all duration-300 ${
+                active 
+                  ? 'bg-white border-[#B9D7F5] shadow-sm scale-105' 
+                  : 'bg-white/70 border-white/50 hover:bg-white hover:shadow-xs'
+              }`}>
+                <Icon className={`h-5 w-5 ${iconColor}`} />
               </div>
-              <span className={`text-[9px] font-black tracking-tight mt-0.5 whitespace-nowrap ${active ? 'text-[#0078D4]' : 'text-slate-400'}`}>
+              <span className={`text-[8.5px] tracking-tight mt-1 text-center whitespace-nowrap leading-none ${textColor}`}>
                 {item.label}
               </span>
-              {active && (
-                <div className="absolute top-0 left-4 right-4 h-0.5 bg-[#0078D4] rounded-full" />
-              )}
             </button>
           );
         })}
 
         <button
           onClick={handleLogout}
-          className="flex-1 flex flex-col items-center justify-center h-full text-red-600 transition-all duration-150"
+          className="flex-1 flex flex-col items-center justify-center h-full transition-all duration-200 active:scale-95 cursor-pointer"
         >
-          <div className="p-1 rounded-lg hover:bg-red-50 flex items-center justify-center">
-            <LogOut className="h-5 w-5 animate-pulse" />
+          <div className="w-11 h-11 rounded-xl bg-white/70 border border-white/50 flex items-center justify-center shadow-xs hover:bg-white hover:shadow-xs">
+            <LogOut className="h-5 w-5 text-red-600" />
           </div>
-          <span className="text-[9px] font-black tracking-tight mt-0.5 uppercase">
+          <span className="text-[8.5px] tracking-tight mt-1 text-red-600 font-black leading-none">
             LOGOUT
           </span>
         </button>

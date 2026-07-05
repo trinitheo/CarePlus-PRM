@@ -686,41 +686,69 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   return (
     <div className="space-y-6 font-sans">
       
-      {/* Fluent 2 Breadcrumb & Segmented Page Navigation Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 pb-4 bg-white/75 backdrop-blur-md sticky top-0 z-40">
-        <div>
-          <div className="flex items-center gap-1.5 text-[10.5px] text-[#0078d4] font-bold uppercase tracking-wider font-sans">
+      {/* High-Fidelity Header & Segmented Tab Navigation Controls */}
+      <div className="flex flex-col gap-4 pb-4 bg-transparent border-b border-slate-200/40">
+        
+        {/* Row 1: Back Chevron & Two Stacked Tabs */}
+        <div className="flex items-center justify-between gap-2 pt-2">
+          {/* Back Chevron */}
+          <button className="p-2 -ml-2 text-slate-700 hover:text-slate-900 cursor-pointer transition-colors" title="Go Back">
+            <span className="text-2xl font-light select-none">⟨</span>
+          </button>
+
+          {/* Floating Pivot Tabs */}
+          <div className="flex items-center gap-4">
+            {/* At a Glance Tab */}
+            <button
+              onClick={() => setActiveSubPage(1)}
+              className={`transition-all duration-300 px-5 py-2.5 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer min-w-[105px] h-[58px] ${
+                activeSubPage === 1
+                  ? 'bg-white text-[#0078d4] font-black border border-slate-100 shadow-lg shadow-blue-900/5'
+                  : 'text-slate-400 hover:text-slate-600 font-bold'
+              }`}
+            >
+              <span className="text-[10px] uppercase font-black tracking-wider leading-tight">At a</span>
+              <span className="text-[12px] uppercase font-black tracking-wider leading-tight">Glance</span>
+            </button>
+
+            {/* Vital Focus Tab */}
+            <button
+              onClick={() => setActiveSubPage(2)}
+              className={`transition-all duration-300 px-5 py-2.5 rounded-2xl flex items-center gap-2 cursor-pointer h-[58px] ${
+                activeSubPage === 2
+                  ? 'bg-white text-[#0078d4] font-black border border-slate-100 shadow-lg shadow-blue-900/5'
+                  : 'text-slate-400 hover:text-[#0078d4] font-bold'
+              }`}
+            >
+              <Activity className="h-5 w-5 text-[#0078d4] shrink-0" />
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] uppercase font-black tracking-wider leading-tight">VITAL</span>
+                <span className="text-[12px] uppercase font-black tracking-wider leading-tight">FOCUS</span>
+              </div>
+            </button>
+          </div>
+
+          {/* Right spacer to balance back chevron */}
+          <div className="w-8" />
+        </div>
+
+        {/* Row 2: Breadcrumbs & App Title */}
+        <div className="mt-2 flex flex-col items-start px-1">
+          <div className="flex items-center gap-1.5 text-[10px] text-[#0078d4] font-black uppercase tracking-wider">
             <Smartphone className="h-3.5 w-3.5 text-[#0078d4] stroke-[2.5]" />
             <span>CAREPLUS PORTAL</span>
             <span className="text-slate-300">/</span>
             <span className="text-[#0078d4]/90">{patient.name?.toUpperCase().replace(' ALAN ', ' ')}</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-0.5">Clinical Care Center</h1>
-        </div>
-
-        {/* Fluent 2 Pivot Segments Control */}
-        <div className="flex bg-[#f3f2f1] p-1 rounded-xl border border-[#edebe9] shrink-0 font-sans shadow-2xs">
-          <button
-            onClick={() => setActiveSubPage(1)}
-            className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubPage === 1 
-                ? 'bg-white text-[#0078d4] shadow-xs font-black' 
-                : 'text-slate-500 hover:text-slate-900 hover:bg-[#edebe9]'
-            }`}
-          >
-            At a Glance
-          </button>
-          <button
-            onClick={() => setActiveSubPage(2)}
-            className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubPage === 2 
-                ? 'bg-white text-[#0078d4] shadow-xs font-black' 
-                : 'text-slate-500 hover:text-slate-900 hover:bg-[#edebe9]'
-            }`}
-          >
-            <Activity className="h-4 w-4 text-rose-500" />
-            VITAL FOCUS
-          </button>
+          
+          <div className="relative mt-2">
+            <h2 className="text-xs font-black text-slate-500 uppercase tracking-wider">My Health Board</h2>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 mt-1 leading-none">
+              Clinical Care Center
+            </h1>
+            {/* Cyan/Teal accent block line under title */}
+            <div className="absolute -bottom-1.5 left-0 w-24 h-1 bg-[#B2E6E6] rounded-full opacity-60" />
+          </div>
         </div>
       </div>
 
@@ -728,22 +756,35 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       {activeSubPage === 1 && (
         <div className="space-y-6 font-sans">
           
-          {/* Clinical Alert Banners */}
-          {outOfRangeVitals.length > 0 && (
-            <div className="space-y-3">
-              {outOfRangeVitals.map((ov) => (
-                <div key={ov.name} className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3 text-amber-900 shadow-3xs">
-                  <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
-                  <div>
-                    <h5 className="text-xs font-black uppercase tracking-wider">Clinical Telemetry Alert: {ov.name}</h5>
-                    <p className="text-[11px] font-bold mt-1 leading-normal">
-                      Your current reading is <span className="font-extrabold">{ov.value}</span> ({ov.status}). This deviates from your target baseline. Please perform your prescribed therapeutic walks, hydrate, or contact Dr. Gregory if symptoms persist.
-                    </p>
+          {/* Centered Top Health Score Dial */}
+          <div className="flex flex-col items-center justify-center py-4 bg-transparent">
+            <div className="w-full max-w-sm mx-auto flex flex-col items-center justify-center">
+              {/* HEALTH SCORE badge above the dial */}
+              <div className="mb-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#0078d4] bg-white border border-slate-100 shadow-2xs px-4 py-1.5 rounded-full">
+                  HEALTH SCORE
+                </span>
+              </div>
+
+              {/* The Outer 3D circular dial container */}
+              <div className="relative w-52 h-52 md:w-60 md:h-60 rounded-full bg-gradient-to-b from-[#EBF5FF] to-[#D5EAFF] flex items-center justify-center shadow-[0_16px_40px_rgba(15,108,189,0.14)] border border-white p-4 transition-all duration-300 hover:scale-[1.02]">
+                
+                {/* Middle Blue track with subtle border */}
+                <div className="w-full h-full rounded-full bg-gradient-to-tr from-[#DEEFFF] to-[#F3F9FF] flex items-center justify-center p-3 relative shadow-[inset_0_2px_8px_rgba(0,120,212,0.05)]">
+                  
+                  {/* Tiny bright green dot at the bottom right */}
+                  <div className="absolute bottom-8 right-8 md:bottom-9 md:right-9 w-3 h-3 rounded-full bg-[#107C41] border-2 border-white shadow-[0_0_8px_rgba(16,124,65,0.6)] z-20" />
+                  
+                  {/* Inner white solid circle */}
+                  <div className="w-32 h-32 md:w-38 md:h-38 rounded-full bg-white flex flex-col items-center justify-center shadow-[0_10px_25px_rgba(0,120,212,0.1)] relative border border-slate-50/50">
+                    <span className="text-5xl md:text-6xl font-black text-[#111C24] tracking-tighter select-none">
+                      {calculatedHealthScore}
+                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          )}
+          </div>
 
           {/* Upcoming Consultation Banner */}
           {nextAppointment && (
@@ -765,49 +806,8 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
           {/* Concentric Index & Checklist Grid */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-            {/* Concentric Health Score Dial Card */}
-            <Card className="md:col-span-6 border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 flex flex-col justify-between space-y-6">
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-widest text-[#0078d4] flex items-center gap-1.5">
-                  <Award className="h-4.5 w-4.5 text-[#0078d4]" />
-                  Therapeutic Health Index
-                </h3>
-                <p className="text-xs text-slate-500 font-medium mt-1">Concentric assessment of active biometric adherence factors.</p>
-              </div>
-
-              <div className="flex flex-col items-center justify-center py-4">
-                <div className="relative flex items-center justify-center h-40 w-40">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" stroke="#F1F5F9" strokeWidth="8" fill="none" />
-                    <circle 
-                      cx="50" cy="50" r="40" 
-                      stroke={calculatedHealthScore >= 80 ? '#107c41' : calculatedHealthScore >= 60 ? '#b25900' : '#a80000'} 
-                      strokeWidth="8" fill="none" 
-                      strokeDasharray="251.2" 
-                      strokeDashoffset={251.2 - (calculatedHealthScore / 100) * 251.2} 
-                      strokeLinecap="round" 
-                      className="transition-all duration-700 ease-out" 
-                    />
-                  </svg>
-                  <div className="absolute text-center">
-                    <div className="text-4xl font-black text-slate-900 leading-none tracking-tight">
-                      {calculatedHealthScore}
-                    </div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">SCORE INDEX</p>
-                  </div>
-                </div>
-                <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full mt-4 border ${
-                  calculatedHealthScore >= 80 
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
-                    : 'bg-amber-50 text-amber-800 border-amber-100'
-                }`}>
-                  {calculatedHealthScore >= 80 ? 'Optimal Baseline' : 'Action Required'}
-                </span>
-              </div>
-            </Card>
-
             {/* Today's Telemetry Factors Checklist */}
-            <Card className="md:col-span-6 border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 flex flex-col justify-between space-y-5">
+            <Card className="md:col-span-12 border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 flex flex-col justify-between space-y-5">
               <div>
                 <h3 className="text-xs font-black uppercase tracking-widest text-[#0078d4] flex items-center gap-1.5">
                   <ClipboardList className="h-4.5 w-4.5 text-[#0078d4]" />
@@ -913,67 +913,57 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             )}
           </Card>
 
-          {/* Care Pathway Milestone Status */}
-          <Card className="border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="bg-[#7A9876]/10 p-2 rounded-xl text-[#7A9876]">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Care Pathway Milestone Status</h4>
-                  <p className="text-[11px] text-slate-550 font-semibold mt-0.5">Interactive medical journey and recovery targets</p>
-                </div>
+          {/* Horizontal Ticker Reel for Clinical Telemetry Alerts at the Bottom */}
+          <style>{`
+            @keyframes ticker {
+              0% { transform: translate3d(0, 0, 0); }
+              100% { transform: translate3d(-33.3333%, 0, 0); }
+            }
+            .ticker-wrap {
+              overflow: hidden;
+              width: 100%;
+            }
+            .ticker-content {
+              display: inline-flex;
+              white-space: nowrap;
+              animation: ticker 40s linear infinite;
+            }
+            .ticker-content:hover {
+              animation-play-state: paused;
+            }
+          `}</style>
+          
+          <div className="fixed bottom-[76px] md:bottom-0 left-0 md:left-20 right-0 z-40 bg-[#0F1C2A]/95 text-white py-2.5 shadow-[0_-4px_24px_rgba(0,120,212,0.15)] border-t border-slate-800 backdrop-blur-md flex items-center overflow-hidden h-[38px] select-none font-sans">
+            <div className="ticker-wrap flex-1 flex items-center relative">
+              <div className="absolute left-0 top-0 bottom-0 px-3 bg-amber-600 flex items-center gap-1.5 z-50 text-[10px] font-black uppercase tracking-wider shadow-[4px_0_12px_rgba(217,119,6,0.3)] shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                <span>Telemetry Alerts</span>
               </div>
-              <span className="text-[9.5px] font-black uppercase tracking-wider bg-[#F1F6F2] text-[#3F5B42] border border-[#DEE8E0] px-3 py-1 rounded-full">
-                Active Phase
-              </span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#F8FAF7] border border-[#E8ECE7] rounded-2xl p-4">
-              <div className="space-y-1">
-                <h5 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
-                  <span>🌸 Milestone: "Flowering" Stage</span>
-                  <span className="text-xs font-mono text-slate-400 font-bold">(Weeks 6-8)</span>
-                </h5>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  Your biological immunomodulator saturation is entering its optimal adaptation stage. Learn more about your clinical roadmap.
-                </p>
+              
+              <div className="ticker-content flex gap-16 items-center pl-36">
+                {outOfRangeVitals.length > 0 ? (
+                  [...Array(3)].flatMap((_, idx) => (
+                    outOfRangeVitals.map((ov, itemIdx) => (
+                      <span key={`${ov.name}-${idx}-${itemIdx}`} className="text-[11px] font-black tracking-wide flex items-center gap-2">
+                        <span className="text-amber-400 font-extrabold">⚠️ ALERT:</span> 
+                        <span className="text-slate-200">{ov.name} is <span className="text-amber-300 underline font-black">{ov.value}</span> ({ov.status})</span>
+                        <span className="text-slate-400 font-medium">— Target deviation detected. Perform prescribed protocols or notify Dr. Gregory.</span>
+                        <span className="text-slate-600 ml-4">•</span>
+                      </span>
+                    ))
+                  ))
+                ) : (
+                  [...Array(3)].map((_, idx) => (
+                    <span key={`stable-${idx}`} className="text-[11px] font-black tracking-wide flex items-center gap-2">
+                      <span className="text-emerald-400 font-extrabold">💚 ALL METRICS STABLE:</span> 
+                      <span className="text-slate-200">Patient therapeutic index optimal • Metformin Dose compliance active • BP optimal • Glycemic target met</span>
+                      <span className="text-slate-600 ml-4">•</span>
+                    </span>
+                  ))
+                )}
               </div>
-              <button 
-                onClick={() => setShowFloweringMilestone(!showFloweringMilestone)}
-                className="text-xs font-black text-[#7A9876] hover:underline cursor-pointer shrink-0"
-              >
-                {showFloweringMilestone ? 'Hide Milestone Details' : 'Learn more'}
-              </button>
             </div>
-
-            <AnimatePresence>
-              {showFloweringMilestone && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden bg-[#7A9876]/5 rounded-2xl p-4 space-y-3 border border-[#7A9876]/15 text-xs text-slate-700 leading-relaxed font-semibold font-sans"
-                >
-                  <h6 className="text-[10px] font-black uppercase tracking-wider text-[#3F5B42] flex items-center gap-1.5">
-                    <Info className="h-4 w-4" />
-                    Clinical Roadmap & Biological Adaptations (Weeks 6-8)
-                  </h6>
-                  <p>
-                    During the <span className="font-extrabold text-slate-900">Flowering Phase</span>, your immune-mediated pathway achieves constant, balanced therapeutic concentrations of active biologic/immunomodulator inhibitors. 
-                  </p>
-                  <p>
-                    Statistical models indicate that consistent daily medication compliance of <span className="font-extrabold text-slate-900">&gt;95%</span> during this precise 14-day window reduces joint cartilage inflammation levels by up to <span className="font-extrabold text-emerald-700">40%</span>.
-                  </p>
-                  <div className="pt-2 border-t border-[#7A9876]/10 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500">
-                    <span>Next Pathway Stage: "Harvest" (Week 9+)</span>
-                    <span className="text-[#3F5B42]">Target Compliance Met</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Card>
+          </div>
 
         </div>
       )}
