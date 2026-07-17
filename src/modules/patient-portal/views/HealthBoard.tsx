@@ -325,7 +325,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   }, [vitals]);
 
   // Vitals configuration & pinning
-  const [pinnedVitals, setPinnedVitals] = useState<string[]>(['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation']);
+  const [pinnedVitals, setPinnedVitals] = useState<string[]>(['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation', 'Respiratory Rate', 'Sleep Log', 'Daily Steps', 'Body Temperature', 'Hydration Quotient']);
   const [showConfigVitals, setShowConfigVitals] = useState(false);
 
   const [waterGlasses, setWaterGlasses] = useState<number>(() => {
@@ -586,62 +586,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     }
   };
 
-  // Modal vital submission states
-  const [showLogModal, setShowLogModal] = useState(false);
+  // Sensor and sync states
   const [showSensorHubModal, setShowSensorHubModal] = useState(false);
-  const [newGlucoseInput, setNewGlucoseInput] = useState('104');
-  const [newBPInput, setNewBPInput] = useState('118/76');
-  const [newHRInput, setNewHRInput] = useState('72');
-  const [newStepsInput, setNewStepsInput] = useState('8420');
-  const [newSleepInput, setNewSleepInput] = useState('7.6');
-
-  const handleManualVitalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = {
-      patientId: patient.id,
-      authorId: 'uid-patient-manual',
-      source: 'patient_portal',
-      device: 'Manual Patient Entry',
-      timestamp: Date.now(),
-      bp: newBPInput,
-      hr: Number(newHRInput),
-      glucose: Number(newGlucoseInput),
-      steps: Number(newStepsInput),
-      sleep: Number(newSleepInput),
-      spo2: 98,
-      temp: 36.8,
-      rr: 16,
-      weight: 72.5,
-      height: 168.0,
-      bmi: 25.7,
-      pain: 0,
-      hydration: 92,
-      createdAt: { seconds: Math.floor(Date.now() / 1000) }
-    };
-
-    try {
-      await updatePatientVitals(patient.id, payload);
-      const recalculatedScore = computeHealthScore({
-        medsDays: patient.medsDays,
-        sleepHours: Number(newSleepInput),
-        dailySteps: Number(newStepsInput),
-        bloodGlucose: Number(newGlucoseInput),
-        aiGoalsCompleted: true,
-        willAttend: patient.willAttend
-      });
-      await updatePatientHealthScore(patient.id, recalculatedScore, {
-        medsDays: patient.medsDays,
-        sleepHours: Number(newSleepInput),
-        dailySteps: Number(newStepsInput),
-        bloodGlucose: Number(newGlucoseInput),
-        aiGoalsCompleted: true,
-        willAttend: patient.willAttend
-      }, 'manual');
-      setShowLogModal(false);
-    } catch (err) {
-      console.warn(err);
-    }
-  };
+  const [clinicSyncState, setClinicSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
 
   // Toggle Pinned status
   const handleTogglePin = (name: string) => {
@@ -1061,33 +1008,76 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           <div className="w-8" />
         </div>
 
-        {/* Row 2: Breadcrumbs & App Title */}
-        <div className="mt-2 flex flex-col items-start px-1">
-          <div className="flex items-center gap-1.5 text-[10px] text-[#0078d4] font-black uppercase tracking-wider">
-            <Smartphone className="h-3.5 w-3.5 text-[#0078d4] stroke-[2.5]" />
-            <span>CAREPLUS PORTAL</span>
-            <span className="text-slate-300">/</span>
-            <span className="text-[#0078d4]/90">{patient.name?.toUpperCase().replace(' ALAN ', ' ')}</span>
-          </div>
+        {/* Row 2: Hero Banner for Clinical Care Center */}
+        <div className="mt-4 relative overflow-hidden bg-gradient-to-r from-slate-900 via-[#0d2137] to-[#12283f] rounded-3xl p-6 md:p-8 text-white shadow-lg border border-slate-800">
+          {/* Subtle medical grid/plus pattern overlays or light circles in background */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-900/40 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#0078d4]/10 rounded-full blur-3xl pointer-events-none" />
           
-          <div className="relative mt-2">
-            <h2 className="text-xs font-black text-slate-500 uppercase tracking-wider">My Health Board</h2>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 mt-1 leading-none">
-              Clinical Care Center
-            </h1>
-            {/* Cyan/Teal accent block line under title */}
-            <div className="absolute -bottom-1.5 left-0 w-24 h-1 bg-[#B2E6E6] rounded-full opacity-60" />
-          </div>
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-3">
+              {/* Breadcrumb path */}
+              <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] text-sky-300 font-bold uppercase tracking-widest opacity-90">
+                <Smartphone className="h-3.5 w-3.5 text-sky-400 stroke-[2.5]" />
+                <span>CAREPLUS PORTAL</span>
+                <span className="text-sky-500/50">/</span>
+                <span className="text-white/90">{patient.name?.toUpperCase().replace(' ALAN ', ' ')}</span>
+              </div>
+              
+              <div className="space-y-1">
+                <h2 className="text-[10px] md:text-xs font-black text-sky-400 uppercase tracking-widest">My Health Board</h2>
+                <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-none">
+                  Clinical Care Center
+                </h1>
+              </div>
+              
+              <p className="text-xs md:text-[13px] text-slate-300 font-medium max-w-xl leading-relaxed">
+                Personalized medical command center syncing continuous wearables telemetry, diagnostic patient reports, and clinical treatment guidelines.
+              </p>
 
-          <div className="mt-5">
-            <Button
-              id="my-connected-accessories-btn"
-              onClick={() => setShowSensorHubModal(true)}
-              className="bg-sky-50 text-[#0078d4] hover:bg-sky-100 border border-sky-100 hover:border-sky-200 font-extrabold text-[11px] uppercase tracking-wider px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-3xs"
-            >
-              <Smartphone className="h-4 w-4 text-[#0078d4] shrink-0" />
-              <span>My Connected Accessories</span>
-            </Button>
+              <div className="pt-2 flex flex-wrap gap-2.5">
+                <Button
+                  id="my-connected-accessories-btn"
+                  onClick={() => setShowSensorHubModal(true)}
+                  className="bg-white/10 hover:bg-white/15 text-white border border-white/15 font-black text-[10px] md:text-[11px] uppercase tracking-wider px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+                >
+                  <Smartphone className="h-4 w-4 text-sky-400 shrink-0" />
+                  <span>My Connected Accessories</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Right side patient brief profile card */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4.5 space-y-3 shrink-0 min-w-[240px] md:max-w-xs backdrop-blur-xs">
+              <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-400 to-[#0078d4] text-white flex items-center justify-center font-black text-sm shadow-sm">
+                  {patient.name?.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-black uppercase text-sky-300 tracking-wider">Active Patient</h4>
+                  <p className="text-xs font-extrabold text-white">{patient.name}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[10px] font-bold text-slate-300">
+                <div>
+                  <span className="block text-slate-400 text-[8.5px] uppercase tracking-wider">ID / MRN</span>
+                  <span className="text-white font-mono text-[9.5px]">{patient.id?.substring(0, 11) || 'PAT-MARC-01'}</span>
+                </div>
+                <div>
+                  <span className="block text-slate-400 text-[8.5px] uppercase tracking-wider">DOB</span>
+                  <span className="text-white font-mono">1982-06-14</span>
+                </div>
+                <div>
+                  <span className="block text-slate-400 text-[8.5px] uppercase tracking-wider">Health Status</span>
+                  <span className="text-emerald-400 uppercase font-black tracking-wide">● Stable</span>
+                </div>
+                <div>
+                  <span className="block text-slate-400 text-[8.5px] uppercase tracking-wider">Care Circle</span>
+                  <span className="text-white font-semibold">Dr. Aequanimitas</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1376,13 +1366,6 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 >
                   Configure Pins
                 </Button>
-                <Button 
-                  size="xs" 
-                  onClick={() => setShowLogModal(true)}
-                  className="h-8 text-[11px] font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white px-3 rounded-lg"
-                >
-                  + Log Vital
-                </Button>
               </div>
             </div>
 
@@ -1393,7 +1376,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                   <button onClick={() => setShowConfigVitals(false)} className="text-xs text-slate-400 hover:text-slate-700 font-bold">✕</button>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation', 'Sleep Log', 'Daily Steps', 'Body Temperature', 'Hydration Quotient'].map((vt) => {
+                  {['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation', 'Respiratory Rate', 'Sleep Log', 'Daily Steps', 'Body Temperature', 'Hydration Quotient'].map((vt) => {
                     const isPinned = pinnedVitals.includes(vt);
                     return (
                       <button
@@ -1420,29 +1403,30 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {sortedVitals
                 .filter(v => pinnedVitals.includes(v.name))
-                .map((v, idx) => {
-                  const Icon = v.icon;
-                  const metricKey = nameToMetricMap[v.name];
+                .map((item, idx) => {
+                  const Icon = item.icon;
+                  const metricKey = nameToMetricMap[item.name];
+                  const activePinnedCount = sortedVitals.filter(v => pinnedVitals.includes(v.name)).length;
                   return (
                     <div 
-                      key={v.name} 
+                      key={item.name} 
                       onClick={() => {
                         if (metricKey) {
                           setTrendsChartMetric(metricKey);
                           setOpenTrendsModal(true);
                         }
                       }}
-                      className="bg-white border border-slate-100 rounded-2xl p-4.5 hover:border-slate-300 hover:shadow-sm transition-all space-y-3 relative overflow-hidden flex flex-col justify-between cursor-pointer group/card"
+                      className="bg-white border border-slate-100 rounded-3xl p-5 hover:border-slate-300 hover:shadow-md transition-all space-y-3 relative overflow-hidden flex flex-col justify-between cursor-pointer group/card h-full min-h-[175px]"
                     >
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <div className="p-2 rounded-xl bg-slate-50 text-slate-600 shrink-0 group-hover/card:bg-slate-100 transition-colors">
+                            <div className="p-2.5 rounded-2xl bg-slate-50 text-slate-600 shrink-0 group-hover/card:bg-slate-100 transition-colors">
                               <Icon className="h-4.5 w-4.5" />
                             </div>
                             <div>
-                              <h5 className="text-[10.5px] font-black uppercase tracking-wider text-slate-400 leading-none">{v.name}</h5>
-                              <p className="text-base font-extrabold text-slate-800 leading-none mt-1.5">{v.value}</p>
+                              <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none">{item.name}</h5>
+                              <p className="text-base font-extrabold text-slate-800 leading-none mt-1.5">{item.value}</p>
                             </div>
                           </div>
                           
@@ -1450,26 +1434,26 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                             <span className="text-[8.5px] text-[#0078d4] opacity-0 group-hover/card:opacity-100 transition-opacity font-bold uppercase tracking-wider flex items-center gap-0.5 mr-0.5">
                               Trends
                             </span>
-                            {v.metadata && (
+                            {item.metadata && (
                               <div className="relative group self-start" onClick={(e) => e.stopPropagation()}>
                                 <Info className="h-3.5 w-3.5 text-slate-300 hover:text-slate-500 transition-colors cursor-pointer" />
                                 <div className="absolute right-0 top-5 hidden group-hover:block bg-slate-900 text-white text-[10px] font-bold p-2.5 rounded-xl shadow-lg z-50 w-52 border border-slate-800 space-y-1">
                                   <div className="flex items-center justify-between border-b border-slate-800 pb-1 mb-1">
                                     <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider">Provenance Log</span>
                                     <span className={`text-[8px] font-black uppercase px-1 py-0.2 rounded-sm ${
-                                      v.metadata.sourceType === 'provider' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/30' : 'bg-sky-950 text-sky-300 border border-sky-800/30'
+                                      item.metadata.sourceType === 'provider' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/30' : 'bg-sky-950 text-sky-300 border border-sky-800/30'
                                     }`}>
-                                      {v.metadata.sourceType === 'provider' ? 'Clinical' : 'Wearable'}
+                                      {item.metadata.sourceType === 'provider' ? 'Clinical' : 'Wearable'}
                                     </span>
                                   </div>
                                   <div className="text-slate-200">
-                                    <span className="text-slate-400">Source:</span> {v.metadata.friendlySource}
+                                    <span className="text-slate-400">Source:</span> {item.metadata.friendlySource}
                                   </div>
                                   <div className="text-slate-200">
-                                    <span className="text-slate-400">Device:</span> {v.metadata.device}
+                                    <span className="text-slate-400">Device:</span> {item.metadata.device}
                                   </div>
                                   <div className="text-slate-300 text-[8.5px] pt-1">
-                                    {new Date(v.metadata.timestamp).toLocaleDateString(undefined, { 
+                                    {new Date(item.metadata.timestamp).toLocaleDateString(undefined, { 
                                       month: 'short', 
                                       day: 'numeric', 
                                       hour: '2-digit', 
@@ -1487,13 +1471,13 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                         <svg className="w-full h-full text-[#0078d4] opacity-80 group-hover/card:scale-y-110 transition-transform origin-bottom" viewBox="0 0 100 20" preserveAspectRatio="none">
                           <polyline
                             fill="none"
-                            stroke={v.colorHex || '#0078d4'}
+                            stroke={item.colorHex || '#0078d4'}
                             strokeWidth="2"
-                            points={v.spark.map((val: number, sidx: number) => {
-                              const max = Math.max(...v.spark);
-                              const min = Math.min(...v.spark);
+                            points={item.spark.map((val: number, sidx: number) => {
+                              const max = Math.max(...item.spark);
+                              const min = Math.min(...item.spark);
                               const range = max - min || 1;
-                              const x = (sidx / (v.spark.length - 1)) * 100;
+                              const x = (sidx / (item.spark.length - 1)) * 100;
                               const y = 18 - ((val - min) / range) * 16;
                               return `${x},${y}`;
                             }).join(' ')}
@@ -1502,14 +1486,14 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                       </div>
 
                       <div className="flex items-center justify-between text-[9px] font-bold border-t border-slate-50 pt-2">
-                        <span className={`px-2 py-0.5 rounded-full border ${v.statusColor}`}>
-                          {v.status}
+                        <span className={`px-2 py-0.5 rounded-full border ${item.statusColor}`}>
+                          {item.status}
                         </span>
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleMoveVital(v.name, 'up');
+                              handleMoveVital(item.name, 'up');
                             }}
                             disabled={idx === 0}
                             className="p-1 rounded hover:bg-slate-50 disabled:opacity-30 cursor-pointer text-slate-400 hover:text-slate-700"
@@ -1519,9 +1503,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleMoveVital(v.name, 'down');
+                              handleMoveVital(item.name, 'down');
                             }}
-                            disabled={idx === pinnedVitals.length - 1}
+                            disabled={idx === activePinnedCount - 1}
                             className="p-1 rounded hover:bg-slate-50 disabled:opacity-30 cursor-pointer text-slate-400 hover:text-slate-700"
                           >
                             ▼
@@ -1820,105 +1804,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
         </div>
       )}
-      {/* --- REUSABLE LOG VITAL MODAL DIALOG --- */}
-      {showLogModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans text-xs">
-          <motion.div 
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white border border-slate-100 rounded-2xl max-w-md w-full shadow-lg overflow-hidden"
-          >
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
-                <Stethoscope className="h-4.5 w-4.5 text-[#0078d4]" />
-                Log Daily Biometrics Telemetry
-              </h3>
-              <button 
-                onClick={() => setShowLogModal(false)}
-                className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
 
-            <form onSubmit={handleManualVitalSubmit} className="p-5 space-y-4 font-medium">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10.5px] text-slate-500 font-bold uppercase block">Fasting Blood Glucose (mg/dL)</label>
-                  <input
-                    type="number"
-                    value={newGlucoseInput}
-                    onChange={(e) => setNewGlucoseInput(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-lg font-mono text-slate-800 focus:ring-[#0078d4]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10.5px] text-slate-500 font-bold uppercase block">Blood Pressure (mmHg)</label>
-                  <input
-                    type="text"
-                    value={newBPInput}
-                    onChange={(e) => setNewBPInput(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-lg font-mono text-slate-800 focus:ring-[#0078d4]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10.5px] text-slate-500 font-bold uppercase block">Heart Rate (bpm)</label>
-                  <input
-                    type="number"
-                    value={newHRInput}
-                    onChange={(e) => setNewHRInput(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-lg font-mono text-slate-800 focus:ring-[#0078d4]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10.5px] text-slate-500 font-bold uppercase block">Daily Steps</label>
-                  <input
-                    type="number"
-                    value={newStepsInput}
-                    onChange={(e) => setNewStepsInput(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-lg font-mono text-slate-800 focus:ring-[#0078d4]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10.5px] text-slate-500 font-bold uppercase block">Sleep (hrs)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={newSleepInput}
-                    onChange={(e) => setNewSleepInput(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-lg font-mono text-slate-800 focus:ring-[#0078d4]"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100/50 text-[10.5px] text-slate-500 leading-normal flex gap-1.5 items-start mt-2">
-                <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                <span>Publishing metrics uploads telemetry directly to Firebase Cloud databases. All values undergo safety range boundary filters.</span>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowLogModal(false)}
-                  className="h-8 text-xs font-bold px-4 cursor-pointer"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  className="h-8 bg-[#0078d4] hover:bg-[#106ebe] text-white text-xs font-bold px-4 cursor-pointer"
-                >
-                  Publish Telemetry
-                </Button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
 
       {/* --- BIOMETRIC SENSOR INTEGRATION HUB MODAL --- */}
       {showSensorHubModal && (
