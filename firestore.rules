@@ -23,11 +23,15 @@ service cloud.firestore {
     }
 
     function getRole() {
-      return exists(/databases/$(database)/documents/roles/$(request.auth.uid)) 
-        ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role 
-        : (exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
-            ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role 
-            : 'none');
+      return (request.path.size() > 4 && request.path[3] == 'roles' && request.path[4] == request.auth.uid)
+        ? (resource != null ? resource.data.get('role', 'none') : (request.resource != null ? request.resource.data.get('role', 'none') : 'none'))
+        : (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) 
+            ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.get('role', 'none') 
+            : ((request.path.size() > 4 && request.path[3] == 'users' && request.path[4] == request.auth.uid)
+                ? (resource != null ? resource.data.get('role', 'none') : (request.resource != null ? request.resource.data.get('role', 'none') : 'none'))
+                : (exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+                    ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'none') 
+                    : 'none')));
     }
 
     function hasRole(role) {

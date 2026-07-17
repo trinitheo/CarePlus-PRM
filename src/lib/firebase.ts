@@ -32,7 +32,11 @@ console.log("Firebase Config Check:", firebaseConfig);
 // Initialize Firebase safely (prevents hot-reload crashes)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-const dbId = (firebaseConfig as any).firestoreDatabaseId || undefined;
+// Resolve the database ID robustly from possible field name variations
+let dbId: string | undefined = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId || undefined;
+if (dbId === 'default' || dbId === '') {
+  dbId = undefined;
+}
 
 let firestoreInstance: ReturnType<typeof initializeFirestore>;
 let authInstance: ReturnType<typeof getAuth>;

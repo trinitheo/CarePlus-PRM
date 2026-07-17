@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Lock,
   ArrowRight,
+  ChevronRight,
   Droplet,
   Gauge,
   Thermometer,
@@ -60,6 +61,58 @@ import {
   savePatient,
   createRefillRequest
 } from '../../../services/clinicalFirestoreService';
+
+
+const OxygenBubblesIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={props.className}
+    {...props}
+  >
+    {/* Large main bubble */}
+    <circle cx="10" cy="14" r="6" stroke="currentColor" fill="currentColor" fillOpacity="0.1" />
+    {/* Sheen on main bubble */}
+    <path d="M7 11a3.5 3.5 0 0 1 3.5-3.5" stroke="currentColor" strokeWidth="1" opacity="0.7" />
+    
+    {/* Medium bubble floating up-right */}
+    <circle cx="17.5" cy="7.5" r="3.5" stroke="currentColor" fill="currentColor" fillOpacity="0.05" />
+    <path d="M16 6a2 2 0 0 1 2-2" stroke="currentColor" strokeWidth="0.8" opacity="0.6" />
+
+    {/* Small bubble floating far-right */}
+    <circle cx="21" cy="14" r="1.5" stroke="currentColor" />
+
+    {/* O2 Text inside the main bubble */}
+    <text
+      x="10"
+      y="16.5"
+      textAnchor="middle"
+      fontSize="8px"
+      fontWeight="900"
+      fill="currentColor"
+      fontFamily="Inter, system-ui, sans-serif"
+      stroke="none"
+    >
+      O₂
+    </text>
+  </svg>
+);
+
+const nameToMetricMap: Record<string, 'glucose' | 'bp' | 'hr' | 'spo2' | 'rr' | 'sleep' | 'steps' | 'temp' | 'hydration'> = {
+  'Blood Glucose': 'glucose',
+  'Blood Pressure': 'bp',
+  'Heart Rate': 'hr',
+  'Oxygen Saturation': 'spo2',
+  'Respiratory Rate': 'rr',
+  'Sleep Log': 'sleep',
+  'Daily Steps': 'steps',
+  'Body Temperature': 'temp',
+  'Hydration Quotient': 'hydration',
+};
 
 interface HealthBoardProps {
   patientData?: {
@@ -132,7 +185,7 @@ const CONDITION_DESCRIPTIONS: Record<string, {
 
 export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab }: HealthBoardProps) {
   // Page Navigation State
-  const [activeSubPage, setActiveSubPage] = useState<1 | 2>(1);
+  const [activeSubPage, setActiveSubPage] = useState<1 | 2 | 3>(1);
   const [showFloweringMilestone, setShowFloweringMilestone] = useState(false);
 
   const rawPatient = patientData?.patient;
@@ -214,6 +267,63 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     })[0];
   }, [vitals]);
 
+  // Integrated Multi-Source Vital Data Merger
+  // Consolidates clinical-grade measurements from clinicians with continuous wearable telemetry
+  const mergedVitals = useMemo(() => {
+    // Sort all raw entries descending to scan the latest available inputs first
+    const sortedRaw = [...vitals].sort((a, b) => {
+      const timeA = a.timestamp || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0) || 0;
+      const timeB = b.timestamp || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) || 0;
+      return timeB - timeA;
+    });
+
+    const getLatestValue = (field: string, fallbackVal: any, defaultSource: 'clinical' | 'wearable') => {
+      for (const rec of sortedRaw) {
+        if (rec[field] !== undefined && rec[field] !== null && rec[field] !== '') {
+          // Verify positive values if it is a number
+          if (typeof rec[field] === 'number' && rec[field] <= 0) continue;
+          
+          let friendlySource = 'Provider Intake';
+          if (rec.source === 'apple_health') friendlySource = 'Apple HealthKit';
+          else if (rec.source === 'android_health_connect') friendlySource = 'Android Connect';
+          else if (rec.source === 'patient_portal') friendlySource = 'Patient Portal';
+          else if (rec.source === 'clinical') friendlySource = 'CarePlus Clinician';
+          else if (rec.device && rec.device.toLowerCase().includes('watch')) friendlySource = rec.device;
+          else if (rec.authorId === 'uid-wearable-sync') friendlySource = 'Wearable Sensor';
+
+          const isProvider = rec.source === 'clinical' || rec.source === 'clinical_intake' || (rec.authorId && rec.authorId.startsWith('user-'));
+
+          return {
+            value: rec[field],
+            sourceType: isProvider ? 'provider' : 'wearable',
+            friendlySource,
+            device: rec.device || (isProvider ? 'Clinical Assessment' : 'Biometric Sensor'),
+            timestamp: rec.timestamp || (rec.createdAt?.seconds ? rec.createdAt.seconds * 1000 : 0) || Date.now()
+          };
+        }
+      }
+      return {
+        value: fallbackVal,
+        sourceType: defaultSource,
+        friendlySource: defaultSource === 'clinical' ? 'CarePlus Clinician' : 'Wearable Sensor',
+        device: defaultSource === 'clinical' ? 'Clinical Assessment' : 'Biometric Sensor',
+        timestamp: Date.now()
+      };
+    };
+
+    return {
+      bp: getLatestValue('bp', '118/76', 'clinical'),
+      hr: getLatestValue('hr', 72, 'clinical'),
+      glucose: getLatestValue('glucose', 104, 'wearable'),
+      steps: getLatestValue('steps', 8420, 'wearable'),
+      sleep: getLatestValue('sleep', 7.6, 'wearable'),
+      spo2: getLatestValue('spo2', 98, 'clinical'),
+      temp: getLatestValue('temp', 36.8, 'clinical'),
+      hydration: getLatestValue('hydration', 92, 'wearable'),
+      rr: getLatestValue('rr', 16, 'clinical'),
+    };
+  }, [vitals]);
+
   // Vitals configuration & pinning
   const [pinnedVitals, setPinnedVitals] = useState<string[]>(['Blood Glucose', 'Blood Pressure', 'Heart Rate', 'Oxygen Saturation']);
   const [showConfigVitals, setShowConfigVitals] = useState(false);
@@ -247,8 +357,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   const [refillSuccessMessage, setRefillSuccessMessage] = useState<string | null>(null);
 
   // Dynamic Charting states (Page 2)
-  const [trendsChartMetric, setTrendsChartMetric] = useState<'glucose' | 'steps' | 'hr'>('glucose');
+  const [trendsChartMetric, setTrendsChartMetric] = useState<'glucose' | 'bp' | 'hr' | 'spo2' | 'rr' | 'sleep' | 'steps' | 'temp' | 'hydration'>('glucose');
   const [trendsDuration, setTrendsDuration] = useState<'3m' | '6m'>('3m');
+  const [openTrendsModal, setOpenTrendsModal] = useState(false);
 
   // Interactive Health Score compliance factors
   const [adherenceMeds, setAdherenceMeds] = useState(false);
@@ -477,6 +588,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
   // Modal vital submission states
   const [showLogModal, setShowLogModal] = useState(false);
+  const [showSensorHubModal, setShowSensorHubModal] = useState(false);
   const [newGlucoseInput, setNewGlucoseInput] = useState('104');
   const [newBPInput, setNewBPInput] = useState('118/76');
   const [newHRInput, setNewHRInput] = useState('72');
@@ -560,34 +672,148 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     setPinnedVitals(next);
   };
 
-  // Resolve Vitals and Sparklines (using simple mock visual arrays)
+  // Resolve Vitals and Sparklines (using integrated multi-source merged data)
   const sortedVitals = useMemo(() => {
     // Current Values
-    const bpVal = latestVitalRecord?.bp || '118/76';
-    const hrVal = latestVitalRecord?.hr || 72;
-    const glucoseVal = latestVitalRecord?.glucose || 104;
-    const stepsVal = latestVitalRecord?.steps || 8420;
-    const sleepVal = latestVitalRecord?.sleep || 7.6;
-    const spo2Val = latestVitalRecord?.spo2 || 98;
-    const tempVal = latestVitalRecord?.temp || 36.8;
-    const hydVal = latestVitalRecord?.hydration || 92;
+    const bpVal = mergedVitals.bp.value;
+    const hrVal = mergedVitals.hr.value;
+    const glucoseVal = mergedVitals.glucose.value;
+    const stepsVal = mergedVitals.steps.value;
+    const sleepVal = mergedVitals.sleep.value;
+    const spo2Val = mergedVitals.spo2.value;
+    const tempVal = mergedVitals.temp.value;
+    const hydVal = mergedVitals.hydration.value;
+    const rrVal = mergedVitals.rr.value;
+
+    // 1. Blood Pressure (BP)
+    let bpStatus = 'Normal';
+    let bpIsUrgent = false;
+    let bpStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    try {
+      const parts = bpVal.split('/');
+      const sys = Number(parts[0]);
+      const dia = Number(parts[1]);
+      if (sys >= 180 || dia >= 120) {
+        bpStatus = 'CRITICAL ALERT';
+        bpIsUrgent = true;
+        bpStatusColor = 'text-red-700 bg-red-50 border-red-200 animate-pulse font-black';
+      } else if (sys >= 140 || dia >= 90) {
+        bpStatus = 'Hypertension';
+        bpStatusColor = 'text-rose-700 bg-rose-50 border-rose-200 font-bold';
+      } else if (sys >= 130 || dia >= 80) {
+        bpStatus = 'Elevated';
+        bpStatusColor = 'text-amber-700 bg-amber-50 border-amber-200 font-bold';
+      } else {
+        bpStatus = 'Optimal';
+        bpStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+      }
+    } catch (e) {
+      console.warn("BP parsing error:", e);
+    }
+
+    // 2. Heart Rate (Pulse)
+    let hrStatus = 'Normal';
+    let hrIsUrgent = false;
+    let hrStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    if (hrVal < 40 || hrVal > 120) {
+      hrStatus = 'CRITICAL ALERT';
+      hrIsUrgent = true;
+      hrStatusColor = 'text-red-700 bg-red-50 border-red-200 animate-pulse font-black';
+    } else if (hrVal > 100) {
+      hrStatus = 'Tachycardia';
+      hrStatusColor = 'text-rose-700 bg-rose-50 border-rose-200 font-bold';
+    } else if (hrVal < 60) {
+      hrStatus = 'Bradycardia';
+      hrStatusColor = 'text-amber-700 bg-amber-50 border-amber-200 font-bold';
+    } else {
+      hrStatus = 'Resting Balance';
+      hrStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    }
+
+    // 3. Respiratory Rate
+    let rrStatus = 'Normal';
+    let rrIsUrgent = false;
+    let rrStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    if (rrVal < 10 || rrVal > 24) {
+      rrStatus = 'CRITICAL ALERT';
+      rrIsUrgent = true;
+      rrStatusColor = 'text-red-700 bg-red-50 border-red-200 animate-pulse font-black';
+    } else if (rrVal < 12 || rrVal > 20) {
+      rrStatus = 'Borderline';
+      rrStatusColor = 'text-amber-700 bg-amber-50 border-amber-200 font-bold';
+    } else {
+      rrStatus = 'Normal';
+      rrStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    }
+
+    // 4. Temperature
+    let tempStatus = 'Normal';
+    let tempIsUrgent = false;
+    let tempStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    if (tempVal >= 39.5 || tempVal < 35.0) {
+      tempStatus = 'CRITICAL ALERT';
+      tempIsUrgent = true;
+      tempStatusColor = 'text-red-700 bg-red-50 border-red-200 animate-pulse font-black';
+    } else if (tempVal >= 37.6 || tempVal < 36.5) {
+      tempStatus = 'Borderline';
+      tempStatusColor = 'text-amber-700 bg-amber-50 border-amber-200 font-bold';
+    } else {
+      tempStatus = 'Healthy Range';
+      tempStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    }
+
+    // 5. Oxygen Saturation (SpO2)
+    let spo2Status = 'Normal';
+    let spo2IsUrgent = false;
+    let spo2StatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    if (spo2Val <= 92) {
+      spo2Status = 'CRITICAL ALERT';
+      spo2IsUrgent = true;
+      spo2StatusColor = 'text-red-700 bg-red-50 border-red-200 animate-pulse font-black';
+    } else if (spo2Val <= 94) {
+      spo2Status = 'Caution (Low)';
+      spo2StatusColor = 'text-amber-700 bg-amber-50 border-amber-200 font-bold';
+    } else {
+      spo2Status = 'Normal Saturation';
+      spo2StatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    }
+
+    // 6. Blood Glucose
+    let glucoseStatus = 'Normal';
+    let glucoseIsUrgent = false;
+    let glucoseStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    if (glucoseVal < 60 || glucoseVal > 300) {
+      glucoseStatus = 'CRITICAL ALERT';
+      glucoseIsUrgent = true;
+      glucoseStatusColor = 'text-red-700 bg-red-50 border-red-200 animate-pulse font-black';
+    } else if (glucoseVal >= 140) {
+      glucoseStatus = 'Elevated';
+      glucoseStatusColor = 'text-rose-700 bg-rose-50 border-rose-200 font-bold';
+    } else if (glucoseVal >= 100) {
+      glucoseStatus = 'Borderline';
+      glucoseStatusColor = 'text-amber-700 bg-amber-50 border-amber-200 font-bold';
+    } else {
+      glucoseStatus = 'Optimal';
+      glucoseStatusColor = 'text-[#107c41] bg-emerald-50 border-emerald-200';
+    }
 
     const allVitals = [
-      { name: 'Blood Glucose', value: `${glucoseVal} mg/dL`, status: glucoseVal >= 140 ? 'Elevated' : glucoseVal >= 100 ? 'Borderline' : 'Optimal', statusColor: glucoseVal >= 140 ? 'text-[#a80000] bg-red-50 border-red-200' : glucoseVal >= 100 ? 'text-[#b25900] bg-amber-50 border-amber-200' : 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [92, 115, 108, 125, 104], colorHex: '#107c41', icon: Droplet },
-      { name: 'Blood Pressure', value: `${bpVal} mmHg`, status: 'Optimal', statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [116, 122, 118, 120, 118], colorHex: '#0078d4', icon: Gauge },
-      { name: 'Heart Rate', value: `${hrVal} bpm`, status: 'Resting Balance', statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [68, 74, 82, 69, 72], colorHex: '#a80000', icon: Heart },
-      { name: 'Oxygen Saturation', value: `${spo2Val}%`, status: 'Normal Saturation', statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [98, 99, 98, 97, 98], colorHex: '#008575', icon: Activity },
-      { name: 'Sleep Log', value: `${sleepVal} hrs`, status: 'Restful Window', statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [7.2, 8.1, 7.5, 6.9, 7.6], colorHex: '#5c2d91', icon: Moon },
-      { name: 'Daily Steps', value: `${stepsVal.toLocaleString()} steps`, status: stepsVal >= 8000 ? 'Target Met' : 'Active Progress', statusColor: stepsVal >= 8000 ? 'text-[#107c41] bg-emerald-50 border-emerald-200' : 'text-[#b25900] bg-amber-50 border-amber-200', spark: [6500, 8900, 7200, 9300, 8420], colorHex: '#107c41', icon: TrendingUp },
-      { name: 'Body Temperature', value: `${tempVal}°C`, status: 'Healthy Range', statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [36.6, 36.7, 36.9, 36.8, 36.8], colorHex: '#b25900', icon: Thermometer },
-      { name: 'Hydration Quotient', value: `${hydVal}%`, status: 'Optimally Hydrated', statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [88, 95, 90, 94, 92], colorHex: '#0078d4', icon: Droplet }
+      { name: 'Blood Glucose', value: `${glucoseVal} mg/dL`, status: glucoseStatus, isUrgent: glucoseIsUrgent, statusColor: glucoseStatusColor, spark: [92, 115, 108, 125, glucoseVal], colorHex: '#107c41', icon: Droplet, metadata: mergedVitals.glucose },
+      { name: 'Blood Pressure', value: `${bpVal} mmHg`, status: bpStatus, isUrgent: bpIsUrgent, statusColor: bpStatusColor, spark: [116, 122, 118, 120, 118], colorHex: '#0078d4', icon: Gauge, metadata: mergedVitals.bp },
+      { name: 'Heart Rate', value: `${hrVal} bpm`, status: hrStatus, isUrgent: hrIsUrgent, statusColor: hrStatusColor, spark: [68, 74, 82, 69, hrVal], colorHex: '#a80000', icon: Heart, metadata: mergedVitals.hr },
+      { name: 'Oxygen Saturation', value: `${spo2Val}%`, status: spo2Status, isUrgent: spo2IsUrgent, statusColor: spo2StatusColor, spark: [98, 99, 98, 97, spo2Val], colorHex: '#008575', icon: OxygenBubblesIcon, metadata: mergedVitals.spo2 },
+      { name: 'Respiratory Rate', value: `${rrVal} breaths/min`, status: rrStatus, isUrgent: rrIsUrgent, statusColor: rrStatusColor, spark: [14, 18, 15, 17, rrVal], colorHex: '#008575', icon: Activity, metadata: mergedVitals.rr },
+      { name: 'Sleep Log', value: `${sleepVal} hrs`, status: 'Restful Window', isUrgent: false, statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [7.2, 8.1, 7.5, 6.9, sleepVal], colorHex: '#5c2d91', icon: Moon, metadata: mergedVitals.sleep },
+      { name: 'Daily Steps', value: `${stepsVal.toLocaleString()} steps`, status: stepsVal >= 8000 ? 'Target Met' : 'Active Progress', isUrgent: false, statusColor: stepsVal >= 8000 ? 'text-[#107c41] bg-emerald-50 border-emerald-200' : 'text-[#b25900] bg-amber-50 border-amber-200', spark: [6500, 8900, 7200, 9300, stepsVal], colorHex: '#107c41', icon: TrendingUp, metadata: mergedVitals.steps },
+      { name: 'Body Temperature', value: `${tempVal}°C`, status: tempStatus, isUrgent: tempIsUrgent, statusColor: tempStatusColor, spark: [36.6, 36.7, 36.9, 36.8, tempVal], colorHex: '#b25900', icon: Thermometer, metadata: mergedVitals.temp },
+      { name: 'Hydration Quotient', value: `${hydVal}%`, status: 'Optimally Hydrated', isUrgent: false, statusColor: 'text-[#107c41] bg-emerald-50 border-emerald-200', spark: [88, 95, 90, 94, hydVal], colorHex: '#0078d4', icon: Droplet, metadata: mergedVitals.hydration }
     ];
 
     return allVitals;
-  }, [latestVitalRecord]);
+  }, [mergedVitals]);
 
   const outOfRangeVitals = useMemo(() => {
-    return sortedVitals.filter(v => v.status && !['Optimal', 'Stable', 'Normal', 'Remission'].includes(v.status));
+    return sortedVitals.filter(v => v.isUrgent || (v.status && !['Optimal', 'Stable', 'Normal', 'Remission', 'Healthy Range', 'Restful Window', 'Resting Balance', 'Optimally Hydrated', 'Target Met', 'Normal Saturation'].includes(v.status)));
   }, [sortedVitals]);
 
   // Appointments mapping helper
@@ -645,24 +871,90 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     if (trendsChartMetric === 'glucose') {
       return months.map((m, idx) => ({
         name: m,
-        Fasting: [95, 110, 104, 118, 99, 104][idx % 6],
-        PostMeal: [135, 148, 142, 155, 138, 140][idx % 6],
-        Target: 140
+        value: [110, 105, 98, 115, 102, 100][idx % 6],
       }));
     } else if (trendsChartMetric === 'steps') {
       return months.map((m, idx) => ({
         name: m,
-        Steps: [6400, 7800, 8420, 9100, 8300, 8420][idx % 6],
-        Goal: 8000
+        value: [7800, 8420, 8100, 9100, 8300, 8900][idx % 6],
       }));
-    } else {
+    } else if (trendsChartMetric === 'hr') {
       return months.map((m, idx) => ({
         name: m,
-        Resting: [64, 68, 72, 70, 66, 72][idx % 6],
-        Peak: [120, 135, 142, 130, 125, 132][idx % 6]
+        value: [72, 70, 68, 64, 66, 62][idx % 6],
+      }));
+    } else if (trendsChartMetric === 'bp') {
+      return months.map((m, idx) => ({
+        name: m,
+        systolic: [132, 128, 122, 135, 125, 118][idx % 6],
+        diastolic: [84, 82, 78, 88, 80, 75][idx % 6],
+      }));
+    } else if (trendsChartMetric === 'spo2') {
+      return months.map((m, idx) => ({
+        name: m,
+        value: [98, 97, 98, 99, 98, 99][idx % 6],
+      }));
+    } else if (trendsChartMetric === 'rr') {
+      return months.map((m, idx) => ({
+        name: m,
+        value: [15, 16, 14, 17, 15, 16][idx % 6],
+      }));
+    } else if (trendsChartMetric === 'sleep') {
+      return months.map((m, idx) => ({
+        name: m,
+        value: [7.1, 7.5, 7.8, 6.9, 7.2, 7.6][idx % 6],
+      }));
+    } else if (trendsChartMetric === 'temp') {
+      return months.map((m, idx) => ({
+        name: m,
+        value: [36.6, 36.7, 36.8, 36.5, 36.7, 36.8][idx % 6],
+      }));
+    } else if (trendsChartMetric === 'hydration') {
+      return months.map((m, idx) => ({
+        name: m,
+        value: [85, 90, 88, 92, 91, 94][idx % 6],
       }));
     }
+    return [];
   }, [trendsChartMetric, trendsDuration]);
+
+  const calculateTrend = (data: any[]) => {
+    if (!data || data.length < 2) return { percent: 0, direction: 'neutral' };
+    
+    let first, last;
+    if (trendsChartMetric === 'bp') {
+      first = data[0].systolic;
+      last = data[data.length - 1].systolic;
+    } else {
+      first = data[0].value;
+      last = data[data.length - 1].value;
+    }
+    
+    const percent = Math.round(((last - first) / first) * 100);
+    const direction = (trendsChartMetric === 'steps' || trendsChartMetric === 'bp') 
+      ? (last < first ? 'down' : 'up')
+      : (last < first ? 'down' : 'up');
+    
+    return { percent: Math.abs(percent), direction };
+  };
+
+  const trend = calculateTrend(chartData);
+
+  // Metric label helper
+  const metricLabel = {
+    glucose: 'Blood Glucose',
+    bp: 'Blood Pressure',
+    hr: 'Heart Rate',
+    spo2: 'Oxygen Saturation',
+    rr: 'Respiratory Rate',
+    sleep: 'Sleep Log',
+    steps: 'Daily Steps',
+    temp: 'Body Temperature',
+    hydration: 'Hydration Quotient'
+  }[trendsChartMetric];
+
+  const successDirection = ['glucose', 'hr', 'bp', 'rr', 'temp'].includes(trendsChartMetric) ? 'down' : 'up';
+  const isTrendGood = trend.direction === successDirection;
 
   // Conditions checklist state
   const [completedDirectives, setCompletedDirectives] = useState<Record<string, boolean>>(() => {
@@ -683,6 +975,19 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     localStorage.setItem('fluent_completed_directives', JSON.stringify(next));
   };
 
+  const metricColors: Record<string, { stroke: string; stopColor: string }> = {
+    glucose: { stroke: '#107c41', stopColor: '#107c41' },
+    bp: { stroke: '#0078d4', stopColor: '#0078d4' },
+    hr: { stroke: '#a80000', stopColor: '#a80000' },
+    spo2: { stroke: '#008575', stopColor: '#008575' },
+    rr: { stroke: '#008575', stopColor: '#008575' },
+    sleep: { stroke: '#5c2d91', stopColor: '#5c2d91' },
+    steps: { stroke: '#107c41', stopColor: '#107c41' },
+    temp: { stroke: '#b25900', stopColor: '#b25900' },
+    hydration: { stroke: '#0078d4', stopColor: '#0078d4' },
+  };
+  const activeColor = metricColors[trendsChartMetric] || { stroke: '#0078d4', stopColor: '#0078d4' };
+
   return (
     <div className="space-y-6 font-sans">
       
@@ -692,7 +997,15 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
         {/* Row 1: Back Chevron & Two Stacked Tabs */}
         <div className="flex items-center justify-between gap-2 pt-2">
           {/* Back Chevron */}
-          <button className="p-2 -ml-2 text-slate-700 hover:text-slate-900 cursor-pointer transition-colors" title="Go Back">
+          <button 
+            onClick={() => {
+              if (activeSubPage === 2 || activeSubPage === 3) {
+                setActiveSubPage(1);
+              }
+            }}
+            className="p-2 -ml-2 text-slate-700 hover:text-slate-900 cursor-pointer transition-colors" 
+            title="Go Back"
+          >
             <span className="text-2xl font-light select-none">⟨</span>
           </button>
 
@@ -726,6 +1039,22 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 <span className="text-[12px] uppercase font-black tracking-wider leading-tight">FOCUS</span>
               </div>
             </button>
+
+            {/* Medications Tab */}
+            <button
+              onClick={() => setActiveSubPage(3)}
+              className={`transition-all duration-300 px-5 py-2.5 rounded-2xl flex items-center gap-2 cursor-pointer h-[58px] ${
+                activeSubPage === 3
+                  ? 'bg-white text-[#0078d4] font-black border border-slate-100 shadow-lg shadow-blue-900/5'
+                  : 'text-slate-400 hover:text-[#0078d4] font-bold'
+              }`}
+            >
+              <Pill className="h-5 w-5 text-[#0078d4] shrink-0" />
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] uppercase font-black tracking-wider leading-tight">MY</span>
+                <span className="text-[12px] uppercase font-black tracking-wider leading-tight">MEDS</span>
+              </div>
+            </button>
           </div>
 
           {/* Right spacer to balance back chevron */}
@@ -748,6 +1077,17 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             </h1>
             {/* Cyan/Teal accent block line under title */}
             <div className="absolute -bottom-1.5 left-0 w-24 h-1 bg-[#B2E6E6] rounded-full opacity-60" />
+          </div>
+
+          <div className="mt-5">
+            <Button
+              id="my-connected-accessories-btn"
+              onClick={() => setShowSensorHubModal(true)}
+              className="bg-sky-50 text-[#0078d4] hover:bg-sky-100 border border-sky-100 hover:border-sky-200 font-extrabold text-[11px] uppercase tracking-wider px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-3xs"
+            >
+              <Smartphone className="h-4 w-4 text-[#0078d4] shrink-0" />
+              <span>My Connected Accessories</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -867,19 +1207,28 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           {/* Daily Medication Verification Log */}
           <Card className="border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="bg-amber-100 p-2 rounded-xl text-amber-700">
+              <button 
+                onClick={() => setActiveSubPage(3)}
+                className="flex items-center gap-2 text-left hover:opacity-80 transition-all cursor-pointer group"
+              >
+                <div className="bg-amber-100 p-2 rounded-xl text-amber-700 group-hover:bg-amber-200 transition-all">
                   <Pill className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Daily Medication Verification Log</h4>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1 group-hover:text-[#0078d4] transition-all">
+                    Daily Medication Verification Log
+                    <ChevronRight className="h-4.5 w-4.5 text-[#0078d4] stroke-[3]" />
+                  </h4>
                   <p className="text-[11px] text-slate-550 font-semibold mt-0.5">Maintain therapeutic blood plasma stability ranges</p>
                 </div>
-              </div>
-              <div className="text-right">
+              </button>
+              <button 
+                onClick={() => setActiveSubPage(3)}
+                className="text-right hover:opacity-80 transition-all cursor-pointer"
+              >
                 <span className="text-[10px] font-black text-slate-400 uppercase">Compliance Score</span>
                 <p className="text-lg font-extrabold text-[#107c41] leading-none">96%</p>
-              </div>
+              </button>
             </div>
 
             {!adherenceMeds ? (
@@ -911,6 +1260,18 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 </span>
               </div>
             )}
+
+            <div className="pt-2 border-t border-slate-50 flex justify-end">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setActiveSubPage(3)}
+                className="text-xs font-black text-[#0078d4] hover:text-[#005a9e] flex items-center gap-1 cursor-pointer"
+              >
+                Go to Medications Page
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           </Card>
 
           {/* Horizontal Ticker Reel for Clinical Telemetry Alerts at the Bottom */}
@@ -935,7 +1296,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           
           <div className="fixed bottom-[76px] md:bottom-0 left-0 md:left-20 right-0 z-40 bg-[#0F1C2A]/95 text-white py-2.5 shadow-[0_-4px_24px_rgba(0,120,212,0.15)] border-t border-slate-800 backdrop-blur-md flex items-center overflow-hidden h-[38px] select-none font-sans">
             <div className="ticker-wrap flex-1 flex items-center relative">
-              <div className="absolute left-0 top-0 bottom-0 px-3 bg-amber-600 flex items-center gap-1.5 z-50 text-[10px] font-black uppercase tracking-wider shadow-[4px_0_12px_rgba(217,119,6,0.3)] shrink-0">
+              <div className="absolute left-0 top-0 bottom-0 px-3 bg-red-600 flex items-center gap-1.5 z-50 text-[10px] font-black uppercase tracking-wider shadow-[4px_0_12px_rgba(220,38,38,0.3)] shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                 <span>Telemetry Alerts</span>
               </div>
@@ -943,14 +1304,45 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               <div className="ticker-content flex gap-16 items-center pl-36">
                 {outOfRangeVitals.length > 0 ? (
                   [...Array(3)].flatMap((_, idx) => (
-                    outOfRangeVitals.map((ov, itemIdx) => (
-                      <span key={`${ov.name}-${idx}-${itemIdx}`} className="text-[11px] font-black tracking-wide flex items-center gap-2">
-                        <span className="text-amber-400 font-extrabold">⚠️ ALERT:</span> 
-                        <span className="text-slate-200">{ov.name} is <span className="text-amber-300 underline font-black">{ov.value}</span> ({ov.status})</span>
-                        <span className="text-slate-400 font-medium">— Target deviation detected. Perform prescribed protocols or notify Dr. Gregory.</span>
-                        <span className="text-slate-600 ml-4">•</span>
-                      </span>
-                    ))
+                    outOfRangeVitals.map((ov, itemIdx) => {
+                      const getUrgentGuidance = (name: string) => {
+                        switch (name) {
+                          case 'Blood Pressure':
+                            return "BP threshold breached. Seek emergency care immediately if accompanied by chest pain, shortness of breath, severe headache, or vision changes.";
+                          case 'Heart Rate':
+                            return "Pulse rate threshold breached (<40 or >120 bpm at rest). Seek urgent clinical evaluation.";
+                          case 'Respiratory Rate':
+                            return "Respiration threshold breached. Seek immediate attention if difficulty breathing, gasping, or unable to speak full sentences.";
+                          case 'Body Temperature':
+                            return "Temperature anomaly. Seek immediate care if temperature is ≥39.5°C (103°F) or <35°C (95°F).";
+                          case 'Oxygen Saturation':
+                            return "Oxygen Saturation ≤ 92% is a critical indicator. Seek emergency medical attention immediately.";
+                          case 'Blood Glucose':
+                            return "Glucose out of bounds (<60 or >300 mg/dL). Risk of immediate hypoglycemia or DKA. Seek urgent care.";
+                          default:
+                            return "Target deviation detected. Follow emergency action protocols or notify your clinician.";
+                        }
+                      };
+
+                      return (
+                        <span key={`${ov.name}-${idx}-${itemIdx}`} className="text-[11px] font-black tracking-wide flex items-center gap-2">
+                          {ov.isUrgent ? (
+                            <>
+                              <span className="text-red-500 font-black animate-pulse bg-red-950/40 px-2 py-0.5 rounded border border-red-800">🚨 CRITICAL URGENT ALERT:</span> 
+                              <span className="text-red-100">{ov.name} is <span className="text-red-400 underline font-black">{ov.value}</span> ({ov.status})</span>
+                              <span className="text-red-300 font-medium">— {getUrgentGuidance(ov.name)}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-amber-400 font-extrabold">⚠️ ELEVATED ALERT:</span> 
+                              <span className="text-slate-200">{ov.name} is <span className="text-amber-300 underline font-black">{ov.value}</span> ({ov.status})</span>
+                              <span className="text-slate-400 font-medium">— Metric is outside optimal therapeutic ranges. Log trends and monitor.</span>
+                            </>
+                          )}
+                          <span className="text-slate-600 ml-4">•</span>
+                        </span>
+                      );
+                    })
                   ))
                 ) : (
                   [...Array(3)].map((_, idx) => (
@@ -972,72 +1364,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       {activeSubPage === 2 && (
         <div className="space-y-6 font-sans">
           
-          {/* Biometric Wearable Sensors Integration Hub */}
-          <Card className="border border-[#EBEFEA] shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-sky-50 p-2.5 rounded-xl text-sky-600">
-                  <Smartphone className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-850">Biometric Sensor Integration Hub</h4>
-                  <p className="text-[11px] text-slate-555 font-semibold mt-0.5">Synchronize telemetry from wearable hardware devices</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-755 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase shrink-0">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live Connected
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-[#FAFBF9] border border-[#E9ECE8] rounded-2xl p-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
-                    <Apple className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-black text-slate-800">Apple HealthKit</h5>
-                    <p className="text-[10px] text-slate-400 font-bold">Steps, Heart Rate, Spo2</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Synced</span>
-              </div>
-
-              <div className="bg-[#FAFBF9] border border-[#E9ECE8] rounded-2xl p-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0">
-                    <Activity className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-black text-slate-800">Android Connect</h5>
-                    <p className="text-[10px] text-slate-400 font-bold">Glucose, Sleep Logs</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-black text-emerald-600 uppercase">Synced</span>
-              </div>
-            </div>
-
-            <Button 
-              onClick={() => {
-                alert("Synchronizing live biometric telemetry from Apple HealthKit & Android Connect databases...");
-              }}
-              className="w-full h-11 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Sync Live Wearable Sensors & Recalculate Index
-            </Button>
-          </Card>
-
           {/* Dedicated Pinned Vitals List */}
           <Card className="border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
-              <div>
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-850">Pinned Biometric Vitals</h4>
-                <p className="text-[11px] text-slate-555 font-semibold mt-0.5">Drag-order or configure active telemetric monitoring channels</p>
-              </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 self-end sm:self-center">
                 <Button 
                   size="xs" 
@@ -1093,22 +1422,69 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 .filter(v => pinnedVitals.includes(v.name))
                 .map((v, idx) => {
                   const Icon = v.icon;
+                  const metricKey = nameToMetricMap[v.name];
                   return (
-                    <div key={v.name} className="bg-white border border-slate-100 rounded-2xl p-4.5 hover:border-slate-200 hover:shadow-xs transition-all space-y-3 relative overflow-hidden flex flex-col justify-between">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 rounded-xl bg-slate-50 text-slate-600 shrink-0">
-                            <Icon className="h-4.5 w-4.5" />
+                    <div 
+                      key={v.name} 
+                      onClick={() => {
+                        if (metricKey) {
+                          setTrendsChartMetric(metricKey);
+                          setOpenTrendsModal(true);
+                        }
+                      }}
+                      className="bg-white border border-slate-100 rounded-2xl p-4.5 hover:border-slate-300 hover:shadow-sm transition-all space-y-3 relative overflow-hidden flex flex-col justify-between cursor-pointer group/card"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 rounded-xl bg-slate-50 text-slate-600 shrink-0 group-hover/card:bg-slate-100 transition-colors">
+                              <Icon className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <h5 className="text-[10.5px] font-black uppercase tracking-wider text-slate-400 leading-none">{v.name}</h5>
+                              <p className="text-base font-extrabold text-slate-800 leading-none mt-1.5">{v.value}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h5 className="text-[10.5px] font-black uppercase tracking-wider text-slate-400 leading-none">{v.name}</h5>
-                            <p className="text-base font-extrabold text-slate-800 leading-none mt-1.5">{v.value}</p>
+                          
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[8.5px] text-[#0078d4] opacity-0 group-hover/card:opacity-100 transition-opacity font-bold uppercase tracking-wider flex items-center gap-0.5 mr-0.5">
+                              Trends
+                            </span>
+                            {v.metadata && (
+                              <div className="relative group self-start" onClick={(e) => e.stopPropagation()}>
+                                <Info className="h-3.5 w-3.5 text-slate-300 hover:text-slate-500 transition-colors cursor-pointer" />
+                                <div className="absolute right-0 top-5 hidden group-hover:block bg-slate-900 text-white text-[10px] font-bold p-2.5 rounded-xl shadow-lg z-50 w-52 border border-slate-800 space-y-1">
+                                  <div className="flex items-center justify-between border-b border-slate-800 pb-1 mb-1">
+                                    <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider">Provenance Log</span>
+                                    <span className={`text-[8px] font-black uppercase px-1 py-0.2 rounded-sm ${
+                                      v.metadata.sourceType === 'provider' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/30' : 'bg-sky-950 text-sky-300 border border-sky-800/30'
+                                    }`}>
+                                      {v.metadata.sourceType === 'provider' ? 'Clinical' : 'Wearable'}
+                                    </span>
+                                  </div>
+                                  <div className="text-slate-200">
+                                    <span className="text-slate-400">Source:</span> {v.metadata.friendlySource}
+                                  </div>
+                                  <div className="text-slate-200">
+                                    <span className="text-slate-400">Device:</span> {v.metadata.device}
+                                  </div>
+                                  <div className="text-slate-300 text-[8.5px] pt-1">
+                                    {new Date(v.metadata.timestamp).toLocaleDateString(undefined, { 
+                                      month: 'short', 
+                                      day: 'numeric', 
+                                      hour: '2-digit', 
+                                      minute: '2-digit' 
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
                       <div className="h-8 w-full flex items-end">
-                        <svg className="w-full h-full text-[#0078d4] opacity-80" viewBox="0 0 100 20" preserveAspectRatio="none">
+                        <svg className="w-full h-full text-[#0078d4] opacity-80 group-hover/card:scale-y-110 transition-transform origin-bottom" viewBox="0 0 100 20" preserveAspectRatio="none">
                           <polyline
                             fill="none"
                             stroke={v.colorHex || '#0078d4'}
@@ -1129,18 +1505,24 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                         <span className={`px-2 py-0.5 rounded-full border ${v.statusColor}`}>
                           {v.status}
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button 
-                            onClick={() => handleMoveVital(v.name, 'up')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveVital(v.name, 'up');
+                            }}
                             disabled={idx === 0}
-                            className="p-1 rounded hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
+                            className="p-1 rounded hover:bg-slate-50 disabled:opacity-30 cursor-pointer text-slate-400 hover:text-slate-700"
                           >
                             ▲
                           </button>
                           <button 
-                            onClick={() => handleMoveVital(v.name, 'down')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveVital(v.name, 'down');
+                            }}
                             disabled={idx === pinnedVitals.length - 1}
-                            className="p-1 rounded hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
+                            className="p-1 rounded hover:bg-slate-50 disabled:opacity-30 cursor-pointer text-slate-400 hover:text-slate-700"
                           >
                             ▼
                           </button>
@@ -1152,73 +1534,289 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
             </div>
           </Card>
 
-          {/* Interactive Trends & Adherence Analytics */}
-          <Card className="border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
-              <div>
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-850">Interactive Trends & Adherence Analytics</h4>
-                <p className="text-[11px] text-slate-555 font-semibold mt-0.5">Visualize biometric metrics and track adherence trajectories</p>
+        </div>
+      )}
+
+      {/* --- PAGE 3: MY MEDICATIONS & COMPLIANCE --- */}
+      {activeSubPage === 3 && (
+        <div className="space-y-6 font-sans">
+          
+          {/* Medications Hub Summary Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-3xs">
+              <span className="text-[10px] font-black uppercase text-slate-400">Active Prescriptions</span>
+              <p className="text-xl font-black text-slate-800 mt-1">
+                {prescriptions.filter((p: any) => p.status === 'active' || !p.status).length} Meds
+              </p>
+            </div>
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-3xs">
+              <span className="text-[10px] font-black uppercase text-slate-400">Adherence Level</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <p className="text-xl font-black text-emerald-600">96%</p>
+                <span className="text-[9px] font-bold text-slate-400">Therapeutic</span>
               </div>
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                  {['glucose', 'steps', 'hr'].map((mt) => (
-                    <button
-                      key={mt}
-                      onClick={() => setTrendsChartMetric(mt as any)}
-                      className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all cursor-pointer ${
-                        trendsChartMetric === mt ? 'bg-white text-slate-800 shadow-3xs' : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      {mt}
-                    </button>
-                  ))}
+            </div>
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-3xs">
+              <span className="text-[10px] font-black uppercase text-slate-400">Refill Requests Pending</span>
+              <p className="text-xl font-black text-amber-600 mt-1">
+                {submittingRefillId ? 1 : 0} Active
+              </p>
+            </div>
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-3xs">
+              <span className="text-[10px] font-black uppercase text-slate-400">Symptom Logs</span>
+              <p className="text-xl font-black text-sky-600 mt-1">
+                {diaryNotes.length} Logged
+              </p>
+            </div>
+          </div>
+
+          {refillSuccessMessage && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-emerald-50 border border-emerald-200 text-emerald-850 p-4 rounded-2xl text-xs font-semibold flex items-center gap-2"
+            >
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+              <span>{refillSuccessMessage}</span>
+            </motion.div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Left Column: Medications List (span-2) */}
+            <div className="lg:col-span-2 space-y-4">
+              <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-800">Current Prescribed Meds</h3>
+                    <p className="text-[10.5px] text-slate-400 font-bold">Review clinical instructions, refills remaining, and pill count counts</p>
+                  </div>
+                  <Badge className="bg-[#0078d4]/10 text-[#0078d4] hover:bg-[#0078d4]/15 border-none font-bold text-[10px] uppercase">
+                    Pharmacotherapy Portal
+                  </Badge>
                 </div>
-                <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                  {['3m', '6m'].map((dr) => (
-                    <button
-                      key={dr}
-                      onClick={() => setTrendsDuration(dr as any)}
-                      className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all cursor-pointer ${
-                        trendsDuration === dr ? 'bg-white text-slate-800 shadow-3xs' : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      {dr}
-                    </button>
-                  ))}
+
+                <div className="space-y-4 divide-y divide-slate-100">
+                  {prescriptions.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 font-medium">
+                      No medications are currently logged or prescribed.
+                    </div>
+                  ) : (
+                    prescriptions.map((med: any, idx: number) => {
+                      const isActive = med.status === 'active' || !med.status;
+                      const needRefill = med.refills === 0;
+                      const isRequesting = submittingRefillId === med.id;
+
+                      return (
+                        <div key={med.id || idx} className={`pt-4 ${idx === 0 ? 'pt-0' : ''} space-y-3`}>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`p-2 rounded-xl shrink-0 ${isActive ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-400'}`}>
+                                <Pill className="h-4.5 w-4.5" />
+                              </div>
+                              <div>
+                                <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                                  {med.medicationName}
+                                  <span className="text-xs font-semibold text-slate-500">({med.dosage})</span>
+                                </h4>
+                                <p className="text-[11px] text-[#0078d4] font-black uppercase tracking-wide mt-0.5">
+                                  {med.frequency} • {med.route}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isActive ? (
+                                <span className="text-[9px] font-black uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                  Active Course
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">
+                                  Completed/Inactive
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Sig instructions box */}
+                          <div className="bg-slate-50/70 border border-slate-100 p-3 rounded-xl text-[11px] text-slate-600 leading-relaxed font-semibold">
+                            <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Dosing Instructions (Sig):</span>
+                            {med.sig || 'Take exactly as prescribed by your medical professional.'}
+                          </div>
+
+                          {/* Countdown Refills & Last Count Details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div className="bg-slate-50/50 border border-slate-100 p-2.5 rounded-xl flex items-center justify-between text-[11px]">
+                              <span className="text-slate-500 font-bold">Refills Available:</span>
+                              <span className={`font-black ${needRefill ? 'text-rose-600' : 'text-slate-800'}`}>
+                                {med.refills} left
+                              </span>
+                            </div>
+                            <div className="bg-slate-50/50 border border-slate-100 p-2.5 rounded-xl flex items-center justify-between text-[11px]">
+                              <span className="text-slate-500 font-bold">Pill Count / Days Left:</span>
+                              <span className="font-black text-slate-800">
+                                {isActive ? (needRefill ? '14 pills remaining (7 days left)' : '56 pills remaining (28 days left)') : '0 pills remaining'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Refill Action Bar */}
+                          {isActive && (
+                            <div className="flex items-center justify-between gap-3 pt-2">
+                              {needRefill ? (
+                                <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1">
+                                  <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                                  <span>Prescription depleted. Urgent refill request required.</span>
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                  <span>Sufficient supply active. Next count scheduled.</span>
+                                </div>
+                              )}
+
+                              <Button
+                                size="xs"
+                                disabled={isRequesting}
+                                onClick={() => handleTriggerRefill(med.id || 'rx-custom', med.medicationName)}
+                                className={`h-8 font-black text-[10.5px] uppercase px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                                  needRefill 
+                                    ? 'bg-rose-600 hover:bg-rose-750 text-white animate-pulse' 
+                                    : 'bg-slate-900 hover:bg-slate-800 text-white'
+                                }`}
+                              >
+                                {isRequesting ? (
+                                  <>
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                    <span>Transmitting...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="h-3 w-3" />
+                                    <span>Request Refill</span>
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-              </div>
+              </Card>
             </div>
 
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0078d4" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#0078d4" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f2f1" />
-                  <XAxis dataKey="name" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 12, border: '1px solid #edebe9' }} />
-                  {trendsChartMetric === 'glucose' ? (
-                    <>
-                      <Area type="monotone" dataKey="Fasting" stroke="#107c41" fillOpacity={1} fill="url(#colorMetric)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="PostMeal" stroke="#0078d4" fillOpacity={1} fill="url(#colorMetric)" strokeWidth={2} />
-                    </>
-                  ) : trendsChartMetric === 'steps' ? (
-                    <Area type="monotone" dataKey="Steps" stroke="#008575" fillOpacity={1} fill="url(#colorMetric)" strokeWidth={2} />
-                  ) : (
-                    <>
-                      <Area type="monotone" dataKey="Resting" stroke="#a80000" fillOpacity={1} fill="url(#colorMetric)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="Peak" stroke="#b25900" fillOpacity={1} fill="url(#colorMetric)" strokeWidth={2} />
-                    </>
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
+            {/* Right Column: Compliance & Symptom Logs (span-1) */}
+            <div className="space-y-6">
+              
+              {/* Compliance checklist */}
+              <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Compliance Log</h4>
+                  <span className="text-[10px] font-black text-[#107c41] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">96% Status</span>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    Verify today's prescribed medication intake to maintain therapeutic blood stability and logging metrics:
+                  </p>
+
+                  <div className="space-y-2">
+                    <div 
+                      onClick={() => handleToggleAdherenceFactor('meds')}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/40 hover:bg-slate-50 cursor-pointer transition-all"
+                    >
+                      <span className="font-bold text-slate-700 flex items-center gap-2 text-xs leading-none">
+                        <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${adherenceMeds ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                        <span>Morning Dose Intake</span>
+                      </span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                        adherenceMeds ? 'bg-emerald-50 text-emerald-800 border-emerald-150' : 'bg-slate-100 text-slate-400 border-slate-200'
+                      }`}>{adherenceMeds ? 'Taken' : 'Log'}</span>
+                    </div>
+
+                    <div 
+                      onClick={() => {
+                        alert("Intake status saved successfully. Compliance statistics re-indexed.");
+                      }}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/40 hover:bg-slate-50 cursor-pointer transition-all"
+                    >
+                      <span className="font-bold text-slate-700 flex items-center gap-2 text-xs leading-none">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-300" />
+                        <span>Evening Dose Intake</span>
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md border bg-slate-100 text-slate-400 border-slate-200">Pending</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Persona Symptom Notes */}
+              <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Persona Symptom Notes</h4>
+                  <Badge className="bg-[#0078d4]/5 text-[#0078d4] border-none font-bold text-[9px] uppercase">
+                    Patient Diary
+                  </Badge>
+                </div>
+
+                <div className="space-y-3 font-medium">
+                  <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    Log any symptoms, secondary reactions, or personal responses for your next medical consultation review:
+                  </p>
+
+                  <div className="space-y-2">
+                    <textarea
+                      value={newDiaryNote}
+                      onChange={(e) => setNewDiaryNote(e.target.value)}
+                      placeholder="e.g., Slight finger joint morning stiffness, resolved in 30 mins. Mild nausea after Metformin dose."
+                      className="w-full h-20 p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-1 focus:ring-[#0078d4] focus:border-transparent font-medium text-slate-800 leading-normal"
+                    />
+
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDiaryEntry}
+                      disabled={!newDiaryNote.trim()}
+                      className="w-full bg-[#0078d4] hover:bg-[#106ebe] text-white font-black text-xs h-9 rounded-xl flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Symptom Entry
+                    </Button>
+                  </div>
+
+                  {/* Log history list */}
+                  <div className="space-y-2 pt-2 border-t border-slate-50">
+                    <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Recent Logged Notes:</span>
+                    <div className="max-h-56 overflow-y-auto space-y-2.5 pr-1">
+                      {diaryNotes.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic text-center py-4">No symptom notes logged yet.</p>
+                      ) : (
+                        diaryNotes.map((note) => (
+                          <div key={note.id} className="bg-slate-50/70 border border-slate-100/70 p-3 rounded-xl space-y-1.5 relative group">
+                            <button
+                              onClick={() => handleDeleteDiaryEntry(note.id)}
+                              className="absolute top-2.5 right-2.5 text-slate-350 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer opacity-0 group-hover:opacity-100"
+                              title="Delete log"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="text-[9px] font-black text-slate-400 block">
+                              {note.time}
+                            </span>
+                            <p className="text-xs text-slate-700 font-semibold leading-relaxed pr-6">
+                              {note.text}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
             </div>
-          </Card>
+
+          </div>
 
         </div>
       )}
@@ -1318,6 +1916,260 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 </Button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* --- BIOMETRIC SENSOR INTEGRATION HUB MODAL --- */}
+      {showSensorHubModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans text-xs">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white border border-slate-100 rounded-3xl max-w-lg w-full shadow-lg overflow-hidden"
+          >
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-sky-50 p-2.5 rounded-xl text-sky-600">
+                  <Smartphone className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">
+                    Biometric Sensor Integration Hub
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Synchronize telemetry from wearable hardware devices</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSensorHubModal(false)}
+                className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-800 cursor-pointer text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 font-bold">Connection Status:</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-755 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Connected
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-[#FAFBF9] border border-[#E9ECE8] rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
+                      <Apple className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-black text-slate-800">Apple HealthKit</h5>
+                      <p className="text-[10px] text-slate-400 font-bold">Steps, Heart Rate, Spo2</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black text-emerald-600 uppercase">Synced</span>
+                </div>
+
+                <div className="bg-[#FAFBF9] border border-[#E9ECE8] rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0">
+                      <Activity className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-black text-slate-800">Android Connect</h5>
+                      <p className="text-[10px] text-slate-400 font-bold">Glucose, Sleep Logs</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black text-emerald-600 uppercase">Synced</span>
+                </div>
+              </div>
+
+              <Button 
+                onClick={() => {
+                  alert("Synchronizing live biometric telemetry from Apple HealthKit & Android Connect databases...");
+                }}
+                className="w-full h-11 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Sync Live Wearable Sensors & Recalculate Index
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* --- TRENDS DETAIL ANALYSIS MODAL --- */}
+      {openTrendsModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans text-xs">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white border border-slate-100 rounded-3xl max-w-2xl w-full shadow-lg overflow-hidden flex flex-col"
+          >
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-sky-50 p-2.5 rounded-xl text-[#0078d4]">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">
+                    Biometric Trends
+                  </h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => setOpenTrendsModal(false)}
+                className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-800 cursor-pointer text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[80vh]">
+              {/* Metric Buttons & Durations */}
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Select Biometric Focus Channel</span>
+                  <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                    {[
+                      { id: 'glucose', label: 'Glucose' },
+                      { id: 'bp', label: 'BP' },
+                      { id: 'hr', label: 'HR' },
+                      { id: 'spo2', label: 'SPO₂' },
+                      { id: 'rr', label: 'RR' },
+                      { id: 'sleep', label: 'Sleep' },
+                      { id: 'steps', label: 'Steps' },
+                      { id: 'temp', label: 'Temp' },
+                      { id: 'hydration', label: 'Hydration' }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setTrendsChartMetric(item.id as any)}
+                        className={`px-2.5 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all cursor-pointer ${
+                          trendsChartMetric === item.id 
+                            ? 'bg-white text-slate-800 shadow-3xs border-slate-200 border' 
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-50 pt-3">
+                  <div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Selected Channel</span>
+                    <h5 className="text-sm font-extrabold text-slate-850 uppercase mt-0.5">{metricLabel}</h5>
+                  </div>
+                  <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    {['3m', '6m'].map((dr) => (
+                      <button
+                        key={dr}
+                        onClick={() => setTrendsDuration(dr as any)}
+                        className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all cursor-pointer ${
+                          trendsDuration === dr ? 'bg-white text-slate-800 shadow-3xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {dr}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Trajectory details */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Trend Trajectory:</span>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
+                    isTrendGood 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                      : 'bg-rose-50 text-rose-700 border-rose-100'
+                  }`}>
+                    {trend.direction === 'up' ? '▲' : '▼'} {trend.percent}% {trend.direction} 
+                    <span className="text-[9px] font-normal font-sans opacity-75 ml-1">
+                      ({isTrendGood ? 'Optimal Improvement' : 'Needs Intervention'})
+                    </span>
+                  </span>
+                </div>
+                <div className="text-[10px] font-bold text-slate-500">
+                  Target Direction: <span className="uppercase text-[#0078d4] font-black">{successDirection}</span>
+                </div>
+              </div>
+
+              {/* Chart container */}
+              <div className="h-64 w-full bg-white border border-slate-100 p-4 rounded-2xl">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="modalDynamicGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={activeColor.stopColor} stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor={activeColor.stopColor} stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="modalBpGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#185FA5" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#185FA5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f2f1" />
+                    <XAxis dataKey="name" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}
+                      formatter={(value, name) => {
+                        if (name === 'systolic') return [`${value} mmHg`, 'Systolic'];
+                        if (name === 'diastolic') return [`${value} mmHg`, 'Diastolic'];
+                        if (trendsChartMetric === 'steps') return [`${value.toLocaleString()} steps`, 'Steps'];
+                        if (trendsChartMetric === 'hr') return [`${value} bpm`, 'HR'];
+                        if (trendsChartMetric === 'glucose') return [`${value} mg/dL`, 'Glucose'];
+                        if (trendsChartMetric === 'spo2') return [`${value}%`, 'Oxygen Saturation'];
+                        if (trendsChartMetric === 'rr') return [`${value} breaths/min`, 'Respiratory Rate'];
+                        if (trendsChartMetric === 'sleep') return [`${value} hrs`, 'Sleep Log'];
+                        if (trendsChartMetric === 'temp') return [`${value}°C`, 'Body Temperature'];
+                        if (trendsChartMetric === 'hydration') return [`${value}%`, 'Hydration Quotient'];
+                        return [value, name];
+                      }}
+                    />
+                    
+                    {trendsChartMetric === 'bp' ? (
+                      <>
+                        <Area type="monotone" dataKey="systolic" stroke="#185FA5" fill="url(#modalBpGrad)" strokeWidth={2.5} />
+                        <Area type="monotone" dataKey="diastolic" stroke="#185FA5" fill="none" strokeWidth={1.2} strokeDasharray="2 2" opacity={0.5} />
+                      </>
+                    ) : (
+                      <Area 
+                        type="monotone" 
+                        dataKey="value" 
+                        stroke={activeColor.stroke} 
+                        fill="url(#modalDynamicGradient)"
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* BP Legend if needed */}
+              {trendsChartMetric === 'bp' && (
+                <div className="flex gap-2 items-center text-[11px] text-slate-500 justify-center">
+                  <span className="w-3 h-0.5 bg-[#185FA5]"></span>
+                  <span className="font-semibold text-slate-650">Systolic</span>
+                  <span className="w-3 h-0.5 border-t border-dashed border-[#185FA5] opacity-50 ml-3"></span>
+                  <span className="font-semibold text-[#185FA5]">Diastolic</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5">
+              <Button
+                onClick={() => setOpenTrendsModal(false)}
+                className="h-9 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs px-5 rounded-xl cursor-pointer"
+              >
+                Close Analysis
+              </Button>
+            </div>
           </motion.div>
         </div>
       )}
