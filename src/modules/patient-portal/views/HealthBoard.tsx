@@ -58,6 +58,7 @@ import { db } from '../../../lib/firebase';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
+import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../../components/ui/tooltip';
 import { Button } from '../../../components/ui/button';
 import { 
   updatePatientVitals, 
@@ -307,6 +308,16 @@ const CONDITION_DESCRIPTIONS: Record<string, {
     tip: 'Gentle hand gliding exercises in warm water before bed significantly improves morning kinematic stiffness.',
     icon: Stethoscope
   }
+};
+
+const factorTooltips: Record<string, string> = {
+  compliance: "Medication compliance is the strongest predictor of glucose and health stability.",
+  sleep: "Restorative sleep (7.5+ hours) helps regulate autonomic function, blood pressure, and recovery.",
+  exercise: "Daily physical activity improves cardiovascular health and insulin sensitivity.",
+  wellness: "Fulfilling wellness micro-goals builds cognitive consistency and active lifestyle habits.",
+  vitals: "Vital sign trends, particularly blood glucose, are direct physiological indicators of health state.",
+  appointments: "Attending medical consultations ensures proactive management and timely treatment adjustments.",
+  conditions: "Active chronic conditions are structured weights that adjust your target baseline."
 };
 
 export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab }: HealthBoardProps) {
@@ -570,6 +581,12 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
   const [adherenceGlucose, setAdherenceGlucose] = useState(true);
   const [adherenceSleep, setAdherenceSleep] = useState(true);
   const [showScoreInfo, setShowScoreInfo] = useState(false);
+  const [showScoreAnimation, setShowScoreAnimation] = useState(false);
+
+  const triggerScoreAnimation = () => {
+    setShowScoreAnimation(true);
+    setTimeout(() => setShowScoreAnimation(false), 800);
+  };
 
   // Recalculated health score based on active checklist selections
   const calculatedHealthScore = useMemo(() => {
@@ -686,6 +703,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     const quickWins = [];
     if (!adherenceSteps) {
       quickWins.push({
+        id: 'steps',
         title: 'Add 4,000 steps today',
         impactPoints: 5,
         effort: 'easy' as const,
@@ -694,6 +712,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     }
     if (!patient.aiGoalsCompleted) {
       quickWins.push({
+        id: 'wellness',
         title: 'Complete wellness micro-goals',
         impactPoints: 3,
         effort: 'moderate' as const,
@@ -702,6 +721,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     }
     if (!adherenceMeds) {
       quickWins.push({
+        id: 'meds',
         title: 'Log your morning medication',
         impactPoints: 2,
         effort: 'easy' as const,
@@ -710,6 +730,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     }
     if (!adherenceSleep) {
       quickWins.push({
+        id: 'sleep',
         title: 'Optimize tonight\'s sleep hygiene',
         impactPoints: 2,
         effort: 'easy' as const,
@@ -718,6 +739,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     }
     if (!patient.willAttend) {
       quickWins.push({
+        id: 'rsvp',
         title: 'RSVP to your scheduled consultation',
         impactPoints: 4,
         effort: 'easy' as const,
@@ -728,6 +750,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     // Fallbacks if user has completed everything
     if (quickWins.length === 0) {
       quickWins.push({
+        id: 'streak',
         title: 'Maintain current streak!',
         impactPoints: 1,
         effort: 'easy' as const,
@@ -747,6 +770,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
   // Update Firestore when patient adjusts score indicators
   const handleToggleAdherenceFactor = async (factor: 'meds' | 'steps' | 'glucose' | 'sleep') => {
+    triggerScoreAnimation();
     let nextMeds = adherenceMeds;
     let nextSteps = adherenceSteps;
     let nextGlucose = adherenceGlucose;
@@ -788,6 +812,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
   // RSVP Trigger
   const handleToggleRSVP = async () => {
+    triggerScoreAnimation();
     const nextWillAttend = !patient.willAttend;
     try {
       await savePatient(patient.id, {
@@ -814,6 +839,53 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       }, 'manual');
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // AI Goals Trigger
+  const handleToggleAIGoals = async () => {
+    triggerScoreAnimation();
+    const nextAIGoals = !patient.aiGoalsCompleted;
+    try {
+      await savePatient(patient.id, {
+        ...rawPatient,
+        aiGoalsCompleted: nextAIGoals
+      });
+      // trigger score rebuild
+      const newScore = computeHealthScore({
+        medsDays: patient.medsDays,
+        sleepHours: patient.sleepHours,
+        dailySteps: patient.dailySteps,
+        bloodGlucose: patient.bloodGlucose,
+        aiGoalsCompleted: nextAIGoals,
+        willAttend: patient.willAttend,
+        conditionsCount: patient.conditions?.length || 2
+      });
+      await updatePatientHealthScore(patient.id, newScore, {
+        medsDays: patient.medsDays,
+        sleepHours: patient.sleepHours,
+        dailySteps: patient.dailySteps,
+        bloodGlucose: patient.bloodGlucose,
+        aiGoalsCompleted: nextAIGoals,
+        willAttend: patient.willAttend
+      }, 'manual');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Quick Win Click Handler
+  const handleQuickWinClick = async (winId: string) => {
+    if (winId === 'steps') {
+      await handleToggleAdherenceFactor('steps');
+    } else if (winId === 'wellness') {
+      await handleToggleAIGoals();
+    } else if (winId === 'meds') {
+      await handleToggleAdherenceFactor('meds');
+    } else if (winId === 'sleep') {
+      await handleToggleAdherenceFactor('sleep');
+    } else if (winId === 'rsvp') {
+      await handleToggleRSVP();
     }
   };
 
@@ -1716,9 +1788,9 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 </div>
                 <button
                   onClick={() => setShowScoreInfo(!showScoreInfo)}
-                  className="text-[10px] font-bold text-[#0078d4] hover:text-[#005a9e] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200/50 transition-all cursor-pointer shrink-0 animate-pulse"
+                  className="text-[10px] font-bold text-[#0078d4] hover:text-[#005a9e] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200/50 transition-all cursor-pointer shrink-0"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <Info className="h-3.5 w-3.5 text-[#0078d4]" />
                   <span>{showScoreInfo ? "View Score" : "View Factors"}</span>
                 </button>
               </div>
@@ -1727,14 +1799,14 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               {!showScoreInfo ? (
                 <div className="flex flex-col items-center justify-center flex-1 w-full py-2 space-y-5">
                   {/* The Outer 3D circular dial container */}
-                  <div className="relative w-44 h-44 md:w-48 md:h-48 rounded-full bg-gradient-to-b from-[#EBF5FF] to-[#D5EAFF] flex items-center justify-center shadow-[0_16px_40px_rgba(15,108,189,0.14)] border border-white p-3 transition-all duration-300 hover:scale-[1.02]">
+                  <div className={`relative w-44 h-44 md:w-48 md:h-48 rounded-full bg-gradient-to-b from-[#EBF5FF] to-[#D5EAFF] flex items-center justify-center shadow-[0_16px_40px_rgba(15,108,189,0.14)] border border-white p-3 transition-all duration-300 ${showScoreAnimation ? 'scale-105 ring-4 ring-[#0078d4]/30' : 'hover:scale-[1.02]'}`}>
                     {/* Middle Blue track with subtle border */}
                     <div className="w-full h-full rounded-full bg-gradient-to-tr from-[#DEEFFF] to-[#F3F9FF] flex items-center justify-center p-2.5 relative shadow-[inset_0_2px_8px_rgba(0,120,212,0.05)]">
                       {/* Tiny bright green dot at the bottom right */}
                       <div className="absolute bottom-6 right-6 md:bottom-7 md:right-7 w-2.5 h-2.5 rounded-full bg-[#107C41] border-2 border-white shadow-[0_0_8px_rgba(16,124,65,0.6)] z-20" />
                       {/* Inner white solid circle */}
                       <div className="w-28 h-28 md:w-32 md:h-32 rounded-full bg-white flex flex-col items-center justify-center shadow-[0_10px_25px_rgba(0,120,212,0.1)] relative border border-slate-50/50">
-                        <span className="text-4xl md:text-5xl font-black text-[#111C24] tracking-tighter select-none">
+                        <span className={`text-4xl md:text-5xl font-black text-[#111C24] tracking-tighter select-none transition-all duration-350 ${showScoreAnimation ? 'text-[#0078d4] scale-110' : ''}`}>
                           {healthScoreBreakdown.overallScore}
                         </span>
                         <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider mt-0.5">out of 100</span>
@@ -1751,21 +1823,53 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                   </div>
                 </div>
               ) : (
-                <div className="w-full flex-1 flex flex-col justify-start space-y-3 py-1">
-                  <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-1">
+                <div className="w-full flex-1 flex flex-col justify-start py-1">
+                  {/* Sticky top opportunity when View Factors is active */}
+                  {healthScoreBreakdown.quickWins.length > 0 && healthScoreBreakdown.quickWins[0].id !== 'streak' && (
+                    <div 
+                      onClick={() => healthScoreBreakdown.quickWins[0].id && handleQuickWinClick(healthScoreBreakdown.quickWins[0].id)}
+                      className="mb-4 bg-amber-50/90 border border-amber-200 hover:bg-amber-100 transition-all rounded-2xl p-3.5 flex justify-between items-center gap-3 cursor-pointer select-none shadow-[0_2px_8px_rgba(245,158,11,0.04)] active:scale-[0.98]"
+                    >
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                          Top opportunity right now
+                        </span>
+                        <p className="text-xs font-extrabold text-amber-900 mt-1 leading-tight">
+                          {healthScoreBreakdown.quickWins[0].title}
+                        </p>
+                        <p className="text-[10.5px] text-amber-800/80 font-medium leading-normal">
+                          {healthScoreBreakdown.quickWins[0].description}
+                        </p>
+                      </div>
+                      <span className="bg-amber-100 text-amber-850 border border-amber-200 px-2.5 py-1 rounded-xl text-[10.5px] font-black shrink-0 whitespace-nowrap">
+                        +{healthScoreBreakdown.quickWins[0].impactPoints} pts
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between border-b border-slate-50 pb-2 mb-2">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Weighted Contributions</h4>
                     <span className="text-[10px] font-bold text-[#0078d4]">Target: 100%</span>
                   </div>
                   
-                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                  <div className="space-y-2.5 max-h-[290px] overflow-y-auto pr-1">
                     {healthScoreBreakdown.factors.map(factor => (
                       <div key={factor.name} className="bg-slate-50/60 border border-slate-100 rounded-2xl p-3 space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-xs font-bold text-slate-800">{factor.label}</span>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-black text-[#0078d4] bg-[#0078d4]/5 px-2 py-0.5 rounded-md border border-[#0078d4]/10">
-                              wt: {factor.weightPercent}%
-                            </span>
+                            <TooltipProvider>
+                              <UiTooltip>
+                                <TooltipTrigger>
+                                  <span className="text-[10px] font-black text-[#0078d4] bg-[#0078d4]/5 px-2 py-0.5 rounded-md border border-[#0078d4]/10 cursor-help select-none">
+                                    wt: {factor.weightPercent}%
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-950 text-white rounded-xl p-3 text-[11px] max-w-xs shadow-2xl font-medium border border-slate-800/50 leading-relaxed">
+                                  {factorTooltips[factor.name] || 'Weighted contribution value'}
+                                </TooltipContent>
+                              </UiTooltip>
+                            </TooltipProvider>
                             {factor.trend === 'up' && <TrendingUp className="h-3.5 w-3.5 text-[#107C41]" />}
                             {factor.trend === 'down' && <TrendingDown className="h-3.5 w-3.5 text-rose-600" />}
                             {factor.trend === 'stable' && <span className="text-slate-400 text-xs font-bold">—</span>}
@@ -1798,7 +1902,16 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 </h4>
                 <div className="space-y-2">
                   {healthScoreBreakdown.quickWins.map((win, idx) => (
-                    <div key={idx} className="bg-amber-50/50 border border-amber-100/50 hover:bg-amber-50 transition-all rounded-2xl p-3 flex justify-between items-start gap-3">
+                    <div 
+                      key={idx} 
+                      onClick={() => win.id && handleQuickWinClick(win.id)}
+                      className={`transition-all rounded-2xl p-3 flex justify-between items-start gap-3 border select-none cursor-pointer active:scale-[0.98]
+                        ${win.id === 'streak' 
+                          ? 'bg-slate-50/80 border-slate-100 hover:bg-slate-50' 
+                          : 'bg-amber-50/50 border-amber-100/50 hover:bg-amber-50 hover:border-amber-200'
+                        }
+                      `}
+                    >
                       <div className="space-y-0.5">
                         <p className="text-xs font-bold text-amber-900 leading-tight">{win.title}</p>
                         <p className="text-[10.5px] text-amber-800/80 font-medium leading-normal">{win.description}</p>
@@ -1815,74 +1928,144 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               </div>
             </Card>
 
-            {/* Medication Log card */}
-            <Card className="lg:col-span-7 border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <button 
-                  onClick={() => setActiveSubPage(3)}
-                  className="flex items-center gap-2 text-left hover:opacity-80 transition-all cursor-pointer group"
-                >
-                  <div className="bg-amber-100 p-2 rounded-xl text-amber-700 group-hover:bg-amber-200 transition-all">
-                    <Pill className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1 group-hover:text-[#0078d4] transition-all">
-                      Medication Log
-                      <ChevronRight className="h-4.5 w-4.5 text-[#0078d4] stroke-[3]" />
-                    </h4>
-                  </div>
-                </button>
-                <button 
-                  onClick={() => setActiveSubPage(3)}
-                  className="text-right hover:opacity-80 transition-all cursor-pointer"
-                >
-                  <span className="text-[10px] font-black text-slate-400 uppercase">Compliance Score</span>
-                  <p className="text-lg font-extrabold text-[#107c41] leading-none">96%</p>
-                </button>
-              </div>
-
-              {!adherenceMeds ? (
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h5 className="text-xs font-black text-amber-900 uppercase tracking-wide">⚠️ Reminder</h5>
-                    <p className="text-xs text-amber-800 font-semibold leading-relaxed">
-                      Take Metformin 500mg, twice daily. Compliance window closes at 12:00 PM. Please log your intake.
-                    </p>
-                  </div>
-                  <Button 
-                    size="sm"
-                    onClick={() => handleToggleAdherenceFactor('meds')}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs px-4 py-2 rounded-xl shrink-0 cursor-pointer"
+            {/* Right Column: Medication Log & Patient Diary (span-7) */}
+            <div className="lg:col-span-7 flex flex-col gap-6 justify-between h-full">
+              {/* Medication Log card */}
+              <Card className="border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4 flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <button 
+                    onClick={() => setActiveSubPage(3)}
+                    className="flex items-center gap-2 text-left hover:opacity-80 transition-all cursor-pointer group"
                   >
-                    Log Medication Taken
+                    <div className="bg-amber-100 p-2 rounded-xl text-amber-700 group-hover:bg-amber-200 transition-all">
+                      <Pill className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1 group-hover:text-[#0078d4] transition-all">
+                        Medication Log
+                        <ChevronRight className="h-4.5 w-4.5 text-[#0078d4] stroke-[3]" />
+                      </h4>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={() => setActiveSubPage(3)}
+                    className="text-right hover:opacity-80 transition-all cursor-pointer"
+                  >
+                    <span className="text-[10px] font-black text-slate-400 uppercase">Compliance Score</span>
+                    <p className="text-lg font-extrabold text-[#107c41] leading-none">96%</p>
+                  </button>
+                </div>
+
+                {!adherenceMeds ? (
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h5 className="text-xs font-black text-amber-900 uppercase tracking-wide">⚠️ Reminder</h5>
+                      <p className="text-xs text-amber-800 font-semibold leading-relaxed">
+                        Take Metformin 500mg, twice daily. Compliance window closes at 12:00 PM. Please log your intake.
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm"
+                      onClick={() => handleToggleAdherenceFactor('meds')}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs px-4 py-2 rounded-xl shrink-0 cursor-pointer"
+                    >
+                      Log Medication Taken
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h5 className="text-xs font-black text-emerald-900 uppercase tracking-wide">🎉 Outstanding Compliance Commendation!</h5>
+                      <p className="text-xs text-emerald-800 font-semibold leading-relaxed">
+                        Meds Logged! Splendid job keeping your therapeutic stability high today. Your pathway results show consistent excellence.
+                      </p>
+                    </div>
+                    <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200">
+                      ✓ Taken & Authenticated
+                    </span>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-50 flex justify-end">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setActiveSubPage(3)}
+                    className="text-xs font-black text-[#0078d4] hover:text-[#005a9e] flex items-center gap-1 cursor-pointer"
+                  >
+                    Go to Medications Page
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
-              ) : (
-                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h5 className="text-xs font-black text-emerald-900 uppercase tracking-wide">🎉 Outstanding Compliance Commendation!</h5>
-                    <p className="text-xs text-emerald-800 font-semibold leading-relaxed">
-                      Meds Logged! Splendid job keeping your therapeutic stability high today. Your pathway results show consistent excellence.
-                    </p>
-                  </div>
-                  <span className="text-xs font-black bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200">
-                    ✓ Taken & Authenticated
-                  </span>
-                </div>
-              )}
+              </Card>
 
-              <div className="pt-2 border-t border-slate-50 flex justify-end">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setActiveSubPage(3)}
-                  className="text-xs font-black text-[#0078d4] hover:text-[#005a9e] flex items-center gap-1 cursor-pointer"
-                >
-                  Go to Medications Page
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </Card>
+              {/* Patient Diary (formerly Persona Symptom Notes) */}
+              <Card className="border border-slate-100 shadow-xs bg-white rounded-3xl p-6 md:p-8 space-y-4 flex flex-col justify-between flex-1">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-sky-100 p-2 rounded-xl text-sky-700">
+                      <BookOpen className="h-5 w-5" />
+                    </div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                      Patient Diary
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="space-y-3 font-medium flex-1 flex flex-col justify-between">
+                  <p className="text-[11.5px] text-slate-500 font-semibold leading-relaxed">
+                    Log any symptoms, secondary reactions, or personal responses for your next medical consultation review:
+                  </p>
+
+                  <div className="space-y-2.5">
+                    <textarea
+                      value={newDiaryNote}
+                      onChange={(e) => setNewDiaryNote(e.target.value)}
+                      placeholder="e.g., Slight finger joint morning stiffness, resolved in 30 mins. Mild nausea after Metformin dose."
+                      className="w-full h-16 p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-1 focus:ring-[#0078d4] focus:border-transparent font-medium text-slate-800 leading-normal"
+                    />
+
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDiaryEntry}
+                      disabled={!newDiaryNote.trim()}
+                      className="w-full bg-[#0078d4] hover:bg-[#106ebe] text-white font-black text-xs h-9 rounded-xl flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Symptom Entry
+                    </Button>
+                  </div>
+
+                  {/* Log history list */}
+                  <div className="space-y-2 pt-2 border-t border-slate-50 flex-1 min-h-0">
+                    <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Recent Logged Notes:</span>
+                    <div className="max-h-24 overflow-y-auto space-y-2 pr-1">
+                      {diaryNotes.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic text-center py-3">No symptom notes logged yet.</p>
+                      ) : (
+                        diaryNotes.map((note) => (
+                          <div key={note.id} className="bg-slate-50/70 border border-slate-100/70 p-3 rounded-xl space-y-1.5 relative group">
+                            <button
+                              onClick={() => handleDeleteDiaryEntry(note.id)}
+                              className="absolute top-2.5 right-2.5 text-slate-350 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer opacity-0 group-hover:opacity-100"
+                              title="Delete log"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="text-[9px] font-black text-slate-400 block">
+                              {note.time}
+                            </span>
+                            <p className="text-xs text-slate-700 font-semibold leading-relaxed pr-6">
+                              {note.text}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
 
 
@@ -2424,13 +2607,10 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 </div>
               </Card>
 
-              {/* Persona Symptom Notes */}
+              {/* Patient Diary */}
               <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Persona Symptom Notes</h4>
-                  <Badge className="bg-[#0078d4]/5 text-[#0078d4] border-none font-bold text-[9px] uppercase">
-                    Patient Diary
-                  </Badge>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Patient Diary</h4>
                 </div>
 
                 <div className="space-y-3 font-medium">
