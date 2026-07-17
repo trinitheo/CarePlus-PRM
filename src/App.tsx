@@ -78,7 +78,7 @@ export default function App() {
       <EventStoreProvider>
         <HIPAAMonitorProvider>
           <Shell currentModule={currentModule} onNavigate={handleNavigate}>
-            {currentModule === 'dashboard' && <PatientPortalRoot />}
+            {currentModule === 'dashboard' && <PatientPortalRoot onNavigateTab={handleNavigate} />}
             {currentModule === 'settings' && (
               <div className="flex-1 min-h-0 overflow-auto h-full">
                 <Settings />

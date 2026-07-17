@@ -3,7 +3,11 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePatientClinicalData } from '../../hooks/usePatientClinicalData';
 import { useQueryModel } from '../../store/eventStore';
 
-export function PatientPortalRoot() {
+interface PatientPortalRootProps {
+  onNavigateTab?: (tab: string) => void;
+}
+
+export function PatientPortalRoot({ onNavigateTab }: PatientPortalRootProps) {
   const { userProfile } = useCurrentUser();
   const patientId = userProfile?.patientId || (userProfile?.role === 'patient' && userProfile?.patientId) || 'pat-marcus-001';
   const patientData = usePatientClinicalData(patientId);
@@ -11,11 +15,21 @@ export function PatientPortalRoot() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-[#EBF5FF] via-[#F5F9FD] to-[#FFFFFF] overflow-y-auto">
-      <div className="flex-1 p-4 md:p-6 w-full max-w-4xl mx-auto pb-28">
+      <div 
+        className="flex-1 mx-auto pb-28" 
+        style={{ 
+          width: '1100px', 
+          maxWidth: '100%',
+          paddingLeft: '5px', 
+          paddingRight: '5px', 
+          paddingTop: '24px', 
+          paddingBottom: '20px' 
+        }}
+      >
         <HealthBoard 
           patientData={patientData} 
           appointments={Object.values(appointments)} 
-          onNavigateTab={() => {}} 
+          onNavigateTab={onNavigateTab} 
         />
       </div>
     </div>

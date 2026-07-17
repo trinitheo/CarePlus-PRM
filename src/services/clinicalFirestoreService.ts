@@ -164,14 +164,16 @@ export function computeHealthScore(factors: {
   bloodGlucose?: number;
   aiGoalsCompleted?: boolean;
   willAttend?: boolean;
+  conditionsCount?: number;
 }) {
-  const baseScore = 72;
+  const baseScore = 75;
   let medsContribution = 0;
   let sleepContribution = 0;
   let stepsContribution = 0;
   let glucoseContribution = 0;
   let aiContribution = 0;
   let appointmentContribution = 0;
+  let conditionsPenalty = 0;
 
   const medsDays = typeof factors.medsDays === 'number' ? factors.medsDays : 5;
   const sleepHours = typeof factors.sleepHours === 'number' ? factors.sleepHours : 7.6;
@@ -179,6 +181,7 @@ export function computeHealthScore(factors: {
   const bloodGlucose = typeof factors.bloodGlucose === 'number' ? factors.bloodGlucose : 104;
   const aiGoalsCompleted = typeof factors.aiGoalsCompleted === 'boolean' ? factors.aiGoalsCompleted : true;
   const willAttend = typeof factors.willAttend === 'boolean' ? factors.willAttend : true;
+  const conditionsCount = typeof factors.conditionsCount === 'number' ? factors.conditionsCount : 2;
 
   if (medsDays === 7) medsContribution = 8;
   else if (medsDays >= 5) medsContribution = 5;
@@ -226,13 +229,22 @@ export function computeHealthScore(factors: {
     appointmentContribution = 2;
   }
 
+  if (conditionsCount > 3) {
+    conditionsPenalty = -4;
+  } else if (conditionsCount > 1) {
+    conditionsPenalty = -2;
+  } else if (conditionsCount === 1) {
+    conditionsPenalty = -1;
+  }
+
   const totalMod = 
     medsContribution + 
     sleepContribution + 
     stepsContribution + 
     glucoseContribution + 
     aiContribution + 
-    appointmentContribution;
+    appointmentContribution +
+    conditionsPenalty;
 
   return Math.min(Math.max(baseScore + totalMod, 0), 100);
 }
