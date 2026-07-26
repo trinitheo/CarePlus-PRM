@@ -26,6 +26,8 @@ import { PatientPortalRoot } from './modules/patient-portal/PatientPortalRoot';
 import { Settings } from './modules/patient-portal/views/Settings';
 import { WellnessClasses } from './modules/patient-portal/views/WellnessClasses';
 import { MyConsultations } from './modules/patient-portal/views/MyConsultations';
+import { PatientAppointmentsView } from './modules/patient-portal/views/PatientAppointmentsView';
+import { SchedulingOperatorConsole } from './modules/scheduling/SchedulingOperatorConsole';
 import { usePatientClinicalData } from './hooks/usePatientClinicalData';
 
 export default function App() {
@@ -87,6 +89,11 @@ export default function App() {
             {currentModule === 'messages' && (
               <div className="flex-1 min-h-0 overflow-hidden h-full">
                 <MessagesModule />
+              </div>
+            )}
+            {currentModule === 'appointments' && (
+              <div className="flex-1 min-h-0 overflow-auto h-full">
+                <PatientAppointmentsView />
               </div>
             )}
             {currentModule === 'consultations' && (
@@ -258,6 +265,12 @@ export default function App() {
         {currentModule === 'scheduling' && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <AppointmentsDashboard />
+          </div>
+        )}
+
+        {currentModule === 'roster' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <SchedulingOperatorConsole />
           </div>
         )}
 

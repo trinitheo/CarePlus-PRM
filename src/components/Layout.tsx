@@ -14,7 +14,9 @@ const ALL_NAV_ITEMS = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'Home', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient', 'read_only', 'pt'] },
   { id: 'patients', icon: Users, label: 'Patients', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'read_only', 'pt'] },
   { id: 'scheduling', icon: Calendar, label: 'Schedule', roles: ['admin', 'manager', 'front_desk'] }, 
+  { id: 'roster', icon: Activity, label: 'Roster', roles: ['admin', 'manager', 'front_desk'] },
   { id: 'messages', icon: MessageSquare, label: 'Inbox', roles: ['admin', 'manager', 'clinician', 'nurse', 'billing', 'allied_health', 'patient', 'pt'] },
+  { id: 'appointments', icon: Calendar, label: 'Appts', roles: ['patient'] },
   { id: 'consultations', icon: FileText, label: 'Consultations', roles: ['patient'] },
   { id: 'wellness', icon: Sparkles, label: 'Wellness', roles: ['patient'] },
   { id: 'care-network', icon: Share2, label: 'Networks', roles: ['admin', 'manager', 'clinician'] },
@@ -136,6 +138,7 @@ function BottomNav({ currentModule, onNavigate, onOpenHipaa }: { currentModule: 
     const items = [
       { id: 'dashboard', label: 'HOME', icon: LayoutDashboard },
       { id: 'messages', label: 'INBOX', icon: MessageSquare },
+      { id: 'appointments', label: 'APPT', icon: Calendar },
       { id: 'consultations', label: 'Clinical Notes', icon: FileText },
       { id: 'wellness', label: 'WELLNESS', icon: Sparkles },
       { id: 'settings', label: 'SETTINGS', icon: Settings },

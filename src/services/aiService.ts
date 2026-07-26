@@ -174,3 +174,145 @@ export async function generatePlainLanguageSummary(soapNote: {
   }
 }
 
+export interface SchedulingAgentContext {
+  appointments: any[];
+  patients: any[];
+  providers: any[];
+  rooms: any[];
+  selectedDate?: string;
+  currentUserRole?: string;
+}
+
+export interface SchedulingAgentResult {
+  summary: string;
+  intent: 'SCHEDULE' | 'CANCEL' | 'RESCHEDULE' | 'CHECK_SLOTS' | 'ANALYZE_SCHEDULE' | 'BATCH_CANCEL' | 'GENERAL_QUERY';
+  proposedAction?: {
+    type: 'create_appointment' | 'cancel_appointment' | 'reschedule_appointment' | 'batch_cancel';
+    patientId?: string;
+    patientName?: string;
+    providerId?: string;
+    providerName?: string;
+    appointmentId?: string;
+    time?: string;
+    duration?: number;
+    visitType?: 'clinic' | 'virtual' | 'telehealth';
+    reason?: string;
+    priority?: 'routine' | 'urgent' | 'emergency';
+    cancellationReason?: string;
+    roomId?: string;
+    affectedCount?: number;
+    targetDate?: string;
+  };
+  conflicts?: string[];
+  suggestedSlots?: Array<{ time: string; date: string; providerName: string }>;
+  insights?: string[];
+}
+
+export async function processSchedulingAgentQuery(
+  userQuery: string,
+  context: SchedulingAgentContext
+): Promise<SchedulingAgentResult> {
+  try {
+    const promptDate = context.selectedDate || new Date().toISOString().split('T')[0];
+    
+    // Prepare concise context representations
+    const patientsList = context.patients.slice(0, 30).map(p => ({
+      id: p.id,
+      name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || p.id,
+      mrn: p.mrn
+    }));
+
+    const providersList = context.providers.map(pr => ({
+      id: pr.id || pr.userId,
+      name: pr.name || pr.displayName || 'Clinician',
+      role: pr.role
+    }));
+
+    const activeAppts = context.appointments
+      .filter(a => a.status !== 'cancelled')
+      .slice(0, 30)
+      .map(a => ({
+        id: a.id,
+        patientId: a.patientId,
+        providerId: a.providerId,
+        time: a.time,
+        status: a.status,
+        reason: a.reason,
+        visitType: a.visitType
+      }));
+
+    const prompt = `You are CarePlus-PRM's Intelligent Scheduling & Cancellation Operations Assistant for Front Desk and Administrative staff.
+Context Date for actions: ${promptDate}. Current user role: ${context.currentUserRole || 'front_desk'}.
+
+USER COMMAND / REQUEST: "${userQuery}"
+
+AVAILABLE CLINIC DATA:
+- PATIENTS DATABASE (${patientsList.length} items): ${JSON.stringify(patientsList)}
+- PROVIDERS / CLINICIANS: ${JSON.stringify(providersList)}
+- ACTIVE APPOINTMENTS (Sample): ${JSON.stringify(activeAppts)}
+- AVAILABLE ROOMS: ${JSON.stringify(context.rooms.map(r => ({ id: r.id, name: r.name })))}
+
+YOUR TASK:
+Analyze the user command and extract the exact administrative intent and parameters.
+Determine if the action involves:
+1. SCHEDULE (Creating a new appointment for a patient)
+2. CANCEL (Cancelling an existing appointment, logging a valid cancellation reason, releasing rooms)
+3. RESCHEDULE (Moving an appointment to a new date/time)
+4. CHECK_SLOTS (Finding open time slots for a provider or room)
+5. BATCH_CANCEL (Cancelling multiple appointments for a provider/day)
+6. ANALYZE_SCHEDULE (Summarizing schedule load, cancellation risks, wait times)
+7. GENERAL_QUERY (Answering questions about the schedule)
+
+CRITICAL MATCHING RULES:
+- Find patient matches by name or MRN from the Patients Database. If exact patient ID isn't found, pick the closest matching patient or specify their name.
+- Find provider matches by name from the Providers list.
+- For cancellations: locate the matching active appointment ID by patient name or appointment details.
+- For dates/times: default to context date (${promptDate}) if relative (e.g. "today", "tomorrow", "next Monday"). Use ISO format (YYYY-MM-DDTHH:mm:ss.000Z).
+- Check for potential conflicts (e.g., double booking provider or patient at the same time).
+
+RESPOND ONLY IN VALID JSON matching this exact structure:
+{
+  "intent": "SCHEDULE" | "CANCEL" | "RESCHEDULE" | "CHECK_SLOTS" | "ANALYZE_SCHEDULE" | "BATCH_CANCEL" | "GENERAL_QUERY",
+  "summary": "Clear 1-2 sentence executive explanation of what the agent prepared or determined.",
+  "proposedAction": {
+    "type": "create_appointment" | "cancel_appointment" | "reschedule_appointment" | "batch_cancel",
+    "patientId": "matching patient id",
+    "patientName": "patient full name",
+    "providerId": "matching provider id",
+    "providerName": "provider full name",
+    "appointmentId": "matching appt id for cancel/reschedule",
+    "time": "ISO date-time string (e.g. 2026-07-26T10:00:00.000Z)",
+    "duration": 30,
+    "visitType": "clinic" | "telehealth",
+    "reason": "Appointment reason or clinical visit notes",
+    "priority": "routine" | "urgent" | "emergency",
+    "cancellationReason": "Exact cancellation reason or policy code",
+    "roomId": "assigned room id or Room-1"
+  },
+  "conflicts": ["List of any detected time overlap warnings or policy notes"],
+  "suggestedSlots": [
+    { "time": "09:00 AM", "date": "${promptDate}", "providerName": "Dr. Name" }
+  ],
+  "insights": [
+    "Useful operational tip or patient reminder"
+  ]
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: prompt,
+    });
+
+    const cleanedText = response.text.replace(/```json|```/g, "").trim();
+    const parsed: SchedulingAgentResult = JSON.parse(cleanedText);
+    return parsed;
+  } catch (error) {
+    console.error("Scheduling Agent AI Error:", error);
+    return {
+      intent: 'GENERAL_QUERY',
+      summary: "I analyzed your request, but need clarification to finalize the schedule action. Please verify patient or provider details.",
+      insights: ["You can specify patient name, provider, and target time (e.g., 'Cancel John Doe appointment tomorrow at 10 AM')."]
+    };
+  }
+}
+

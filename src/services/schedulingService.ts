@@ -64,6 +64,75 @@ export async function transitionAppointment(appointmentId: string, newStatus: st
   }
 }
 
+export async function cancelAppointment(appointmentId: string, reason?: string) {
+  await transitionAppointment(appointmentId, 'cancelled');
+
+  if (reason) {
+    await logAudit({
+      action: 'APPOINTMENT_CANCELLED',
+      entityId: appointmentId,
+      entityType: 'appointment',
+      details: `Cancellation logged. Reason: ${reason}`
+    });
+  }
+}
+
+export async function rescheduleAppointment(appointmentId: string, newTime: string | Date, newDuration?: number, newRoomId?: string) {
+  const updates: any = {
+    time: typeof newTime === 'string' ? newTime : newTime.toISOString(),
+    status: 'scheduled'
+  };
+  if (newDuration) updates.duration = newDuration;
+  if (newRoomId) updates.roomId = newRoomId;
+
+  await clinicalService.updateItem('appointments', appointmentId, updates);
+
+  await logAudit({
+    action: 'APPOINTMENT_RESCHEDULED',
+    entityId: appointmentId,
+    entityType: 'appointment',
+    details: `Appointment rescheduled to ${newTime}`
+  });
+}
+
+export function checkScheduleConflicts(
+  appointments: any[], 
+  targetTime: Date, 
+  durationMinutes: number, 
+  providerId?: string, 
+  patientId?: string,
+  excludeApptId?: string
+): { hasConflict: boolean; conflicts: string[] } {
+  const targetStart = targetTime.getTime();
+  const targetEnd = targetStart + durationMinutes * 60 * 1000;
+  const conflicts: string[] = [];
+
+  for (const appt of appointments) {
+    if (appt.id === excludeApptId) continue;
+    if (appt.status === 'cancelled' || appt.status === 'completed') continue;
+
+    const apptTime = appt.time?.seconds ? new Date(appt.time.seconds * 1000) : new Date(appt.time);
+    const apptStart = apptTime.getTime();
+    const apptDuration = appt.duration || 30;
+    const apptEnd = apptStart + apptDuration * 60 * 1000;
+
+    // Check overlap
+    if (targetStart < apptEnd && targetEnd > apptStart) {
+      if (providerId && appt.providerId === providerId) {
+        conflicts.push(`Provider double-booked at ${apptTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+      }
+      if (patientId && appt.patientId === patientId) {
+        conflicts.push(`Patient already has an appointment scheduled at ${apptTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+      }
+    }
+  }
+
+  return {
+    hasConflict: conflicts.length > 0,
+    conflicts
+  };
+}
+
 export async function createAppointment(data: Omit<Appointment, 'id'>) {
   const id = await clinicalService.addItem('appointments', data);
 

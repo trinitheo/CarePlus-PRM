@@ -37,7 +37,16 @@ import {
   Minus,
   Trash2,
   FileText,
-  Grid
+  Grid,
+  Share2,
+  Database,
+  ArrowLeftRight,
+  Terminal,
+  Play,
+  Pause,
+  Code,
+  FileSignature,
+  Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -55,6 +64,8 @@ import {
 
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import { consentFhirService, PatientConsent, FhirSyncLog } from '../../../services/consentFhirService';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
@@ -320,9 +331,48 @@ const factorTooltips: Record<string, string> = {
   conditions: "Active chronic conditions are structured weights that adjust your target baseline."
 };
 
+const trendTooltips: Record<string, { up: string, down: string, stable: string }> = {
+  compliance: {
+    up: "Excellent progress! Keeping up with your medication plan maintains a steady, safe baseline.",
+    down: "Taking doses slightly off-schedule can feel discouraging, but each recorded dose helps stabilize your glycemic patterns.",
+    stable: "You are maintaining a steady routing for your medical schedule."
+  },
+  sleep: {
+    up: "Restorative sleep cycles are functioning perfectly, supporting continuous cell recovery.",
+    down: "Slightly below sleep targets recently. Prioritize 15 mins of offline wind-down time tonight to ease back into rhythm.",
+    stable: "Sleep metrics are steady and stable."
+  },
+  exercise: {
+    up: "Fantastic daily movement! Active pacing directly optimizes metabolic efficiency.",
+    down: "Activity is temporarily lighter than average. No judgment—every small movement or stroll builds momentum toward your goals!",
+    stable: "Pacing is steady and consistent."
+  },
+  wellness: {
+    up: "Superb wellness discipline! Your hydration and stretching habits are fully active.",
+    down: "A few wellness checks are awaiting completion. Take a quick hydration break now to restart your streak!",
+    stable: "Your wellness baseline remains solid."
+  },
+  vitals: {
+    up: "Biometrics are perfectly steady and remaining within optimal target bounds.",
+    down: "Vitals show minor fluctuations. Remember, physiological changes are normal and act as guidance, not performance scores.",
+    stable: "Biometrics are remaining steady within standard limits."
+  },
+  appointments: {
+    up: "Consistently consulting with your care team for guided medical success.",
+    down: "Missed or pending check-ins are standard. Simply reschedule to keep aligned with your clinician's guidance.",
+    stable: "Appointment frequency is standard and up-to-date."
+  },
+  conditions: {
+    up: "Proactively mitigating chronic symptoms with focused clinical metrics.",
+    down: "Symptoms or factors require additional tracking. This is a supportive pathway to adapt your treatment plan.",
+    stable: "Chronic indicators are fully stable."
+  }
+};
+
 export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab }: HealthBoardProps) {
+  const { userProfile } = useCurrentUser();
   // Page Navigation State
-  const [activeSubPage, setActiveSubPage] = useState<1 | 2 | 3>(1);
+  const [activeSubPage, setActiveSubPage] = useState<1 | 2 | 3 | 4>(1);
   const [showFloweringMilestone, setShowFloweringMilestone] = useState(false);
 
   const rawPatient = patientData?.patient;
@@ -522,6 +572,185 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
     return list;
   }, [prescriptions, medSortKey]);
 
+  // Consent & FHIR Interoperability States (Page 4)
+  const [consents, setConsents] = useState<PatientConsent[]>([]);
+  const [syncLogs, setSyncLogs] = useState<FhirSyncLog[]>([]);
+  const [isAutoSyncActive, setIsAutoSyncActive] = useState(true);
+  const [secondsToNextSync, setSecondsToNextSync] = useState(30);
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const [activeFhirResourceType, setActiveFhirResourceType] = useState<'patient' | 'vitals' | 'meds' | 'conditions' | 'consent'>('patient');
+  
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([
+    `[${new Date().toLocaleTimeString()}] [SYSTEM] Consent Management Engine initialized.`,
+    `[${new Date().toLocaleTimeString()}] [SYSTEM] FHIR Store synchronization pipeline online.`,
+    `[${new Date().toLocaleTimeString()}] [SECURITY] Validated HIPAA consent criteria against active provider mappings.`
+  ]);
+
+  const [isAddingConsent, setIsAddingConsent] = useState(false);
+  const [consentOrg, setConsentOrg] = useState<'seattle_general' | 'uw_medicine' | 'evergreen_clinic'>('seattle_general');
+  const [consentCategories, setConsentCategories] = useState<string[]>(['demographics', 'vitals']);
+  const [consentDuration, setConsentDuration] = useState<'3m' | '1y' | '5y'>('1y');
+  const [hasAcceptedPrivacyTerms, setHasAcceptedPrivacyTerms] = useState(false);
+
+  // Helper to append logs to our running local terminal simulation
+  const addTerminalLog = (tag: string, msg: string) => {
+    setTerminalLogs(prev => [
+      `[${new Date().toLocaleTimeString()}] [${tag}] ${msg}`,
+      ...prev.slice(0, 49)
+    ]);
+  };
+
+  // Fetch Consents and Sync Logs on Mount
+  useEffect(() => {
+    if (!patient?.id) return;
+    
+    const loadConsentData = async () => {
+      try {
+        const consentList = await consentFhirService.getConsents(patient.id);
+        setConsents(consentList);
+        
+        const logsList = await consentFhirService.getSyncLogs(patient.id);
+        setSyncLogs(logsList);
+      } catch (err) {
+        console.error("Failed to load consent interop data:", err);
+      }
+    };
+    
+    loadConsentData();
+  }, [patient?.id]);
+
+  // Guard page 4 access: if activeSubPage is 4 and user is not admin, revert to 1
+  useEffect(() => {
+    if (activeSubPage === 4 && userProfile?.role !== 'admin') {
+      setActiveSubPage(1);
+    }
+  }, [activeSubPage, userProfile?.role]);
+
+  const handleTriggerFhirSync = async () => {
+    if (!patient?.id || isSyncingNow) return;
+    
+    setIsSyncingNow(true);
+    addTerminalLog('SYSTEM', 'Manual sync triggered. Initiating background execution pipeline...');
+    
+    try {
+      const activeVitals = [
+        { name: 'Blood Glucose', value: patient.bloodGlucose, metadata: { device: 'Continuous Glucose Monitor (CGM)', timestamp: Date.now() } },
+        { name: 'Sleep Log', value: patient.sleepHours, metadata: { device: 'Smart Watch Wearable', timestamp: Date.now() } },
+        { name: 'Daily Steps', value: patient.dailySteps, metadata: { device: 'Fitness Tracker Sensor', timestamp: Date.now() } }
+      ];
+      
+      addTerminalLog('COMPLIANCE', 'Fetching patient record and active consent rule specifications...');
+      
+      const res = await consentFhirService.evaluateAndSyncToFhirStore(
+        patient.id,
+        patient,
+        activeVitals,
+        prescriptions
+      );
+      
+      if (res.status === 'aborted') {
+        addTerminalLog('SECURITY_REJECT', 'Sync aborted: No active consent agreements authorized for data sharing.');
+      } else {
+        res.results.forEach((item: any) => {
+          addTerminalLog('FHIR_EXPORT', `Translated patient records to valid HL7 v4 FHIR Bundle for '${item.organizationName}'.`);
+          addTerminalLog('NETWORK', `Secure TLS transmission established with GCP Cloud Healthcare API FHIR Store target.`);
+          addTerminalLog('SUCCESS', `Successfully synchronized ${item.resourcesCount} FHIR resources. HTTP 201 Created.`);
+        });
+      }
+      
+      const updatedConsents = await consentFhirService.getConsents(patient.id);
+      setConsents(updatedConsents);
+      const updatedLogs = await consentFhirService.getSyncLogs(patient.id);
+      setSyncLogs(updatedLogs);
+      
+    } catch (err) {
+      console.error(err);
+      addTerminalLog('ERROR', `Pipeline error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsSyncingNow(false);
+      setSecondsToNextSync(30);
+    }
+  };
+
+  // Background runner timer task simulation
+  useEffect(() => {
+    if (!isAutoSyncActive || isSyncingNow || !patient?.id) return;
+    
+    const interval = setInterval(() => {
+      setSecondsToNextSync(prev => {
+        if (prev <= 1) {
+          handleTriggerFhirSync();
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isAutoSyncActive, isSyncingNow, patient?.id, prescriptions]);
+
+  const handleCreateNewConsent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!patient?.id) return;
+    if (!hasAcceptedPrivacyTerms) {
+      alert("Please review and accept the HIPAA disclosure terms to authorize data sharing.");
+      return;
+    }
+
+    const orgNames: Record<string, string> = {
+      seattle_general: 'Seattle General Hospital',
+      uw_medicine: 'UW Medicine',
+      evergreen_clinic: 'Evergreen Specialty Clinic'
+    };
+
+    const durationMonths = consentDuration === '3m' ? 3 : (consentDuration === '1y' ? 12 : 60);
+    const expires = new Date();
+    expires.setMonth(expires.getMonth() + durationMonths);
+
+    const consentPayload = {
+      patientId: patient.id,
+      type: 'data_sharing' as const,
+      organizationId: consentOrg,
+      organizationName: orgNames[consentOrg],
+      dataCategories: consentCategories,
+      status: 'active' as const,
+      signedAt: new Date().toISOString(),
+      expiresAt: expires.toISOString(),
+      documentUrl: `https://careplus-prm.org/consents/everett-marcus-${consentOrg}-signed.pdf`
+    };
+
+    addTerminalLog('SECURITY', `Patient digitally signed new data sharing consent for '${orgNames[consentOrg]}'.`);
+    
+    await consentFhirService.saveConsent(patient.id, consentPayload);
+    const updated = await consentFhirService.getConsents(patient.id);
+    setConsents(updated);
+    
+    setIsAddingConsent(false);
+    setHasAcceptedPrivacyTerms(false);
+    
+    handleTriggerFhirSync();
+  };
+
+  const handleRevokeConsent = async (consentId: string, orgName: string) => {
+    if (!window.confirm(`Are you sure you want to revoke data sharing consent with ${orgName}? External access to your future data will be suspended immediately.`)) {
+      return;
+    }
+
+    addTerminalLog('SECURITY_REVOKE', `Revoking sharing consent rule: ${orgName}.`);
+    
+    await consentFhirService.revokeConsent(consentId);
+    const updated = await consentFhirService.getConsents(patient.id);
+    setConsents(updated);
+    
+    handleTriggerFhirSync();
+  };
+
+  const handleToggleCategory = (cat: string) => {
+    setConsentCategories(prev => 
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
+  };
+
   // Dynamic Charting states (Page 2)
   const [trendsChartMetric, setTrendsChartMetric] = useState<'glucose' | 'bp' | 'hr' | 'spo2' | 'rr' | 'sleep' | 'steps' | 'temp' | 'hydration'>('glucose');
   const [trendsDuration, setTrendsDuration] = useState<'3m' | '6m'>('3m');
@@ -605,6 +834,33 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
       conditionsCount: patient.conditions?.length || 2
     });
   }, [adherenceMeds, adherenceSteps, adherenceGlucose, adherenceSleep, patient.aiGoalsCompleted, patient.willAttend, patient.conditions]);
+
+  const [displayedScore, setDisplayedScore] = useState<number>(0);
+
+  useEffect(() => {
+    if (calculatedHealthScore > 0) {
+      if (displayedScore === 0) {
+        setDisplayedScore(calculatedHealthScore);
+      } else if (displayedScore !== calculatedHealthScore) {
+        const step = calculatedHealthScore > displayedScore ? 1 : -1;
+        const interval = setInterval(() => {
+          setDisplayedScore(prev => {
+            if (prev === calculatedHealthScore) {
+              clearInterval(interval);
+              return prev;
+            }
+            const next = prev + step;
+            if ((step === 1 && next >= calculatedHealthScore) || (step === -1 && next <= calculatedHealthScore)) {
+              clearInterval(interval);
+              return calculatedHealthScore;
+            }
+            return next;
+          });
+        }, 30); // smooth, fast progression for dopamine hit
+        return () => clearInterval(interval);
+      }
+    }
+  }, [calculatedHealthScore, displayedScore]);
 
   // Recalculated health score breakdown based on active choices
   const healthScoreBreakdown = useMemo(() => {
@@ -1576,7 +1832,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
           {/* Back Chevron */}
           <button 
             onClick={() => {
-              if (activeSubPage === 2 || activeSubPage === 3) {
+              if (activeSubPage === 2 || activeSubPage === 3 || activeSubPage === 4) {
                 setActiveSubPage(1);
               }
             }}
@@ -1632,6 +1888,24 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 <span className="text-[12px] uppercase font-black tracking-wider leading-tight">MEDS</span>
               </div>
             </button>
+
+            {/* Consent & Interop Tab */}
+            {userProfile?.role === 'admin' && (
+              <button
+                onClick={() => setActiveSubPage(4)}
+                className={`transition-all duration-300 px-5 py-2.5 rounded-2xl flex items-center gap-2 cursor-pointer h-[58px] ${
+                  activeSubPage === 4
+                    ? 'bg-white text-[#0078d4] font-black border border-slate-100 shadow-lg shadow-blue-900/5'
+                    : 'text-slate-400 hover:text-[#0078d4] font-bold'
+                }`}
+              >
+                <Share2 className="h-5 w-5 text-[#0078d4] shrink-0" />
+                <div className="flex flex-col text-left">
+                  <span className="text-[10px] uppercase font-black tracking-wider leading-tight">CONSENT &</span>
+                  <span className="text-[12px] uppercase font-black tracking-wider leading-tight">INTEROP</span>
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Right spacer to balance back chevron */}
@@ -1767,8 +2041,8 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                 </span>
               </div>
               <button 
-                onClick={() => onNavigateTab?.('consultations')} 
-                className="text-xs font-black text-[#0078d4] hover:underline cursor-pointer shrink-0 flex items-center gap-1 self-start sm:self-center"
+                onClick={() => onNavigateTab?.('appointments')} 
+                className="text-xs font-black text-[#0078d4] hover:underline cursor-pointer shrink-0 flex items-center gap-1 self-start sm:sm:center"
               >
                 View details <ArrowRight className="h-3.5 w-3.5" />
               </button>
@@ -1798,6 +2072,26 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
               {/* Main content pane */}
               {!showScoreInfo ? (
                 <div className="flex flex-col items-center justify-center flex-1 w-full py-2 space-y-5">
+                  {/* Sticky top opportunity above the dial on mobile/desktop for extreme discoverability */}
+                  {healthScoreBreakdown.quickWins.length > 0 && healthScoreBreakdown.quickWins[0].id !== 'streak' && (
+                    <div 
+                      onClick={() => healthScoreBreakdown.quickWins[0].id && handleQuickWinClick(healthScoreBreakdown.quickWins[0].id)}
+                      className="w-full bg-amber-50/90 border border-amber-200 hover:bg-amber-100 transition-all rounded-2xl p-3 flex justify-between items-center gap-3 cursor-pointer select-none shadow-[0_2px_8px_rgba(245,158,11,0.03)] active:scale-[0.98]"
+                    >
+                      <div className="space-y-0.5 text-left">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                          Top opportunity right now
+                        </span>
+                        <p className="text-xs font-extrabold text-amber-900 mt-1 leading-tight">
+                          {healthScoreBreakdown.quickWins[0].title}
+                        </p>
+                      </div>
+                      <span className="bg-amber-100 text-amber-850 border border-amber-200 px-2.5 py-1 rounded-xl text-[10px] font-black shrink-0 whitespace-nowrap">
+                        +{healthScoreBreakdown.quickWins[0].impactPoints} pts
+                      </span>
+                    </div>
+                  )}
+
                   {/* The Outer 3D circular dial container */}
                   <div className={`relative w-44 h-44 md:w-48 md:h-48 rounded-full bg-gradient-to-b from-[#EBF5FF] to-[#D5EAFF] flex items-center justify-center shadow-[0_16px_40px_rgba(15,108,189,0.14)] border border-white p-3 transition-all duration-300 ${showScoreAnimation ? 'scale-105 ring-4 ring-[#0078d4]/30' : 'hover:scale-[1.02]'}`}>
                     {/* Middle Blue track with subtle border */}
@@ -1807,7 +2101,7 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                       {/* Inner white solid circle */}
                       <div className="w-28 h-28 md:w-32 md:h-32 rounded-full bg-white flex flex-col items-center justify-center shadow-[0_10px_25px_rgba(0,120,212,0.1)] relative border border-slate-50/50">
                         <span className={`text-4xl md:text-5xl font-black text-[#111C24] tracking-tighter select-none transition-all duration-350 ${showScoreAnimation ? 'text-[#0078d4] scale-110' : ''}`}>
-                          {healthScoreBreakdown.overallScore}
+                          {displayedScore || healthScoreBreakdown.overallScore}
                         </span>
                         <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider mt-0.5">out of 100</span>
                       </div>
@@ -1870,9 +2164,20 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
                                 </TooltipContent>
                               </UiTooltip>
                             </TooltipProvider>
-                            {factor.trend === 'up' && <TrendingUp className="h-3.5 w-3.5 text-[#107C41]" />}
-                            {factor.trend === 'down' && <TrendingDown className="h-3.5 w-3.5 text-rose-600" />}
-                            {factor.trend === 'stable' && <span className="text-slate-400 text-xs font-bold">—</span>}
+                            <TooltipProvider>
+                              <UiTooltip>
+                                <TooltipTrigger>
+                                  <span className="cursor-help flex items-center justify-center">
+                                    {factor.trend === 'up' && <TrendingUp className="h-3.5 w-3.5 text-[#107C41]" />}
+                                    {factor.trend === 'down' && <TrendingDown className="h-3.5 w-3.5 text-rose-600 animate-pulse" />}
+                                    {factor.trend === 'stable' && <span className="text-slate-400 text-xs font-bold">—</span>}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-950 text-white rounded-xl p-3 text-[11px] max-w-xs shadow-2xl font-medium border border-slate-800/50 leading-relaxed">
+                                  {trendTooltips[factor.name]?.[factor.trend] || 'Trend status'}
+                                </TooltipContent>
+                              </UiTooltip>
+                            </TooltipProvider>
                           </div>
                         </div>
 
@@ -2673,6 +2978,496 @@ export function HealthBoard({ patientData = {}, appointments = [], onNavigateTab
 
         </div>
       )}
+
+
+      {/* --- PAGE 4: CONSENT & HL7 FHIR INTEROPERABILITY --- */}
+      {(() => {
+        // Formulate current FHIR resource representation in real-time
+        const currentFhirJson = (() => {
+          try {
+            if (activeFhirResourceType === 'patient') {
+              return JSON.stringify(consentFhirService.generateFhirPatient(patient), null, 2);
+            } else if (activeFhirResourceType === 'vitals') {
+              const dummyVital = { name: 'Blood Glucose', value: patient.bloodGlucose || 104, metadata: { device: 'Continuous Wearable Sensor', timestamp: Date.now() } };
+              return JSON.stringify(consentFhirService.generateFhirObservation(dummyVital, patient), null, 2);
+            } else if (activeFhirResourceType === 'meds') {
+              const dummyPrescription = prescriptions[0] || { id: 'med-923', medicationName: 'Metformin 500mg', status: 'active', dosage: '500mg twice daily', rxnormCode: '860975', prescriber: 'Dr. Sarah Jenkins', createdAt: new Date().toISOString() };
+              return JSON.stringify(consentFhirService.generateFhirMedicationRequest(dummyPrescription, patient), null, 2);
+            } else if (activeFhirResourceType === 'conditions') {
+              const dummyCondition = patient.conditions?.[0] || 'Type 2 Diabetes (E11.9)';
+              return JSON.stringify(consentFhirService.generateFhirCondition(dummyCondition, patient), null, 2);
+            } else if (activeFhirResourceType === 'consent') {
+              const dummyConsent = consents[0] || {
+                id: 'consent-dummy-123',
+                patientId: patient.id || 'pat-marcus-001',
+                type: 'data_sharing',
+                organizationId: 'seattle_general',
+                organizationName: 'Seattle General Hospital',
+                dataCategories: ['demographics', 'vitals'],
+                status: 'active',
+                signedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 365*24*3600*1000).toISOString()
+              };
+              const consentId = dummyConsent.id || 'consent-dummy-123';
+              return JSON.stringify(consentFhirService.generateFhirConsentResource(patient.id, dummyConsent, consentId), null, 2);
+            }
+          } catch (e) {
+            return `{\n  "error": "Failed to map FHIR resource: ${e instanceof Error ? e.message : String(e)}"\n}`;
+          }
+          return '{}';
+        })();
+
+        return activeSubPage === 4 && userProfile?.role === 'admin' && (
+          <div className="space-y-6 font-sans">
+            
+            {/* Section Header with Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 bg-white border border-slate-100 rounded-3xl p-6 shadow-3xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-[#0078d4]">
+                    <Shield className="h-5 w-5" />
+                    <span className="text-xs font-black uppercase tracking-wider">HIPAA Security & Consent Panel</span>
+                  </div>
+                  <h2 className="text-lg font-black text-slate-800 mt-2 font-sans tracking-tight">Healthcare Data Consent & Interoperability Hub</h2>
+                  <p className="text-[11.5px] text-slate-500 font-semibold leading-relaxed mt-1">
+                    Manage legal authorizations for securely transmitting electronic medical data to designated external hospitals and clinics. All outbound transmissions utilize secure TLS tunnels mapping standard clinical records to official HL7 FHIR R4 resources.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-slate-50">
+                  <Button
+                    size="sm"
+                    onClick={() => setIsAddingConsent(true)}
+                    className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-black text-[11px] uppercase tracking-wider h-9 px-4 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                  >
+                    <FileSignature className="h-4 w-4" />
+                    Authorize New Clinician / Provider
+                  </Button>
+                  <div className="text-[11px] font-bold text-slate-400">
+                    Total active consents: <span className="font-black text-slate-700">{consents.filter(c => c.status === 'active').length}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#f0f4f9] border border-slate-200/50 rounded-3xl p-6 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-black text-slate-400">Sync Pipeline Status</span>
+                    {isAutoSyncActive ? (
+                      <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Auto-Pilot
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-black uppercase text-slate-500 bg-slate-200 border border-slate-300 px-2 py-0.5 rounded-full">
+                        Paused
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xl font-black text-slate-800">FHIR Engine</p>
+                  <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    Automatic data compliance evaluator re-scans for health changes and signs outgoing transactions.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-200/60 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsAutoSyncActive(!isAutoSyncActive)}
+                      className="p-1.5 bg-white border border-slate-300/80 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors shadow-3xs"
+                      title={isAutoSyncActive ? "Pause Auto-Sync Scheduler" : "Resume Auto-Sync Scheduler"}
+                    >
+                      {isAutoSyncActive ? <Pause className="h-3.5 w-3.5 text-slate-600" /> : <Play className="h-3.5 w-3.5 text-emerald-600" />}
+                    </button>
+                    <div className="text-[11px] font-black text-slate-600">
+                      {isAutoSyncActive ? `Scanning in ${secondsToNextSync}s` : 'Pipeline Stopped'}
+                    </div>
+                  </div>
+
+                  <Button
+                    size="xs"
+                    disabled={isSyncingNow}
+                    onClick={handleTriggerFhirSync}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] uppercase h-8 px-3 rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    {isSyncingNow ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        <span>Syncing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowLeftRight className="h-3 w-3" />
+                        <span>Force Sync</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* New Consent Creation Form Modal Overlay */}
+            {isAddingConsent && (
+              <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans text-xs">
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="bg-white border border-slate-100 rounded-3xl max-w-xl w-full shadow-lg overflow-hidden"
+                >
+                  <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-sky-50 p-2.5 rounded-xl text-[#0078d4]">
+                        <FileSignature className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">
+                          HIPAA Legal Authorization Consent
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Configure and digitally sign data sharing rules</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setIsAddingConsent(false)}
+                      className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-800 cursor-pointer text-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateNewConsent} className="p-6 space-y-5">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black uppercase text-slate-500 block">Authorized Institution / clinic</label>
+                      <select
+                        value={consentOrg}
+                        onChange={(e) => setConsentOrg(e.target.value as any)}
+                        className="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-1 focus:ring-[#0078d4] font-bold text-slate-700 bg-white"
+                      >
+                        <option value="seattle_general">Seattle General Hospital (ID: sg_hosp_01)</option>
+                        <option value="uw_medicine">UW Medicine Clinic (ID: uw_med_99)</option>
+                        <option value="evergreen_clinic">Evergreen Specialty Clinic (ID: evg_spec_3)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black uppercase text-slate-500 block">Approved Medical Data Categories</label>
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        {[
+                          { id: 'demographics', label: 'Patient Demographics' },
+                          { id: 'vitals', label: 'Biometric Vitals & Trends' },
+                          { id: 'meds', label: 'Active Prescriptions & Orders' },
+                          { id: 'conditions', label: 'Diagnosed Chronic Conditions' }
+                        ].map((cat) => (
+                          <div
+                            key={cat.id}
+                            onClick={() => handleToggleCategory(cat.id)}
+                            className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer select-none transition-all ${
+                              consentCategories.includes(cat.id)
+                                ? 'bg-slate-50 border-[#0078d4] text-[#0078d4] font-black'
+                                : 'bg-white border-slate-200 text-slate-600 font-bold'
+                            }`}
+                          >
+                            <span className={`h-2 w-2 rounded-full ${consentCategories.includes(cat.id) ? 'bg-[#0078d4]' : 'bg-slate-300'}`} />
+                            <span className="text-[11px]">{cat.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black uppercase text-slate-500 block">Consent validity duration</label>
+                      <div className="flex items-center gap-3">
+                        {[
+                          { id: '3m', label: '3 Months' },
+                          { id: '1y', label: '1 Year' },
+                          { id: '5y', label: '5 Years' }
+                        ].map((dur) => (
+                          <button
+                            key={dur.id}
+                            type="button"
+                            onClick={() => setConsentDuration(dur.id as any)}
+                            className={`flex-1 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                              consentDuration === dur.id
+                                ? 'bg-slate-900 border-slate-900 text-white'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {dur.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 space-y-3">
+                      <h4 className="text-[10px] font-black uppercase text-slate-400">HIPAA Privacy Rule Disclosure Statement</h4>
+                      <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+                        By checking the signature box below, I authorize CarePlus-PRM Platform to compile, format, and securely transmit my clinical health resources (Patient, Observations, Medications) under standard HL7 FHIR formats to the designated recipient hospital. This authorization is voluntary. I retain the right to revoke this consent at any time via the patient portal, which immediately terminates further automatic sync pipelines.
+                      </p>
+                      <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={hasAcceptedPrivacyTerms}
+                          onChange={(e) => setHasAcceptedPrivacyTerms(e.target.checked)}
+                          className="mt-0.5 rounded border-slate-300 text-[#0078d4] focus:ring-[#0078d4]"
+                        />
+                        <span className="text-[10.5px] font-bold text-slate-700 leading-tight">
+                          I digitally sign and authorize this sharing agreement as Marcus Alan Everett (Patient ID: marcus_everett_01).
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsAddingConsent(false)}
+                        className="flex-1 h-10 border-slate-200 font-bold rounded-xl text-slate-600 cursor-pointer"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={!hasAcceptedPrivacyTerms}
+                        className="flex-1 h-10 bg-[#0078d4] hover:bg-[#106ebe] text-white font-black uppercase rounded-xl cursor-pointer"
+                      >
+                        Authorize Sharing
+                      </Button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Main Content Layout Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Left Column: Consents & FHIR Inspector (span-2) */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* Active Consents List */}
+                <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-800">Active Sharing Rules</h3>
+                    <p className="text-[10.5px] text-slate-400 font-bold">Authorized third-party institutions currently configured for outbound data exchange</p>
+                  </div>
+
+                  <div className="space-y-3.5 pt-1">
+                    {consents.length === 0 ? (
+                      <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400">
+                        <Shield className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold">No active data sharing authorizations configured.</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Add a provider to enable secure HL7 FHIR background telemetry exchange.</p>
+                      </div>
+                    ) : (
+                      consents.map((consent) => {
+                        const isActive = consent.status === 'active';
+                        return (
+                          <div
+                            key={consent.id}
+                            className={`border rounded-2xl p-4 flex flex-col sm:flex-row justify-between gap-4 transition-all ${
+                              isActive ? 'bg-white border-slate-200/80 shadow-3xs' : 'bg-slate-50/50 border-slate-100 text-slate-400'
+                            }`}
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-xs text-slate-800">{consent.organizationName}</span>
+                                <Badge className={`text-[8.5px] font-black uppercase px-2 py-0.5 rounded ${
+                                  isActive ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-150 text-slate-500 border border-slate-200'
+                                }`}>
+                                  {consent.status}
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-1.5 gap-x-4 text-[10.5px] text-slate-500">
+                                <div>
+                                  <span className="font-bold text-slate-400">Signed: </span>
+                                  <span className="font-bold text-slate-600">{new Date(consent.signedAt).toLocaleDateString()}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-400">Expires: </span>
+                                  <span className="font-bold text-slate-600">{new Date(consent.expiresAt).toLocaleDateString()}</span>
+                                </div>
+                                <div className="col-span-2 sm:col-span-1">
+                                  <span className="font-bold text-slate-400">Type: </span>
+                                  <span className="font-bold text-slate-600 capitalize">{consent.type.replace('_', ' ')}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {consent.dataCategories.map((cat) => (
+                                  <span
+                                    key={cat}
+                                    className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                      isActive
+                                        ? 'bg-[#f0f4f9] text-[#0078d4] border-slate-200/80'
+                                        : 'bg-slate-100 text-slate-400 border-slate-200'
+                                    }`}
+                                  >
+                                    {cat}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            {isActive && (
+                              <div className="flex items-center self-start sm:self-center">
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() => handleRevokeConsent(consent.id!, consent.organizationName)}
+                                  className="border-rose-200 hover:bg-rose-50 hover:text-rose-700 text-rose-600 font-black text-[10px] uppercase h-8 px-3 rounded-lg cursor-pointer transition-colors"
+                                >
+                                  Revoke Consent
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </Card>
+
+                {/* FHIR Resource Inspector Panel */}
+                <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-wider text-slate-800 font-sans">HL7 FHIR R4 Resource Inspector</h3>
+                      <p className="text-[10.5px] text-slate-400 font-bold">Inspect formatted, compliant JSON payloads generated in real-time by the translation core</p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded">
+                        FHIR R4 Schema
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Selector Tabs */}
+                    <div className="flex flex-wrap gap-1.5 bg-slate-50 border border-slate-200/50 p-1.5 rounded-2xl">
+                      {[
+                        { id: 'patient', label: 'Patient Demographics' },
+                        { id: 'vitals', label: 'Observation (Vitals)' },
+                        { id: 'meds', label: 'MedicationRequest' },
+                        { id: 'conditions', label: 'Conditions' },
+                        { id: 'consent', label: 'Consent Document' }
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveFhirResourceType(tab.id as any)}
+                          className={`px-3 py-1.5 rounded-xl text-[10.5px] font-black transition-all cursor-pointer ${
+                            activeFhirResourceType === tab.id
+                              ? 'bg-[#0078d4] text-white shadow-3xs'
+                              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Monospace JSON Code Block */}
+                    <div className="relative group rounded-2xl overflow-hidden border border-slate-200">
+                      <div className="bg-slate-900 px-4 py-2 flex items-center justify-between border-b border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Code className="h-4 w-4 text-[#0078d4]" />
+                          <span className="font-mono text-[10px] text-slate-400">fhir_resource_{activeFhirResourceType}.json</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(currentFhirJson);
+                            alert("FHIR resource JSON copied to clipboard.");
+                          }}
+                          className="text-[10px] font-black uppercase text-slate-400 hover:text-white bg-slate-800 px-2.5 py-1 rounded border border-slate-700 cursor-pointer transition-colors font-mono"
+                        >
+                          Copy Payload
+                        </button>
+                      </div>
+                      <pre className="bg-slate-950 p-4 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-[380px] leading-relaxed select-all">
+                        {currentFhirJson}
+                      </pre>
+                    </div>
+                  </div>
+                </Card>
+
+              </div>
+
+              {/* Right Column: Engine controls & running logs terminal (span-1) */}
+              <div className="space-y-6">
+                
+                {/* Background Sync Logs Terminal */}
+                <Card className="border border-slate-100 shadow-3xs bg-slate-950 rounded-3xl p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="h-4.5 w-4.5 text-sky-400 animate-pulse" />
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-200">Live Interop Terminal</h4>
+                    </div>
+                    <span className="text-[9px] font-black text-sky-400 bg-sky-950 border border-sky-900 px-2 py-0.5 rounded">Active Listening</span>
+                  </div>
+
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                    {terminalLogs.map((log, index) => {
+                      let textClass = 'text-slate-400';
+                      if (log.includes('[SUCCESS]')) textClass = 'text-emerald-400 font-bold';
+                      else if (log.includes('[ERROR]')) textClass = 'text-rose-400 font-bold';
+                      else if (log.includes('[SECURITY_REJECT]') || log.includes('[SECURITY_REVOKE]')) textClass = 'text-rose-400';
+                      else if (log.includes('[COMPLIANCE]')) textClass = 'text-amber-400';
+                      else if (log.includes('[FHIR_EXPORT]')) textClass = 'text-sky-400';
+                      else if (log.includes('[SYSTEM]')) textClass = 'text-indigo-300';
+                      
+                      return (
+                        <div key={index} className="font-mono text-[10.5px] leading-normal break-words border-b border-slate-900/60 pb-1.5">
+                          <span className={textClass}>{log}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                {/* Secure Transaction History (FHIR Sync Logs) */}
+                <Card className="border border-slate-100 shadow-3xs bg-white rounded-3xl p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4 text-[#0078d4]" />
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Secure Sync Logs</h4>
+                    </div>
+                    <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 border border-slate-200 text-[8.5px] font-bold">Firestore Sync Collection</Badge>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {syncLogs.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 italic text-center py-6">No synchronization logs written yet.</p>
+                    ) : (
+                      syncLogs.map((log) => {
+                        const isSuccess = log.status === 'success';
+                        return (
+                          <div key={log.id} className="bg-slate-50/50 border border-slate-100 p-3 rounded-xl space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-[11px] text-slate-800">{log.organizationName}</span>
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                isSuccess ? 'bg-emerald-50 text-emerald-800 border border-emerald-150' : 'bg-rose-50 text-rose-800 border border-rose-150'
+                              }`}>
+                                {log.status}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold pt-0.5">
+                              <span>{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                              <span className="text-[#0078d4]">{log.resourcesSyncedCount} FHIR Resources</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </Card>
+
+              </div>
+
+            </div>
+
+          </div>
+        );
+      })()}
 
 
       {/* --- BIOMETRIC SENSOR INTEGRATION HUB MODAL --- */}

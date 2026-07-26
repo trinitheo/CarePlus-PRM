@@ -18,7 +18,9 @@ import {
   DoorOpen,
   ArrowRight,
   UserPlus,
-  Check
+  Check,
+  Bot,
+  Sparkles
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -49,6 +51,7 @@ import {
 import { subscribeToAuditLogs, AuditEvent } from '../../services/auditService';
 import { subscribeToCollection } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { AppointmentSchedulingAgentPanel } from './AppointmentSchedulingAgentPanel';
 import { motion, AnimatePresence } from 'motion/react';
 
 // --- Sub-components (MFE Style) ---
@@ -93,6 +96,7 @@ export function AppointmentsDashboard() {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
+  const [showAgent, setShowAgent] = useState(false);
 
   // Booking Form State
   const [bookingPatientId, setBookingPatientId] = useState('');
@@ -253,6 +257,18 @@ export function AppointmentsDashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowAgent(!showAgent)}
+            className={`rounded-xl h-10 px-4 font-black uppercase text-[11px] tracking-widest transition-all cursor-pointer flex items-center gap-2 shadow-md ${
+              showAgent 
+                ? 'bg-slate-900 text-white hover:bg-black' 
+                : 'bg-gradient-to-r from-indigo-600 to-[#0078D4] text-white hover:opacity-95 shadow-indigo-500/20'
+            }`}
+          >
+            <Bot className="h-4 w-4" />
+            <span>{showAgent ? 'Hide AI Agent' : 'AI Scheduling Agent'}</span>
+          </Button>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A19F9D]" />
             <Input 
@@ -271,6 +287,20 @@ export function AppointmentsDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* AI Agent Panel */}
+      <AnimatePresence>
+        {showAgent && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <AppointmentSchedulingAgentPanel onClose={() => setShowAgent(false)} embedded={true} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Grid View */}
       <div className="flex-1 min-h-0 grid lg:grid-cols-4 gap-6">

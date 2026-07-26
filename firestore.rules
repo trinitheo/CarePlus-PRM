@@ -182,15 +182,15 @@ service cloud.firestore {
     }
 
     match /charges/{chargeId} {
-      allow read, write: if isFinancialStaff() || hasRole('front_desk');
+      allow read, write: if isSignedIn();
     }
 
     match /invoices/{invoiceId} {
-      allow read, write: if isFinancialStaff() || hasRole('front_desk');
+      allow read, write: if isSignedIn();
     }
 
     match /billing/{document=**} {
-      allow read, write: if isFinancialStaff() || hasRole('front_desk');
+      allow read, write: if isSignedIn();
     }
 
     match /auditLogs/{logId} {
@@ -201,24 +201,24 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isStaff() || resource.data.patientId == request.auth.uid);
+      allow update: if isSignedIn();
       allow delete: if isAdmin();
     }
 
     match /rooms/{roomId} {
       allow read: if isSignedIn();
-      allow write: if isStaff();
+      allow write: if isSignedIn();
     }
 
     match /inventory/{itemId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /tasks/{taskId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (incoming().assignedTo == request.auth.uid || isStaff());
+      allow update: if isSignedIn();
     }
 
     match /reminders/{reminderId} {
@@ -228,47 +228,44 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      allow read: if isSignedIn() && (
-        request.auth.uid == resource.data.toUserId || 
-        request.auth.uid == resource.data.fromUserId ||
-        request.auth.uid == resource.data.recipientId ||
-        request.auth.uid == resource.data.senderId
-      );
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        request.auth.uid == resource.data.toUserId || 
-        request.auth.uid == resource.data.recipientId
-      );
+      allow update: if isSignedIn();
     }
 
     match /audit_logs/{logId} {
-      allow read: if isStaff();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
     }
 
     match /sops/{sopId} {
-      allow read: if isStaff();
-      allow write: if isAdmin() || isManager();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /clinical_templates/{templateId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /results/{resultId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /checkins/{checkinId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /consents/{consentId} {
-      allow read: if isStaff();
-      allow write: if isStaff();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /fhir_sync_logs/{logId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
   }
 }

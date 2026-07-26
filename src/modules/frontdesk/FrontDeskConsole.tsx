@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { 
   Search, Clock, CreditCard, ShieldAlert, CheckCircle2, 
   FileText, Activity, AlertTriangle, Users, Wallet,
-  ChevronRight, FileSignature, Stethoscope, User
+  ChevronRight, FileSignature, Stethoscope, User, Bot, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { AppointmentSchedulingAgentPanel } from '../scheduling/AppointmentSchedulingAgentPanel';
 
 // --- Types & Mock Data ---
 type QueueStatus = 'pending' | 'arrived' | 'in_intake' | 'ready_for_clinical';
@@ -35,6 +36,7 @@ export function FrontDeskConsole({ onRegisterPatient }: { onRegisterPatient: () 
   const [activeTab, setActiveTab] = useState<'appointments' | 'walk-ins'>('appointments');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<DocketPatient | null>(null);
+  const [showAgent, setShowAgent] = useState(false);
 
   const filteredQueue = MOCK_QUEUE.filter(p => 
     (activeTab === 'appointments' ? p.type === 'appointment' : p.type === 'walk-in') &&
@@ -58,6 +60,18 @@ export function FrontDeskConsole({ onRegisterPatient }: { onRegisterPatient: () 
         </div>
 
         <div className="flex items-center gap-4 w-full md:w-auto">
+          <button
+            onClick={() => setShowAgent(!showAgent)}
+            className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-2 shadow-md whitespace-nowrap ${
+              showAgent 
+                ? 'bg-slate-900 text-white hover:bg-black' 
+                : 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white hover:opacity-95 shadow-indigo-500/20'
+            }`}
+          >
+            <Bot size={16} />
+            <span>{showAgent ? 'Close AI Agent' : 'AI Scheduling Agent'}</span>
+          </button>
+
           <div className="group relative w-full md:w-80">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-600 transition-colors">
               <Search size={16} strokeWidth={3} />
@@ -78,6 +92,21 @@ export function FrontDeskConsole({ onRegisterPatient }: { onRegisterPatient: () 
           </button>
         </div>
       </div>
+
+      {/* Embedded AI Agent Drawer / Panel */}
+      <AnimatePresence>
+        {showAgent && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mb-6 shrink-0"
+          >
+            <AppointmentSchedulingAgentPanel onClose={() => setShowAgent(false)} embedded={true} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Split Layout */}
       <div className="flex-1 flex gap-6 min-h-0">

@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { collection, onSnapshot, query, orderBy, getDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, getDoc, doc, where } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 
 import { UserRole } from '../types';
@@ -9,6 +9,7 @@ type DomainEvent =
   | { type: 'PATIENT_REGISTERED'; payload: Patient }
   | { type: 'VITALS_RECORDED'; payload: Vitals }
   | { type: 'APPOINTMENT_SCHEDULED'; payload: Appointment }
+  | { type: 'APPOINTMENT_REMOVED'; payload: string }
   | { type: 'HEALTH_DATA_INGESTED'; payload: { id: string; patientId: string; source: 'watch' | 'medication_log' | 'diet' | 'health_connect'; type: string; value: any; timestamp: number } }
   | { type: 'CLINICAL_INTAKE_RECORDED'; payload: ClinicalIntake }
   | { type: 'INTERACTION_RECORDED'; payload: Interaction };
@@ -108,6 +109,7 @@ export interface Appointment {
   visitType?: 'in_clinic' | 'telehealth';
   priority?: 'immediate' | 'urgent' | 'routine';
   priorityColor?: string;
+  roomId?: string;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -232,6 +234,15 @@ function eventReducer(state: AppState, event: DomainEvent): AppState {
         ...state,
         appointments: { ...state.appointments, [event.payload.id]: event.payload },
       };
+    case 'APPOINTMENT_REMOVED':
+      {
+        const newAppointments = { ...state.appointments };
+        delete newAppointments[event.payload];
+        return {
+          ...state,
+          appointments: newAppointments,
+        };
+      }
     case 'INTERACTION_RECORDED':
       return {
         ...state,
@@ -280,10 +291,13 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
         unsubs = [unsubUser];
 
         // 2. Sync Appointments (Staff and verified users have access)
-        const apptsQ = query(
-          collection(db, 'appointments'),
-          orderBy('time', 'asc')
-        );
+        const apptsQ = isStaffRole
+          ? query(collection(db, 'appointments'), orderBy('time', 'asc'))
+          : query(
+              collection(db, 'appointments'),
+              where('patientId', '==', userData.patientId || 'pat-marcus-001'),
+              orderBy('time', 'asc')
+            );
 
         const unsubAppts = onSnapshot(apptsQ, (snapshot) => {
           snapshot.docChanges().forEach((change) => {
@@ -292,6 +306,12 @@ export const EventStoreProvider = ({ children }: { children: ReactNode }) => {
               dispatch({
                 type: 'APPOINTMENT_SCHEDULED',
                 payload: appt
+              });
+            }
+            if (change.type === 'removed') {
+              dispatch({
+                type: 'APPOINTMENT_REMOVED',
+                payload: change.doc.id
               });
             }
           });

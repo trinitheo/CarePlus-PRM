@@ -25,7 +25,7 @@ export function BillingDashboard() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid'>('all');
 
   useEffect(() => {
-    if (!userProfile || !['admin', 'manager', 'billing'].includes(userProfile.role)) {
+    if (!userProfile || !['admin', 'manager', 'billing', 'front_desk'].includes(userProfile.role)) {
       return;
     }
     const invoicesQ = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'), limit(10));
@@ -58,7 +58,7 @@ export function BillingDashboard() {
     { label: 'Denial Rate', value: '4.2%', change: '-0.5%', icon: Activity, color: '#D13438' },
   ];
 
-  if (userProfile && !['admin', 'manager', 'billing'].includes(userProfile.role)) {
+  if (userProfile && !['admin', 'manager', 'billing', 'front_desk'].includes(userProfile.role)) {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8">
         <ShieldCheck className="h-12 w-12 text-[#D13438] mb-4" />
