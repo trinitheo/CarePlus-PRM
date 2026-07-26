@@ -3,7 +3,11 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { AppRole } from './rbacService';
 import { faker } from '@faker-js/faker';
-import { savePatient, saveUserProfile, addToCareTeam, saveClinicalIntake, updatePatientVitals } from './clinicalFirestoreService';
+import { savePatient, saveUserProfile, addToCareTeam, saveClinicalIntake, updatePatientVitals, saveAppointment, clinicalService } from './clinicalFirestoreService';
+import { transitionAppointment, cancelAppointment } from './schedulingService';
+import { checkInPatient, signConsent } from './frontdeskService';
+import { createInternalTask } from './taskService';
+import { captureCharge, createInvoice } from './billingService';
 
 export interface SeedProgress {
   step: string;
@@ -951,5 +955,228 @@ export const SeedService = {
 
     import('../lib/mockDatabase').then(m => m.persistMockDb());
     console.log('Seeding Marcus Everett Case Completed perfectly.');
+  },
+
+  /**
+   * Seeds a single, fully connected demo world: staff across every role, rooms,
+   * a patient cohort, and appointments/charges/invoices/tasks/inventory that all
+   * reference each other by real ID. Deliberately calls the app's real service
+   * functions (saveAppointment, transitionAppointment, checkInPatient,
+   * captureCharge, createInvoice, createInternalTask, cancelAppointment) instead
+   * of writing raw documents, so running this also smoke-tests those write paths.
+   *
+   * Safe to re-run: every ID is prefixed 'demo-' so repeated runs create a fresh
+   * cohort rather than colliding with seedCareNetwork / seedMarcusEverettCase data.
+   */
+  async seedConnectedDemoWorld(onProgress?: SeedCallback) {
+    console.log('Seeding connected demo world...');
+    const TOTAL_STEPS = 8;
+    let step = 0;
+    const report = (label: string) => onProgress?.({ step: label, count: ++step, total: TOTAL_STEPS });
+
+    // --- 1. STAFF ACROSS EVERY ROLE ---
+    const staffDefs: { role: AppRole; name: string; specialty?: string }[] = [
+      { role: 'admin', name: 'Priya Anand' },
+      { role: 'manager', name: 'Daniel Cho' },
+      { role: 'clinician', name: 'Dr. Amara Whitfield', specialty: 'Family Medicine' },
+      { role: 'clinician', name: 'Dr. Marcus Yun', specialty: 'Internal Medicine' },
+      { role: 'nurse', name: 'Renee Castillo' },
+      { role: 'front_desk', name: 'Jordan Blake' },
+      { role: 'billing', name: 'Sam Whitaker' },
+    ];
+    const staffIds: Record<string, string> = {};
+    for (const s of staffDefs) {
+      const id = `demo-staff-${s.name.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+      await saveUserProfile(id, {
+        displayName: s.name,
+        email: faker.internet.email({ firstName: s.name.split(' ').pop() }).toLowerCase(),
+        role: s.role,
+        specialty: s.specialty,
+        createdAt: new Date().toISOString()
+      });
+      // Mirror to /roles so this matches what RBACDashboard produces when an admin assigns a role for real.
+      await setDoc(doc(db, 'roles', id), {
+        userId: id,
+        role: s.role,
+        assignedBy: 'seed-script',
+        updatedAt: new Date().toISOString()
+      });
+      staffIds[s.role + (staffIds[s.role] ? '_2' : '')] = id;
+    }
+    const clinicianIds = staffDefs.filter(s => s.role === 'clinician').map(s => `demo-staff-${s.name.toLowerCase().replace(/[^a-z]+/g, '-')}`);
+    const nurseId = staffIds['nurse'];
+    const frontDeskId = staffIds['front_desk'];
+    const billingId = staffIds['billing'];
+    report('Creating Staff (all roles)');
+
+    // --- 2. ROOMS ---
+    const roomDefs = [
+      { name: 'Exam Room 1', type: 'exam' as const },
+      { name: 'Exam Room 2', type: 'exam' as const },
+      { name: 'Procedure Room', type: 'procedure' as const },
+      { name: 'Telehealth Bay', type: 'telehealth' as const },
+    ];
+    const roomIds: string[] = [];
+    for (const r of roomDefs) {
+      const id = await clinicalService.addItem('rooms', {
+        name: r.name,
+        type: r.type,
+        status: 'available'
+      });
+      roomIds.push(id);
+    }
+    report('Creating Rooms');
+
+    // --- 3. PATIENT COHORT ---
+    const conditions = ['Type 2 Diabetes', 'Hypertension', 'Asthma', 'Chronic Migraine', 'Anxiety Disorder', 'Osteoarthritis', 'Hypothyroidism', 'GERD'];
+    const patientIds: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const firstName = faker.person.firstName();
+      const lastName = faker.person.lastName();
+      const id = `demo-pt-${firstName.toLowerCase()}-${lastName.toLowerCase()}`;
+      const condition = conditions[i];
+      const birthDate = faker.date.birthdate({ min: 24, max: 82, mode: 'age' });
+
+      await savePatient(id, {
+        id,
+        mrn: `MRN-${faker.number.int({ min: 10000, max: 99999 })}-${firstName[0]}${lastName[0]}`,
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`,
+        email: faker.internet.email({ firstName, lastName }).toLowerCase(),
+        gender: faker.person.sexType() === 'female' ? 'Female' : 'Male',
+        dob: birthDate.toISOString().split('T')[0],
+        phone: faker.phone.number(),
+        status: 'active',
+        conditions: [condition],
+        chiefComplaint: `Presents for ongoing management of ${condition}.`,
+        createdAt: new Date().toISOString()
+      });
+
+      await updatePatientVitals(id, {
+        hr: faker.number.int({ min: 60, max: 100 }),
+        bp: `${faker.number.int({ min: 110, max: 140 })}/${faker.number.int({ min: 70, max: 90 })}`,
+        temp: faker.number.float({ min: 36.5, max: 37.8, multipleOf: 0.1 }),
+        rr: faker.number.int({ min: 12, max: 20 }),
+        spo2: faker.number.int({ min: 96, max: 99 }),
+        timestamp: Date.now()
+      });
+
+      await addToCareTeam(id, clinicianIds[i % clinicianIds.length], {
+        role: 'primary_clinician',
+        assignedBy: 'seed-script'
+      });
+
+      patientIds.push(id);
+    }
+    report('Creating Patient Cohort');
+
+    // --- 4. APPOINTMENTS ACROSS THE FULL STATUS LIFECYCLE ---
+    // 2 scheduled, 2 checked_in, 1 in_progress, 2 completed (with billing), 1 cancelled.
+    const today = new Date();
+    const apptIds: string[] = [];
+    for (let i = 0; i < patientIds.length; i++) {
+      const patientId = patientIds[i];
+      const providerId = clinicianIds[i % clinicianIds.length];
+      const roomId = roomIds[i % roomIds.length];
+      const apptTime = new Date(today);
+      apptTime.setHours(8 + i, 0, 0, 0);
+
+      const apptId = await saveAppointment({
+        patientId,
+        providerId,
+        roomId,
+        time: apptTime.toISOString(),
+        duration: 30,
+        status: 'scheduled',
+        visitType: i === 3 ? 'virtual' : 'clinic',
+        reason: `Follow-up: ${conditions[i]}`,
+        priority: i === 4 ? 'urgent' : 'routine'
+      });
+      apptIds.push(apptId);
+
+      if (i === 2 || i === 3) {
+        await checkInPatient(patientId, apptId);
+      } else if (i === 4) {
+        await checkInPatient(patientId, apptId);
+        await transitionAppointment(apptId, 'in_progress', roomId);
+      } else if (i === 5 || i === 6) {
+        await checkInPatient(patientId, apptId);
+        await transitionAppointment(apptId, 'in_progress', roomId);
+        await transitionAppointment(apptId, 'completed');
+      } else if (i === 7) {
+        await cancelAppointment(apptId, 'Patient requested reschedule due to a scheduling conflict.');
+      }
+    }
+    report('Creating Appointments (full status lifecycle)');
+
+    // --- 5. BILLING: real charges + invoices tied to the two completed encounters ---
+    for (const i of [5, 6]) {
+      const chargeId = await captureCharge({
+        patientId: patientIds[i],
+        encounterId: apptIds[i],
+        clinicianId: clinicianIds[i % clinicianIds.length],
+        code: i === 5 ? '99214' : '99213',
+        description: i === 5 ? 'Established patient office visit, moderate complexity' : 'Established patient office visit, low complexity',
+        amount: i === 5 ? 185 : 125,
+        status: 'captured'
+      });
+      await createInvoice(patientIds[i], [chargeId]);
+    }
+    report('Creating Charges & Invoices');
+
+    // --- 6. INTERNAL TASKS referencing real staff + real patients ---
+    await createInternalTask({
+      title: 'Post-visit follow-up call',
+      description: `Call ${patientIds[5]} to confirm symptom improvement after today's visit.`,
+      category: 'clinical',
+      priority: 'medium',
+      assignedTo: nurseId,
+      patientId: patientIds[5],
+      status: 'pending',
+      subtasks: [{ id: 'st-1', label: 'Confirm medication adherence', completed: false }]
+    });
+    await createInternalTask({
+      title: 'Rebook cancelled appointment',
+      description: `Reach out to reschedule the cancelled visit for ${patientIds[7]}.`,
+      category: 'administrative',
+      priority: 'high',
+      assignedTo: frontDeskId,
+      patientId: patientIds[7],
+      status: 'pending',
+      subtasks: []
+    });
+    await createInternalTask({
+      title: 'Review invoice before sending',
+      description: `Double-check coding on the invoice generated for ${patientIds[6]}.`,
+      category: 'billing',
+      priority: 'low',
+      assignedTo: billingId,
+      patientId: patientIds[6],
+      status: 'pending',
+      subtasks: []
+    });
+    report('Creating Internal Tasks');
+
+    // --- 7. INVENTORY (two intentionally below minThreshold, to exercise low-stock alerts) ---
+    const inventoryDefs = [
+      { name: 'Nitrile Gloves (Box)', category: 'consumables' as const, stockLevel: 12, minThreshold: 20, unit: 'box', location: 'Exam Room 1 Supply Closet' },
+      { name: 'Gauze Pads', category: 'consumables' as const, stockLevel: 150, minThreshold: 50, unit: 'pack', location: 'Central Supply' },
+      { name: 'Lidocaine 1% Injectable', category: 'medications' as const, stockLevel: 8, minThreshold: 15, unit: 'vial', expiryDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0], location: 'Med Cabinet A' },
+      { name: 'Amoxicillin 500mg', category: 'medications' as const, stockLevel: 200, minThreshold: 40, unit: 'capsule', location: 'Pharmacy Stock' },
+      { name: 'Pulse Oximeter', category: 'equipment' as const, stockLevel: 6, minThreshold: 2, unit: 'unit', location: 'Equipment Room' },
+      { name: 'Blood Pressure Cuff (Adult)', category: 'equipment' as const, stockLevel: 10, minThreshold: 3, unit: 'unit', location: 'Equipment Room' },
+    ];
+    for (const item of inventoryDefs) {
+      await clinicalService.addItem('inventory', { ...item, lastRestockedAt: new Date().toISOString() });
+    }
+    report('Creating Inventory');
+
+    // --- 8. CONSENTS (for the front desk console to show as already-on-file) ---
+    await signConsent(patientIds[0], 'hipaa');
+    await signConsent(patientIds[3], 'telehealth');
+    report('Creating Consents');
+
+    console.log('Connected demo world seeded successfully.');
   }
 };

@@ -8,6 +8,7 @@ export interface Charge {
   patientId: string;
   encounterId?: string;
   clinicianId: string;
+  capturedBy?: string;
   code: string;
   description: string;
   amount: number;
@@ -47,11 +48,12 @@ export async function suggestClinicalCodes(clinicalNote: string) {
 }
 
 export async function captureCharge(data: Omit<Charge, 'id'>) {
-  const adminId = auth.currentUser?.uid || 'system';
+  const currentUserUid = auth.currentUser?.uid || 'system';
   return clinicalService.addItem('charges', {
+    capturedBy: currentUserUid,
     ...data,
-    clinicianId: adminId,
-    status: 'captured'
+    clinicianId: data.clinicianId || currentUserUid,
+    status: data.status || 'captured'
   });
 }
 

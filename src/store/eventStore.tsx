@@ -106,7 +106,7 @@ export interface Appointment {
   duration?: number;
   reason: string;
   status: 'scheduled' | 'confirmed' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled';
-  visitType?: 'in_clinic' | 'telehealth';
+  visitType?: 'in_clinic' | 'telehealth' | 'clinic' | 'virtual';
   priority?: 'immediate' | 'urgent' | 'routine';
   priorityColor?: string;
   roomId?: string;

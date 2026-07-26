@@ -128,6 +128,25 @@ export function RBACDashboard() {
     }
   };
 
+  const handleRunConnectedDemoSeed = async () => {
+    if (!window.confirm("This will create a fully connected demo world: staff across every role, rooms, 8 patients, appointments across the full status lifecycle, real invoices, tasks, and inventory. Continue?")) return;
+
+    setIsSeeding(true);
+    try {
+      await SeedService.seedConnectedDemoWorld((progress) => {
+        setSeedProgress(progress);
+      });
+      toast.success("Connected Demo World Seeded Successfully!");
+      await fetchUsers();
+    } catch (err) {
+      console.error("Connected demo seeding failed", err);
+      toast.error("Connected demo seeding failed");
+    } finally {
+      setIsSeeding(false);
+      setSeedProgress(null);
+    }
+  };
+
   const handleFactoryReset = async () => {
     if (!window.confirm("Are you sure you want to completely wipe the application data? This will delete all customized users, roles, messages, patient charts, and schedules from Firestore, log you out, and reset the system as a clean install. Continue?")) return;
     
@@ -209,6 +228,30 @@ export function RBACDashboard() {
               <>
                 <Database className="h-4 w-4 text-[#0078D4]" />
                 Seed Graph Group
+              </>
+            )}
+          </Button>
+
+          <Button 
+            variant="outline" 
+            className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black uppercase tracking-wider h-11 px-5 hover:bg-emerald-100 transition-all flex items-center gap-2"
+            onClick={handleRunConnectedDemoSeed}
+            disabled={isSeeding}
+          >
+            {isSeeding && seedProgress ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+                {`${seedProgress.step.substring(0, 14)}...`}
+              </>
+            ) : isSeeding ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <Database className="h-4 w-4 text-emerald-700" />
+                Seed Connected Demo
               </>
             )}
           </Button>

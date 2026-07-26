@@ -255,7 +255,7 @@ export function SchedulingOperatorConsole() {
               {filteredRoster.map((appt, idx) => {
                 const patient = patients[appt.patientId];
                 const patientName = patient ? (patient.name || `${patient.firstName || ''} ${patient.lastName || ''}`).trim() : `MRN: ${appt.patientId}`;
-                const isVirtual = appt.visitType === 'telehealth';
+                const isVirtual = appt.visitType === 'telehealth' || appt.visitType === 'virtual';
 
                 return (
                   <motion.div

@@ -440,12 +440,12 @@ export function AppointmentsDashboard() {
                              </div>
                              <div className="flex items-center gap-8">
                                 <div className="flex items-center gap-2">
-                                   {appt.visitType === 'virtual' ? (
+                                   {appt.visitType === 'virtual' || appt.visitType === 'telehealth' ? (
                                      <Video className="h-3.5 w-3.5 text-[#0078D4]" />
                                    ) : (
                                      <MapPin className="h-3.5 w-3.5 text-[#616161]" />
                                    )}
-                                   <span className="text-[10px] font-black uppercase tracking-tight text-[#616161]">{appt.visitType}</span>
+                                   <span className="text-[10px] font-black uppercase tracking-tight text-[#616161]">{appt.visitType === 'virtual' || appt.visitType === 'telehealth' ? 'virtual' : 'clinic'}</span>
                                 </div>
                                 <div className="flex items-center gap-2 min-w-[120px] justify-end">
                                    <Badge className={`uppercase text-[9px] font-black tracking-widest h-6 px-3 rounded-md ${
