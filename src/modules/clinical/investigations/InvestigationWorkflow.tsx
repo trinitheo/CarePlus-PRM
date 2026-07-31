@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Investigation, InvestigationStatus } from '../../../types';
 import { updateInvestigation } from '../../../services/clinicalFirestoreService';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { 
   Dialog, 
   DialogContent, 
@@ -39,6 +40,8 @@ interface InvestigationWorkflowProps {
 }
 
 export function InvestigationWorkflow({ patientId, investigations, canWrite }: InvestigationWorkflowProps) {
+  const { userProfile } = useCurrentUser();
+  const isClinicianOrAdmin = userProfile ? ['clinician', 'admin', 'manager'].includes(userProfile.role) : false;
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [resultSummary, setResultSummary] = useState('');
@@ -249,7 +252,7 @@ export function InvestigationWorkflow({ patientId, investigations, canWrite }: I
                       </div>
                       <div className="col-span-2 lg:col-span-1 text-right">
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                           {canWrite && inv.status === 'ordered' && (
+                           {canWrite && isClinicianOrAdmin && inv.status === 'ordered' && (
                              <Button 
                                variant="outline" 
                                size="sm" 
@@ -259,7 +262,7 @@ export function InvestigationWorkflow({ patientId, investigations, canWrite }: I
                                 Collect Sample
                              </Button>
                            )}
-                           {canWrite && inv.status === 'sample_collected' && (
+                           {canWrite && isClinicianOrAdmin && inv.status === 'sample_collected' && (
                              <Button 
                                variant="outline" 
                                size="sm" 
@@ -269,7 +272,7 @@ export function InvestigationWorkflow({ patientId, investigations, canWrite }: I
                                 Enter Result
                              </Button>
                            )}
-                           {canWrite && inv.status === 'resulted' && (
+                           {canWrite && isClinicianOrAdmin && inv.status === 'resulted' && (
                              <Button 
                                variant="outline" 
                                size="sm" 
@@ -360,7 +363,7 @@ export function InvestigationWorkflow({ patientId, investigations, canWrite }: I
             <Button variant="ghost" className="font-bold text-[#616161] hover:text-[#242424]" onClick={() => setIsResultModalOpen(false)}>
               Close
             </Button>
-            {canWrite && selectedInvestigation?.status !== 'reviewed' && (
+            {canWrite && isClinicianOrAdmin && selectedInvestigation?.status !== 'reviewed' && (
               <Button 
                 onClick={handleSubmitResults} 
                 disabled={isUpdating || !resultSummary.trim()}

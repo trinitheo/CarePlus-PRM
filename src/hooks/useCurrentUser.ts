@@ -4,9 +4,29 @@ import { authService, CurrentUser } from '../services/authService';
 import { onSnapshot, doc } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { saveUserProfile } from '../services/clinicalFirestoreService';
+import { removeAllPatientsFromNurseProfiles, NEW_NURSE_PROFILE } from '../services/nurseService';
 
 export function useCurrentUser() {
-  const [userProfile, setUserProfile] = useState<CurrentUser | null>(() => authService.getCurrentUser());
+  const [userProfile, setUserProfile] = useState<CurrentUser | null>(() => {
+    const active = authService.getCurrentUser();
+    if (active && active.role === 'nurse') {
+      removeAllPatientsFromNurseProfiles().catch(console.warn);
+      // If active nurse is an old default nurse profile, upgrade to the newly added nurse profile
+      if (active.id !== NEW_NURSE_PROFILE.id) {
+        const freshNurse: CurrentUser = {
+          id: NEW_NURSE_PROFILE.id,
+          displayName: NEW_NURSE_PROFILE.displayName,
+          email: NEW_NURSE_PROFILE.email,
+          role: 'nurse',
+          avatar: NEW_NURSE_PROFILE.avatar,
+          createdAt: NEW_NURSE_PROFILE.createdAt
+        };
+        localStorage.setItem('careplus_current_user', JSON.stringify(freshNurse));
+        return freshNurse;
+      }
+    }
+    return active;
+  });
   const [loading, setLoading] = useState(true);
 
   const refreshProfile = () => {

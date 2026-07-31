@@ -42,8 +42,19 @@ export default function App() {
     subView: 'explorer' | 'detail' | 'onboarding';
     selectedPatientId: string | null;
   }>(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('precison_health_view_state') : null;
-    return saved ? JSON.parse(saved) : { subView: 'explorer', selectedPatientId: null };
+    try {
+      const saved = typeof window !== 'undefined' ? sessionStorage.getItem('precison_health_view_state') : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.subView === 'detail' && !parsed.selectedPatientId) {
+          return { subView: 'explorer', selectedPatientId: null };
+        }
+        return parsed;
+      }
+    } catch {
+      // Fallback on error
+    }
+    return { subView: 'explorer', selectedPatientId: null };
   });
 
   useEffect(() => {
@@ -200,7 +211,7 @@ export default function App() {
             <div className="flex-1 flex gap-6 min-h-0 relative">
               {/* List Pane - Always visible on Explorer view, conditionally on others */}
               <AnimatePresence mode="popLayout">
-                {(viewState.subView === 'explorer' || (isListOpen && sizeClass === 'expanded')) && (
+                {(viewState.subView === 'explorer' || !viewState.selectedPatientId || (isListOpen && sizeClass === 'expanded')) && (
                   <motion.div 
                     layout
                     initial={{ opacity: 0, width: 0, paddingRight: 0 }}

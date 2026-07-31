@@ -47,6 +47,7 @@ import {
   canViewClinical, 
   canViewFinancial, 
   canWriteClinical,
+  canPrescribe,
   canEditDemographics,
   getVisibleTabs,
   PatientRecordTab,
@@ -535,7 +536,7 @@ export function ClinicalRecords({
                       <FileText style={{ color: '#0078D4' }} className="h-5 w-5" />
                     </Button>
                   </SOAPNoteModal>
-                  {(userProfile?.role === 'clinician' || userProfile?.role === 'nurse' || userProfile?.role === 'admin') && (
+                  {canPrescribe(currentRole as AppRole) && (
                     <>
                       <div className="w-[1px] h-5 bg-[#EDEBE9]" />
                       <Button 

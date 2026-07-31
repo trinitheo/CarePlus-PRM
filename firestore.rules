@@ -139,14 +139,15 @@ service cloud.firestore {
 
       match /prescriptions/{prescriptionId} {
         allow read: if hasPatientAccess(patientId);
-        // Patients and proxies can submit refill requests (refillRequested: true)
-        allow create: if hasPatientAccess(patientId) && (isClinician() || isNurse() || isLinkedPatient(patientId));
-        allow update: if isCareTeamMember(patientId) && (isClinician() || isNurse());
+        // Patients and proxies can submit refill requests (refillRequested: true); prescribing restricted to clinicians
+        allow create: if hasPatientAccess(patientId) && (isClinician() || isLinkedPatient(patientId));
+        allow update: if isCareTeamMember(patientId) && isClinician();
       }
 
       match /investigations/{investigationId} {
         allow read: if hasPatientAccess(patientId);
-        allow write: if isCareTeamMember(patientId) && (isClinician() || isAdmin());
+        allow create: if isCareTeamMember(patientId) && (isClinician() || isNurse());
+        allow update, delete: if isCareTeamMember(patientId) && isClinician();
       }
 
       match /procedures/{procedureId} {

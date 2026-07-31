@@ -46,6 +46,15 @@ const DEMO_USERS = [
     status: "Active"
   },
   {
+    id: "uid-nurse-alex-001",
+    displayName: "Nurse Alex Morgan, RN",
+    email: "alex.morgan@careplus.health",
+    role: "nurse",
+    avatar: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=200&auto=format&fit=crop",
+    clinic: "clinic-main",
+    status: "Active"
+  },
+  {
     id: "user-clinic-002",
     displayName: "Mark Davis",
     email: "mark.davis@careplus.local",

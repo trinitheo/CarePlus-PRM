@@ -668,6 +668,7 @@ function MedicationFlagsWidget({ onNavigate }: { onNavigate?: (id: string) => vo
 // ═══════════════════════════════════════════════════════════════════════════════
 function TodayScheduleWidget({ onNavigate, patientId }: { onNavigate?: (id: string) => void, patientId?: string }) {
   const { appointments, patients } = useQueryModel();
+  const { userProfile } = useCurrentUser();
   const today = new Date().toDateString();
 
   const parseTime = (timeVal: any) => {
@@ -683,11 +684,30 @@ function TodayScheduleWidget({ onNavigate, patientId }: { onNavigate?: (id: stri
         const ad = parseTime(a.time);
         const isToday = ad.toDateString() === today;
         const matchesPatient = patientId ? a.patientId === patientId : true;
-        return isToday && matchesPatient;
+        if (!isToday || !matchesPatient) return false;
+
+        // Role-based data scoping: Clinicians, Nurses, and Allied Health only see their own assigned appointments
+        if (userProfile) {
+          const role = userProfile.role;
+          if (['admin', 'front_desk', 'manager'].includes(role)) {
+            return true;
+          }
+          if (role === 'patient' || role === 'read_only') {
+            return a.patientId === userProfile.id || (userProfile as any).patientId === a.patientId;
+          }
+          return (
+            a.providerId === userProfile.id ||
+            a.providerName === userProfile.displayName ||
+            a.assignedNurseId === userProfile.id ||
+            a.clinicianId === userProfile.id
+          );
+        }
+
+        return true;
       })
       .map((a: any) => ({ ...a, patientName: (patients as any)[a.patientId]?.name || `Patient #${a.patientId?.slice(0, 8).toUpperCase()}` }))
       .sort((a: any, b: any) => parseTime(a.time).getTime() - parseTime(b.time).getTime()),
-    [appointments, patients, today, patientId]
+    [appointments, patients, today, patientId, userProfile]
   );
 
   const now = new Date();

@@ -40,6 +40,7 @@ import { searchMedications, getMedicationStrengths, ClinicalCode } from '../../s
 import { generateFriendlyInstructions, checkLabMonitoringRequirements } from '../../services/aiService';
 import { savePrescription } from '../../services/clinicalFirestoreService';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { canPrescribe, AppRole } from '../../lib/roleAccess';
 
 interface PrescriptionPadModalProps {
     isOpen: boolean;
@@ -76,6 +77,8 @@ const Highlight: React.FC<{ text: string; highlight: string }> = ({ text, highli
 
 export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, canWrite = true }: PrescriptionPadModalProps) {
     const { userProfile } = useCurrentUser();
+    const userRole = (userProfile?.role || 'read_only') as AppRole;
+    const canUserPrescribe = canWrite && canPrescribe(userRole);
     const [medicationName, setMedicationName] = useState('');
     const [suggestions, setSuggestions] = useState<ClinicalCode[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -181,6 +184,10 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, 
     };
     
     const handleSave = async () => {
+        if (!canUserPrescribe) {
+            setErrorMessage('Security: Prescribing authority is restricted to clinicians and administrators.');
+            return;
+        }
         if (!medicationName || !dose || !frequency) return;
         setIsSaving(true);
         setErrorMessage(null);
@@ -478,7 +485,7 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, 
                         <Button variant="outline" onClick={onClose} className="rounded-xl h-12 px-6 text-[13px] font-bold text-[#242424] border-[#EDEBE9] hover:bg-[#F3F2F1]">
                             Cancel
                         </Button>
-                        {canWrite ? (
+                        {canUserPrescribe ? (
                             <Button 
                                 className="rounded-xl h-12 px-8 bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[13px] shadow-lg shadow-[#0078D4]/10 gap-3"
                                 disabled={isSaving || !medicationName || !dose || !frequency}
@@ -488,9 +495,9 @@ export function PrescriptionPadModal({ isOpen, onClose, patientId, patientName, 
                                 Save Prescription
                             </Button>
                         ) : (
-                            <div className="flex items-center gap-2 bg-[#F3F2F1] px-6 py-3 rounded-xl border border-[#EDEBE9]">
-                                <Lock className="h-4 w-4 text-[#616161]" />
-                                <span className="text-[11px] font-black uppercase text-[#616161]">Read Only</span>
+                            <div className="flex items-center gap-2 bg-[#FDE7E9] px-6 py-3 rounded-xl border border-[#F8D7DA]">
+                                <Lock className="h-4 w-4 text-[#A4262C]" />
+                                <span className="text-[11px] font-black uppercase text-[#A4262C]">Clinician Prescribing Authority Required</span>
                             </div>
                         )}
                     </div>
